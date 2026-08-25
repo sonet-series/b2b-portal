@@ -31,11 +31,17 @@ const money = (label: string) =>
     .transform(toMinor)
     .refine((v) => v > 0, `${label} must be more than zero`);
 
+/**
+ * Optional fields must tolerate an ABSENT key, not just an empty one: the
+ * mode-switching rate forms unmount irrelevant inputs, so those names never
+ * reach FormData at all.
+ */
 const optionalMoney = (label: string) =>
   z
     .string()
     .trim()
-    .transform((v) => (v === "" ? null : v))
+    .optional()
+    .transform((v) => (v === undefined || v === "" ? null : v))
     .superRefine((v, ctx) => {
       if (v !== null && !/^\d[\d,]*(\.\d{1,2})?$/.test(v)) {
         ctx.addIssue({ code: "custom", message: `${label} must be an amount like 4500 or 4500.50` });
@@ -58,7 +64,8 @@ const optionalPosInt = (label: string) =>
   z
     .string()
     .trim()
-    .transform((v) => (v === "" ? null : Number(v)))
+    .optional()
+    .transform((v) => (v === undefined || v === "" ? null : Number(v)))
     .superRefine((v, ctx) => {
       if (v !== null && (!Number.isInteger(v) || v < 1)) {
         ctx.addIssue({ code: "custom", message: `${label} must be a whole number of at least 1` });
@@ -69,7 +76,12 @@ const text = (label: string, max = 200) =>
   z.string().trim().min(1, `${label} is required`).max(max, `${label} is too long`);
 
 const optionalText = (max = 2000) =>
-  z.string().trim().max(max, "Too long").transform((v) => (v === "" ? null : v));
+  z
+    .string()
+    .trim()
+    .max(max, "Too long")
+    .optional()
+    .transform((v) => (v === undefined || v === "" ? null : v));
 
 const checkbox = z
   .string()
@@ -102,7 +114,8 @@ export const hotelSchema = z.object({
   starCategory: z
     .string()
     .trim()
-    .transform((v) => (v === "" ? null : Number(v)))
+    .optional()
+    .transform((v) => (v === undefined || v === "" ? null : Number(v)))
     .superRefine((v, ctx) => {
       if (v !== null && (!Number.isInteger(v) || v < 1 || v > 7)) {
         ctx.addIssue({ code: "custom", message: "Star category must be 1–7" });
