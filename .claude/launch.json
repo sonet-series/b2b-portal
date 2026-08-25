@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "dev",
-      "runtimeExecutable": ".claude/dev-server.sh",
+      "runtimeExecutable": "/Users/seriestours/b2b Portal/.claude/dev-server.sh",
       "runtimeArgs": [],
       "port": 3000
     }
