@@ -1,0 +1,57 @@
+# Mirrors seriestours-website's compose: same Traefik label style, same ACME
+# resolver, same http→https redirect, external network, restart: always.
+#
+# ONE DELIBERATE DIFFERENCE — the network.
+#
+# seriestours-website joins `frappe_default`, the ERP's Docker network. That is
+# correct for that site: it calls the ERP API. This portal must NOT be able to
+# reach the ERP at all (see CLAUDE.md), so it joins a dedicated `edge` network
+# instead. Traefik is attached to both, which lets it route to this container
+# while giving this container no path to any ERP container or database.
+#
+# `edge` must exist and Traefik must be attached to it before this will route.
+# See deploy/DEPLOY-PLAN.md — that is a change to shared infrastructure and is
+# not made automatically.
+
+services:
+  web:
+    build: .
+    container_name: b2b-portal-web
+    restart: always
+    environment:
+      - NODE_ENV=production
+      # The database file lives on the bind mount below, not in the image.
+      - DATABASE_URL=file:/app/data/prod.db
+      - PORTAL_URL=https://b2b.seriestours.com
+      # Runs the admin upsert on boot; the seeded password is one-time and the
+      # app forces a change at first sign-in.
+      - RUN_SEED_ON_START=1
+    env_file:
+      # AUTH_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD. Never committed; created on
+      # the server with 600 permissions.
+      - .env.production
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:3000/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - edge
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=edge"
+      - "traefik.http.routers.b2bportal.rule=Host(`b2b.seriestours.com`)"
+      - "traefik.http.routers.b2bportal.entrypoints=websecure"
+      - "traefik.http.routers.b2bportal.tls.certresolver=acme"
+      - "traefik.http.services.b2bportal.loadbalancer.server.port=3000"
+      - "traefik.http.routers.b2bportal-http.rule=Host(`b2b.seriestours.com`)"
+      - "traefik.http.routers.b2bportal-http.entrypoints=web"
+      - "traefik.http.routers.b2bportal-http.middlewares=b2bportal-https-redirect"
+      - "traefik.http.middlewares.b2bportal-https-redirect.redirectscheme.scheme=https"
+
+networks:
+  edge:
+    external: true

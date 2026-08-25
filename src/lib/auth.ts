@@ -106,7 +106,7 @@ export async function getAdminUser() {
   if (!session) return null;
   return prisma.adminUser.findUnique({
     where: { id: session.sub },
-    select: { id: true, email: true, name: true },
+    select: { id: true, email: true, name: true, mustChangePassword: true },
   });
 }
 
@@ -197,4 +197,46 @@ export async function changeAgentPassword(
 export async function getAgentSessionId(): Promise<string | null> {
   const session = await read("agent");
   return session?.sub ?? null;
+}
+
+/**
+ * The admin's id straight from the session cookie, skipping the user lookup.
+ * Used by the forced password change, which must work for an admin who cannot
+ * yet reach the rest of the dashboard.
+ */
+export async function getAdminSessionId(): Promise<string | null> {
+  const session = await read("admin");
+  return session?.sub ?? null;
+}
+
+/**
+ * Changes the admin's own password and clears the forced-change flag.
+ *
+ * The seeded password arrives via an env file on the server, so it is known to
+ * anyone who can read that file. Forcing a change on first login means the
+ * credential that travels is never the credential that persists.
+ */
+export async function changeAdminPassword(
+  adminId: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<LoginResult> {
+  const admin = await prisma.adminUser.findUnique({
+    where: { id: adminId },
+    select: { passwordHash: true },
+  });
+  if (!admin) return { ok: false, error: "Account not found." };
+
+  if (!(await verifyPassword(currentPassword, admin.passwordHash))) {
+    return { ok: false, error: "Your current password is incorrect." };
+  }
+
+  await prisma.adminUser.update({
+    where: { id: adminId },
+    data: {
+      passwordHash: await hashPassword(newPassword),
+      mustChangePassword: false,
+    },
+  });
+  return { ok: true };
 }

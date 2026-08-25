@@ -31,13 +31,17 @@ async function seedAdmin() {
   }
 
   const passwordHash = await hashPassword(password);
+
+  // mustChangePassword is set on BOTH create and update. ADMIN_PASSWORD lives
+  // in an env file on the server, so it is known to anyone who can read that
+  // file — it must be a one-time credential, never the standing one.
   const admin = await prisma.adminUser.upsert({
     where: { email },
-    update: { passwordHash },
-    create: { email, passwordHash, name: "Sonet" },
+    update: { passwordHash, mustChangePassword: true },
+    create: { email, passwordHash, name: "Sonet", mustChangePassword: true },
   });
   console.log(`✔ admin user ready: ${admin.email}`);
-  console.log("  → change this password in-app once the admin screens exist.");
+  console.log("  → you will be asked to set a new password at first sign-in.");
 }
 
 async function seedDemoCatalogue() {

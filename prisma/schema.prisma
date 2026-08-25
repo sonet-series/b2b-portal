@@ -33,8 +33,13 @@ model AdminUser {
   email        String   @unique
   passwordHash String
   name         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+
+  /// The seed sets this true, so the password that reaches production through
+  /// an env file is dead on first use. Cleared once a real password is chosen.
+  mustChangePassword Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ---------------------------------------------------------------------------

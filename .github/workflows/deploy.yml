@@ -1,0 +1,49 @@
+# Mirrors seriestours-website's workflow: push to main, SSH in, pull, rebuild.
+#
+# Differences, both because this app owns a database:
+#   - no `docker compose down` before build, so downtime is a restart rather
+#     than the length of a full image build
+#   - the health check hits a real page, not just container status
+name: Deploy to Hetzner
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          command_timeout: 15m
+          script: |
+            set -e
+            cd /opt/b2b-portal
+            git pull origin main
+
+            # Back up before migrating. Migrations run on container start, and
+            # a failed migration on a database with no recent backup is the
+            # worst position to be in.
+            bash deploy/backup.sh
+
+            docker compose build
+            docker compose up -d
+
+            echo "→ waiting for health"
+            for i in $(seq 1 30); do
+              if [ "$(docker inspect -f '{{.State.Health.Status}}' b2b-portal-web 2>/dev/null)" = "healthy" ]; then
+                echo "healthy after ${i} checks"
+                exit 0
+              fi
+              sleep 5
+            done
+
+            echo "Container did not become healthy. Logs:"
+            docker compose logs --tail=60
+            exit 1

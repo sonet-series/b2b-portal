@@ -25,6 +25,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const admin = await getAdminUser();
   if (!admin) redirect("/admin/login");
 
+  // The setup password arrives through an env file on the server, so it is a
+  // one-time credential. /admin/change-password sits OUTSIDE this route group
+  // so this redirect cannot loop.
+  if (admin.mustChangePassword) redirect("/admin/change-password");
+
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="border-b border-slate-200 bg-white">
@@ -47,6 +52,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
           <form action={signOut} className="ml-auto flex items-center gap-3">
             <span className="hidden text-xs text-slate-500 sm:inline">{admin.email}</span>
+            <Link href="/admin/change-password" className="text-sm text-slate-600 hover:text-blue-700">
+              Password
+            </Link>
             <button type="submit" className="text-sm text-slate-600 hover:text-red-700">
               Sign out
             </button>
