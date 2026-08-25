@@ -1,17 +1,21 @@
 # Mirrors seriestours-website's compose: same Traefik label style, same ACME
 # resolver, same http→https redirect, external network, restart: always.
 #
-# ONE DELIBERATE DIFFERENCE — the network.
+# ONE DELIBERATE DIFFERENCE — the network. Confirmed with Sonet 26 Aug 2026.
 #
 # seriestours-website joins `frappe_default`, the ERP's Docker network. That is
-# correct for that site: it calls the ERP API. This portal must NOT be able to
-# reach the ERP at all (see CLAUDE.md), so it joins a dedicated `edge` network
-# instead. Traefik is attached to both, which lets it route to this container
-# while giving this container no path to any ERP container or database.
+# correct for that site: it calls the ERP API. This portal joins a dedicated
+# `edge` network instead, with Traefik attached to both. Traefik can then route
+# to this container while this container has no path to any ERP container or
+# database.
 #
-# `edge` must exist and Traefik must be attached to it before this will route.
-# See deploy/DEPLOY-PLAN.md — that is a change to shared infrastructure and is
-# not made automatically.
+# This is the intended design, not a workaround: the ERP isolation is meant to
+# hold at the infrastructure level, enforced by Docker topology rather than by
+# a firewall rule someone has to remember. Do not "simplify" this back onto
+# frappe_default.
+#
+# `edge` must exist and Traefik must be attached to it before this will route —
+# see deploy/DEPLOY-PLAN.md.
 
 services:
   web:

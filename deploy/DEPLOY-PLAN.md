@@ -8,6 +8,9 @@ labels + GitHub Actions), with **one deliberate difference: the Docker
 network**. See "Network isolation" below — that difference is the whole point,
 not an oversight.
 
+Decisions confirmed with Sonet on 26 Aug 2026 are marked as such. They are
+settled; treat them as constraints rather than options to revisit.
+
 ---
 
 ## Network isolation (read this first)
@@ -31,6 +34,11 @@ Cloudflare -> Traefik --+-- frappe_default -> ERP, MariaDB, seriestours.com
 Docker does not route between networks by default, so the portal has no path
 to the ERP. This is enforced by topology, not by a firewall rule someone has to
 remember.
+
+**Confirmed with Sonet, 26 Aug 2026: this is a deliberate choice, not a
+fallback.** The ERP isolation is meant to hold at the infrastructure level. Do
+not collapse this back onto `frappe_default` for the sake of consistency —
+consistency of *deployment style* is the goal, and that is already met.
 
 One-time setup on the box (additive, reversible with `docker network disconnect`):
 
@@ -112,9 +120,17 @@ deploy, since migrations apply on container start.
 `deploy/restore.sh <backup.db.gz>` restores one, keeping the current database
 alongside as `.pre-restore-*`.
 
-**Gap:** these backups sit on the same disk as the database. That covers a bad
-migration or a mistaken delete, not the box failing. Off-box copies are a
-separate decision.
+### Known gap — off-box backups (revisit after 24 Sept 2026)
+
+These backups sit on the same disk as the database. That covers a bad
+migration or a mistaken delete. It does **not** cover the box failing, the disk
+failing, or the server being lost.
+
+**Confirmed with Sonet, 26 Aug 2026: shipping without off-box backups is a
+deliberate launch-scope decision, to be revisited after the 24 Sept deadline.**
+It is not an oversight and it is not done. Options when picked up: Hetzner
+Storage Box over rsync/borg, an S3-compatible bucket, or simply pulling the
+nightly gzip down to another machine on a schedule.
 
 ## Continuous deploy
 

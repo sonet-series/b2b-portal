@@ -320,10 +320,36 @@ Registration never reveals whether an email is already registered — it returns
 the same message either way, so a stranger cannot enumerate which agencies work
 with Series Tours.
 
-### Hosting (confirmed 25 Aug 2026)
+### Hosting (confirmed 25–26 Aug 2026)
 Same Hetzner box as seriestours.com and the ERP, in a separate container with a
 separate database and no shared network path to the ERP. See the rule at the
-top of this file. Nothing has been provisioned yet — ask before provisioning.
+top of this file.
+
+**How the isolation is enforced.** seriestours-website joins `frappe_default`,
+the ERP's Docker network — correct for that site, which calls the ERP API. This
+portal joins a dedicated **`edge`** network instead, with Traefik attached to
+both. Traefik routes to the portal; the portal has no route to the ERP or its
+database.
+
+Sonet confirmed on 26 Aug 2026 that this is a deliberate choice, not a
+fallback: the isolation is meant to hold at the infrastructure level, enforced
+by Docker topology rather than by a firewall rule someone has to remember.
+**Do not move this container onto `frappe_default` for consistency.** The thing
+that is kept consistent with the rest of the web family is the deployment
+*style* — Compose, Traefik labels, `/opt/<repo>`, GitHub Actions — and that is
+already met.
+
+Deployment details live in `deploy/DEPLOY-PLAN.md`.
+
+### Backups (confirmed 26 Aug 2026)
+Nightly `sqlite3 .backup` + `PRAGMA integrity_check`, gzipped, 30 days, on the
+same disk. Also runs before every CI deploy, since migrations apply on
+container start.
+
+**Known gap, deliberately accepted for launch:** no off-box copy. Covers a bad
+migration or a mistaken delete, not the box failing. Sonet decided on 26 Aug
+2026 to ship without it and revisit **after the 24 Sept 2026 deadline**. Do not
+build it before then; do not let it be forgotten after.
 
 Resolved:
 - Houseboat schema — confirmed, extended with dual pricing modes (25 Aug 2026).
