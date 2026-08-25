@@ -1,0 +1,364 @@
+// Series Tours — B2B Agent Portal
+// Standalone schema. This database has NO relationship to the Frappe/ERPNext
+// ERP (`series_tours_app`). Never add a connection, import, or sync to it.
+//
+// Conventions (see CLAUDE.md for the full rationale):
+//  - Money is stored as INTEGER minor units (paise). 1500.50 INR -> 150050.
+//    Field names carry the `Minor` suffix so this is impossible to miss.
+//  - SQLite has no native enum type. Enum-ish columns are String, and the
+//    allowed values live in src/lib/enums.ts as the single source of truth.
+//  - Seasons are date ranges (validFrom/validTo), not free-text labels, so the
+//    quote engine can resolve a rate from a travel date with no human input.
+//  - `active` is a soft-disable everywhere. Catalogue rows are never hard
+//    deleted once they have been quoted against.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 no longer takes a connection URL here. The URL lives in
+// prisma.config.ts (for the CLI/migrations) and reaches PrismaClient through
+// the better-sqlite3 driver adapter in src/lib/db.ts.
+datasource db {
+  provider = "sqlite"
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+/// Sonet only. v1 deliberately has no multi-admin, no roles, no invites.
+model AdminUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Hotels
+// ---------------------------------------------------------------------------
+
+model Hotel {
+  id           String   @id @default(uuid())
+  name         String
+  location     String // town / area, e.g. "Munnar"
+  starCategory Int?
+  notes        String? // internal only, never shown to agents
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  rates HotelRate[]
+
+  @@index([active, location])
+}
+
+model HotelRate {
+  id      String @id @default(uuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  roomType String // "Deluxe", "Suite", ...
+  mealPlan String // MealPlan enum in src/lib/enums.ts: EP | CP | MAP | AP
+
+  /// Human label for the season, shown in admin and on the quote ("Peak").
+  seasonLabel String
+  /// Inclusive. The quote engine matches a travel date against this window.
+  validFrom   DateTime
+  /// Inclusive.
+  validTo     DateTime
+
+  /// DEFAULT rate per room per night, in paise. An agent rate card may
+  /// override this; if it does not, this is the price the agent is quoted.
+  ratePerNightMinor Int
+
+  /// Extra bed / extra adult sharing, per night, in paise. Optional.
+  extraBedRateMinor Int?
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId, active])
+  @@index([validFrom, validTo])
+}
+
+// ---------------------------------------------------------------------------
+// Houseboats
+//
+// No prior schema existed for these anywhere (unlike hotels and vehicles), so
+// this shape is a fresh design. See CLAUDE.md "Houseboat pricing design" for
+// why it is modelled per-cruise rather than per-night-per-person.
+// ---------------------------------------------------------------------------
+
+model Houseboat {
+  id       String  @id @default(uuid())
+  name     String
+  /// Third-party operator, if we do not run the boat ourselves.
+  operator String?
+  /// HouseboatCategory enum: Deluxe | Premium | Luxury | Super Luxury
+  category String
+  bedrooms Int
+  location String // "Alleppey", "Kumarakom", ...
+
+  /// Free-text, agent-visible: "AC bedrooms 9pm-6am, upper deck, sundeck".
+  amenities String?
+  notes     String? // internal only
+  active    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rates HouseboatRate[]
+
+  @@index([active, location, category])
+}
+
+model HouseboatRate {
+  id          String    @id @default(uuid())
+  houseboatId String
+  houseboat   Houseboat @relation(fields: [houseboatId], references: [id], onDelete: Cascade)
+
+  /// CruisePackage enum: DAY_CRUISE | OVERNIGHT_22HR | TWO_NIGHT
+  /// A Kerala houseboat is sold as a whole-boat cruise package, not a room
+  /// night, which is why this replaces the hotel's roomType axis.
+  cruisePackage String
+
+  /// Meals bundled into the cruise price. Almost always full board for
+  /// overnight; kept explicit so a day cruise can differ.
+  mealPlan String // MealPlan enum
+
+  seasonLabel String
+  validFrom   DateTime
+  validTo     DateTime
+
+  /// DEFAULT price for the WHOLE BOAT for one cruise, in paise.
+  ratePerCruiseMinor Int
+
+  /// Capacity guardrails for the quote screen. A 2-bedroom boat quoted for
+  /// 6 pax needs an extra-pax charge, not a silent wrong price.
+  includedPax     Int
+  maxPax          Int
+  /// Per extra person beyond includedPax, per cruise, in paise.
+  extraPaxRateMinor Int?
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([houseboatId, active])
+  @@index([validFrom, validTo])
+}
+
+// ---------------------------------------------------------------------------
+// Vehicles
+// ---------------------------------------------------------------------------
+
+model Vehicle {
+  id       String  @id @default(uuid())
+  /// "Dzire", "Innova Crysta", "Tempo Traveller 12s"
+  type     String
+  capacity Int // seats, excluding driver
+  notes    String?
+  active   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rates VehicleRate[]
+
+  @@index([active])
+}
+
+model VehicleRate {
+  id        String  @id @default(uuid())
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  /// VehicleRateType enum: PER_KM | PER_DAY | TRANSFER
+  /// PER_DAY is the Kerala norm (a day includes a km allowance); PER_KM and
+  /// point-to-point TRANSFER are both still used, so all three are supported.
+  rateType String
+
+  seasonLabel String
+  validFrom   DateTime
+  validTo     DateTime
+
+  /// DEFAULT rate in paise. Unit depends on rateType: per km, per day, or
+  /// flat for the transfer.
+  rateMinor Int
+
+  /// PER_DAY only: km included before extra-km billing kicks in.
+  includedKmPerDay Int?
+  /// PER_DAY only: charge per km beyond includedKmPerDay, in paise.
+  extraKmRateMinor Int?
+  /// PER_DAY only: driver bata / night halt allowance per day, in paise.
+  driverAllowanceMinor Int?
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vehicleId, active])
+  @@index([validFrom, validTo])
+}
+
+// ---------------------------------------------------------------------------
+// Itineraries / packages
+// ---------------------------------------------------------------------------
+
+model Itinerary {
+  id             String @id @default(uuid())
+  name           String // "5N/6D Munnar - Thekkady - Alleppey"
+  durationNights Int
+
+  /// Day-by-day summary. Free text in v1 (structured days are a Phase 5+
+  /// question, not a v1 requirement).
+  routeSummary String?
+  inclusions   String?
+  exclusions   String?
+
+  /// DEFAULT price PER PERSON on twin-sharing, in paise. See CLAUDE.md — this
+  /// is the pricing basis the whole itinerary quote screen assumes.
+  basePricePerPaxMinor Int
+
+  /// Single-occupancy supplement per person, in paise. Optional.
+  singleSupplementMinor Int?
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+}
+
+// ---------------------------------------------------------------------------
+// Agents
+// ---------------------------------------------------------------------------
+
+model Agent {
+  id                 String  @id @default(uuid())
+  agencyName         String
+  contactName        String
+  phone              String
+  email              String  @unique
+  gstOrLicenseNumber String
+
+  /// AgentStatus enum: pending | approved | rejected
+  /// Registration always lands on `pending`. Nothing auto-approves.
+  status String @default("pending")
+
+  /// Set at registration; login is refused until status == approved.
+  passwordHash String
+
+  /// Internal note from Sonet, e.g. why a signup was rejected.
+  adminNotes String?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  approvedAt DateTime?
+  lastLoginAt DateTime?
+
+  rateCardEntries AgentRateCard[]
+  quotes          Quote[]
+
+  @@index([status, createdAt])
+}
+
+/// Per-agent price overrides. This is what makes pricing per-customer rather
+/// than one shared B2B rate card.
+///
+/// FALLBACK RULE (confirmed with Sonet, 25 Aug 2026): if no row exists here
+/// for a given product, the agent is quoted the DEFAULT rate from the
+/// catalogue table. Absence of an override never blocks a quote.
+model AgentRateCard {
+  id      String @id @default(uuid())
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  /// ProductType enum: hotel | houseboat | vehicle | itinerary
+  productType String
+
+  /// Points at the specific priced row:
+  ///   hotel     -> HotelRate.id
+  ///   houseboat -> HouseboatRate.id
+  ///   vehicle   -> VehicleRate.id
+  ///   itinerary -> Itinerary.id
+  /// Deliberately not a Prisma relation: it is polymorphic across four
+  /// tables. Referential integrity is enforced in the application layer —
+  /// see src/lib/rate-card.ts.
+  referenceId String
+
+  /// The agent-specific price, in paise, replacing the default on that row.
+  overridePriceMinor Int
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, productType, referenceId])
+  @@index([agentId, productType])
+}
+
+// ---------------------------------------------------------------------------
+// Quotes
+//
+// v1 is QUOTE-ONLY: no booking, no payment, no money movement. These tables
+// record what was quoted so an agent can retrieve a quote by reference and so
+// Sonet can see what pricing went out. They confer no booking semantics.
+// ---------------------------------------------------------------------------
+
+model Quote {
+  id      String @id @default(uuid())
+  /// Short human reference shown to the agent, e.g. "ST-2609-0042".
+  reference String @unique
+
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  /// ProductType enum — which quote screen produced this.
+  productType String
+
+  /// Trip dates the pricing was resolved against.
+  travelStart DateTime
+  travelEnd   DateTime
+  pax         Int
+
+  /// Sum of line totals, in paise.
+  totalMinor Int
+  currency   String @default("INR")
+
+  /// Frozen copy of the inputs and the resolved pricing, as JSON. Catalogue
+  /// rates change; a quote already sent to an agent must not silently change
+  /// with them.
+  snapshotJson String
+
+  createdAt DateTime @default(now())
+
+  lines QuoteLine[]
+
+  @@index([agentId, createdAt])
+}
+
+model QuoteLine {
+  id      String @id @default(uuid())
+  quoteId String
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  description String
+  /// nights, days, km, or pax depending on the product.
+  quantity    Int
+  unitMinor   Int
+  totalMinor  Int
+
+  /// True when an AgentRateCard override supplied unitMinor, false when the
+  /// catalogue default did. Makes "why is this price what it is" answerable.
+  usedOverride Boolean @default(false)
+
+  sortOrder Int @default(0)
+
+  @@index([quoteId])
+}
