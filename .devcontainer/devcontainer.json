@@ -1,0 +1,34 @@
+{
+  "name": "Series Tours B2B Portal",
+  "build": { "dockerfile": "Dockerfile" },
+
+  // Bind the project folder only. Nothing outside it is reachable from inside
+  // the container — that bounded blast radius is the point of running
+  // autonomous sessions in here.
+  "workspaceFolder": "/workspace",
+
+  "forwardPorts": [3000, 5555],
+  "portsAttributes": {
+    "3000": { "label": "Next.js dev server", "onAutoForward": "notify" },
+    "5555": { "label": "Prisma Studio", "onAutoForward": "silent" }
+  },
+
+  "postCreateCommand": "npm ci && npx prisma generate && npx prisma migrate deploy",
+
+  "remoteUser": "node",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Prisma.prisma",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "typescript.tsdk": "node_modules/typescript/lib"
+      }
+    }
+  }
+}
