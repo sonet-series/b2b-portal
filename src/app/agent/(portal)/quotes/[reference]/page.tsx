@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getAgent } from "@/lib/auth";
+import { requireAgent } from "@/lib/auth";
 import { getQuote } from "@/lib/quote-store";
 import { formatMinor } from "@/lib/money";
 import { formatDateOnly } from "@/lib/dates";
@@ -21,7 +21,7 @@ export default async function QuoteDetailPage({
   params: Promise<{ reference: string }>;
 }) {
   const { reference } = await params;
-  const agent = (await getAgent())!;
+  const agent = await requireAgent();
 
   // Scoped to this agent — another agency's reference must not resolve.
   const quote = await getQuote(agent.id, reference);

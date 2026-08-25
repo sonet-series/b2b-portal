@@ -8,20 +8,49 @@
  * screens — demo rows must never turn up in a real database.
  *
  *   SEED_DEMO=1 npm run db:seed
+ *
+ * ---------------------------------------------------------------------------
+ * THIS FILE MUST NOT IMPORT FROM src/.
+ *
+ * It runs via tsx inside the production container at startup, and the runner
+ * image deliberately ships only the compiled app in .next — no TypeScript
+ * source. Importing a helper from src/ fails at container runtime with
+ * "Cannot find module '../src/lib/password'", which no build-time check
+ * catches because the build stage still has src/ present.
+ *
+ * So money is written as explicit paise literals and dates as explicit UTC
+ * dates below, rather than reaching for src/lib/money.ts and src/lib/dates.ts.
+ * That is deliberate: a local copy of those helpers would be a second
+ * implementation of a load-bearing convention, free to drift. Literals cannot
+ * drift because there is nothing to drift from.
+ * ---------------------------------------------------------------------------
  */
 import "dotenv/config";
+import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { hashPassword } from "../src/lib/password";
-import { toMinor } from "../src/lib/money";
-import { parseDateOnly } from "../src/lib/dates";
 
 const prisma = new PrismaClient({
   adapter: new PrismaBetterSqlite3({ url: process.env.DATABASE_URL! }),
 });
 
+/** Matches BCRYPT COST in src/lib/password.ts. bcrypt records the cost inside
+ *  the hash, so the two staying in step is a tidiness matter, not a correctness
+ *  one — a hash written here verifies fine against the app's verifyPassword. */
+const BCRYPT_COST = 12;
+
+async function hashPassword(plain: string): Promise<string> {
+  if (plain.length < 10) throw new Error("Password must be at least 10 characters");
+  return bcrypt.hash(plain, BCRYPT_COST);
+}
+
+/** YYYY-MM-DD at UTC midnight, matching how the app stores calendar dates. */
+function utc(year: number, month: number, day: number): Date {
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
 /** Wide-open window so demo rates resolve for any travel date while building. */
-const ALL_2026 = { validFrom: parseDateOnly("2026-01-01"), validTo: parseDateOnly("2026-12-31") };
+const ALL_2026 = { validFrom: utc(2026, 1, 1), validTo: utc(2026, 12, 31) };
 
 async function seedAdmin() {
   const email = process.env.ADMIN_EMAIL;
@@ -60,15 +89,15 @@ async function seedDemoCatalogue() {
             mealPlan: "CP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            ratePerNightMinor: toMinor(4500),
-            extraBedRateMinor: toMinor(1200),
+            ratePerNightMinor: 450_000, // ₹4,500
+            extraBedRateMinor: 120_000, // ₹1,200
           },
           {
             roomType: "Suite",
             mealPlan: "MAP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            ratePerNightMinor: toMinor(8200),
+            ratePerNightMinor: 820_000, // ₹8,200
           },
         ],
       },
@@ -94,9 +123,9 @@ async function seedDemoCatalogue() {
             mealPlan: "AP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateMinor: toMinor(14500),
+            rateMinor: 1_450_000, // ₹14,500
             includedPax: 4,
-            extraPaxRateMinor: toMinor(2500),
+            extraPaxRateMinor: 250_000, // ₹2,500
             maxPax: 6,
           },
           // Same boat, same duration, sold per head as well. Two rows, so the
@@ -107,7 +136,7 @@ async function seedDemoCatalogue() {
             mealPlan: "AP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateMinor: toMinor(3800),
+            rateMinor: 380_000, // ₹3,800
             minPax: 4,
             maxPax: 6,
           },
@@ -117,9 +146,9 @@ async function seedDemoCatalogue() {
             mealPlan: "MAP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateMinor: toMinor(7000),
+            rateMinor: 700_000, // ₹7,000
             includedPax: 4,
-            extraPaxRateMinor: toMinor(900),
+            extraPaxRateMinor: 90_000, // ₹900
             maxPax: 8,
           },
         ],
@@ -139,16 +168,16 @@ async function seedDemoCatalogue() {
             rateType: "PER_DAY",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateMinor: toMinor(3800),
+            rateMinor: 380_000, // ₹3,800
             includedKmPerDay: 250,
-            extraKmRateMinor: toMinor(18),
-            driverAllowanceMinor: toMinor(500),
+            extraKmRateMinor: 1_800, // ₹18
+            driverAllowanceMinor: 50_000, // ₹500
           },
           {
             rateType: "TRANSFER",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateMinor: toMinor(3200),
+            rateMinor: 320_000, // ₹3,200
           },
         ],
       },
@@ -171,15 +200,15 @@ async function seedDemoCatalogue() {
             pricingMode: "PER_PERSON_TWIN_SHARING",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            priceMinor: toMinor(24500),
-            singleSupplementMinor: toMinor(7500),
+            priceMinor: 2_450_000, // ₹24,500
+            singleSupplementMinor: 750_000, // ₹7,500
           },
           // Same package sold as a flat family rate.
           {
             pricingMode: "PER_PACKAGE",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            priceMinor: toMinor(96000),
+            priceMinor: 9_600_000, // ₹96,000
             maxPax: 4,
           },
         ],
@@ -210,26 +239,26 @@ async function seedDemoCatalogue() {
         agentId: agent.id,
         productType: "hotel",
         referenceId: hotel.rates[0].id,
-        overridePriceMinor: toMinor(4100),
+        overridePriceMinor: 410_000, // ₹4,100
         notes: "Demo override on the Deluxe/CP rate",
       },
       {
         agentId: agent.id,
         productType: "houseboat",
         referenceId: houseboat.rates[0].id,
-        overridePriceMinor: toMinor(13500),
+        overridePriceMinor: 1_350_000, // ₹13,500
       },
       {
         agentId: agent.id,
         productType: "vehicle",
         referenceId: vehicle.rates[0].id,
-        overridePriceMinor: toMinor(3500),
+        overridePriceMinor: 350_000, // ₹3,500
       },
       {
         agentId: agent.id,
         productType: "itinerary",
         referenceId: itinerary.rates[0].id,
-        overridePriceMinor: toMinor(22900),
+        overridePriceMinor: 2_290_000, // ₹22,900
       },
     ],
   });

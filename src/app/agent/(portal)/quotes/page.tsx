@@ -1,4 +1,4 @@
-import { getAgent } from "@/lib/auth";
+import { requireAgent } from "@/lib/auth";
 import { listQuotes } from "@/lib/quote-store";
 import { formatMinor } from "@/lib/money";
 import { Badge, EmptyState, PageHeader, Table, Td } from "@/components/ui";
@@ -14,7 +14,7 @@ const PRODUCT_LABEL: Record<ProductType, string> = {
 };
 
 export default async function QuotesPage() {
-  const agent = (await getAgent())!;
+  const agent = await requireAgent();
   const quotes = await listQuotes(agent.id);
 
   return (

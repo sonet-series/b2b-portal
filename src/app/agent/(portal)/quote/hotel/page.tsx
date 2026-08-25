@@ -1,4 +1,4 @@
-import { getAgent } from "@/lib/auth";
+import { requireAgent } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { quoteHotel } from "@/lib/quote";
 import { PricingError } from "@/lib/pricing";
@@ -16,7 +16,7 @@ export default async function HotelQuotePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const agent = (await getAgent())!;
+  const agent = await requireAgent();
   const params = await searchParams;
 
   const hotels = await prisma.hotel.findMany({

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getAgent } from "@/lib/auth";
+import { requireAgent } from "@/lib/auth";
 import { listQuotes } from "@/lib/quote-store";
 import { formatMinor } from "@/lib/money";
 import { Card, PageHeader, Badge } from "@/components/ui";
@@ -14,7 +14,7 @@ const PRODUCTS = [
 ];
 
 export default async function AgentHomePage() {
-  const agent = (await getAgent())!;
+  const agent = await requireAgent();
   const recent = (await listQuotes(agent.id)).slice(0, 5);
 
   return (

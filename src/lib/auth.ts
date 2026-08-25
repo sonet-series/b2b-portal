@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "./db";
 import { verifyPassword, hashPassword } from "./password";
@@ -187,6 +188,22 @@ export async function changeAgentPassword(
     },
   });
   return { ok: true };
+}
+
+/**
+ * Loads the signed-in agent, redirecting to the sign-in page if there is none.
+ *
+ * Pages must use this rather than asserting `(await getAgent())!`. A layout's
+ * redirect does NOT prevent its pages from running — Next renders layout and
+ * page in parallel — so a page that assumes the layout already bounced an
+ * unauthenticated request throws on every such request. The user still ends up
+ * redirected, but the server logs an error each time and the correct behaviour
+ * depends on the redirect winning a race.
+ */
+export async function requireAgent() {
+  const agent = await getAgent();
+  if (!agent) redirect("/login");
+  return agent;
 }
 
 /**

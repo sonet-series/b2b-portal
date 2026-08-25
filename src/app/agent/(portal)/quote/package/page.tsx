@@ -1,4 +1,4 @@
-import { getAgent } from "@/lib/auth";
+import { requireAgent } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { quoteItinerary } from "@/lib/quote";
 import { PricingError } from "@/lib/pricing";
@@ -16,7 +16,7 @@ export default async function PackageQuotePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const agent = (await getAgent())!;
+  const agent = await requireAgent();
   const params = await searchParams;
 
   const packages = await prisma.itinerary.findMany({
