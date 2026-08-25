@@ -62,6 +62,61 @@ from the Docker socket, so no restart is needed.
 
 ---
 
+## Traefik naming — read it from the LIVE config, not from another repo
+
+Router labels reference Traefik objects **by name**, and a name that does not
+exist fails silently at deploy time: Traefik logs
+`Router uses a nonexistent certificate resolver` and simply does not serve the
+route.
+
+This bit us once. The portal's labels were copied from
+`seriestours-website/docker-compose.yml`, which names the resolver `acme`. The
+resolver actually running on the box is **`main-resolver`**, defined as
+`--certificatesResolvers.main-resolver.acme...` in the shared
+`frappe-compose.yml`. That repo's compose is stale relative to the box.
+
+Before trusting any router label, read the names off the running Traefik:
+
+```bash
+TRAEFIK=$(docker ps --format '{{.Names}}' | grep -i traefik | head -1)
+
+# certificate resolver names
+docker inspect "$TRAEFIK" --format '{{json .Args}}' | tr ',' '\n' | grep -i certificatesresolvers
+
+# entrypoint names (expect at least websecure; confirm `web` exists too)
+docker inspect "$TRAEFIK" --format '{{json .Args}}' | tr ',' '\n' | grep -i entrypoints
+
+# and check Traefik's log after deploying for silently-dropped routers
+docker logs --tail 100 "$TRAEFIK" 2>&1 | grep -iE "nonexistent|error"
+```
+
+**Known-good reference** — the live ERP frontend router:
+
+```yaml
+traefik.enable: "true"
+traefik.http.routers.frontend-http.entrypoints: websecure
+traefik.http.routers.frontend-http.rule: Host(`erp.seriestours.com`)
+traefik.http.routers.frontend-http.tls.certresolver: main-resolver
+traefik.http.services.frontend.loadbalancer.server.port: "8080"
+```
+
+**One unverified assumption remains.** The portal declares a second router on
+the `web` entrypoint to redirect http→https. The ERP router above does not use
+`web` at all, so its existence is unconfirmed — and it came from the same stale
+file that gave us `acme`. If the entrypoint check above does not list `web`,
+delete these three labels; HTTPS still works without them, only the automatic
+http→https redirect is lost:
+
+```
+traefik.http.routers.b2bportal-http.rule=...
+traefik.http.routers.b2bportal-http.entrypoints=web
+traefik.http.routers.b2bportal-http.middlewares=b2bportal-https-redirect
+traefik.http.middlewares.b2bportal-https-redirect.redirectscheme.scheme=https
+```
+
+(The `curl` check for a `308` further down is what tells you whether the
+redirect router is live.)
+
 ## First deploy
 
 Prerequisites: DNS for `b2b.seriestours.com` pointing at the box, and the

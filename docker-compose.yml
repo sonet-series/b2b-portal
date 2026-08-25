@@ -1,5 +1,8 @@
-# Mirrors seriestours-website's compose: same Traefik label style, same ACME
-# resolver, same http→https redirect, external network, restart: always.
+# Mirrors seriestours-website's compose: same Traefik label style, same
+# http→https redirect, external network, restart: always.
+#
+# The certificate resolver name is taken from the LIVE Traefik config, not from
+# that repo — see the comment on the certresolver label below.
 #
 # ONE DELIBERATE DIFFERENCE — the network. Confirmed with Sonet 26 Aug 2026.
 #
@@ -49,7 +52,14 @@ services:
       - "traefik.docker.network=edge"
       - "traefik.http.routers.b2bportal.rule=Host(`b2b.seriestours.com`)"
       - "traefik.http.routers.b2bportal.entrypoints=websecure"
-      - "traefik.http.routers.b2bportal.tls.certresolver=acme"
+      # main-resolver, NOT acme. The resolver is defined as
+      # --certificatesResolvers.main-resolver.acme... in the shared
+      # frappe-compose.yml on the box. The name `acme` appears in the
+      # seriestours-website repo's compose, but that file is stale relative to
+      # what is actually running — copying it produced
+      # "Router uses a nonexistent certificate resolver". Confirmed against the
+      # live ERP frontend router, 26 Aug 2026.
+      - "traefik.http.routers.b2bportal.tls.certresolver=main-resolver"
       - "traefik.http.services.b2bportal.loadbalancer.server.port=3000"
       - "traefik.http.routers.b2bportal-http.rule=Host(`b2b.seriestours.com`)"
       - "traefik.http.routers.b2bportal-http.entrypoints=web"
