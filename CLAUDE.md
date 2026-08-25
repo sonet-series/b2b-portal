@@ -195,6 +195,10 @@ src/components/ui.tsx  # form and table primitives
   handover.ts          # the copy-ready WhatsApp message (v1 sends no email)
   temp-password.ts     # CSPRNG temp passwords, no lookalike characters
   rate-options.ts      # the four rate tables flattened into one pick list
+  quote.ts             # the quote engine (season resolution + rate card)
+  quote-types.ts       # shared shapes, no server-only import so the client
+                       #   components can use the types
+  quote-store.ts       # saving, listing, and retrieving quotes
 src/app/
   page.tsx             # public landing
   register/            # public agent registration -> pending
@@ -233,7 +237,7 @@ Node lives at `~/.local/node/bin` and is on PATH via `~/.zshrc`.
 - [x] **Phase 1** — scaffold, DB schema, dev container, this file
 - [x] **Phase 2** — admin CRUD (hotels/houseboats/vehicles/itineraries/rates) + Sonet-only auth
 - [x] **Phase 3** — agent registration, pending queue, approve + assign rate card
-- [ ] **Phase 4** — agent quote screens for the four product types, price resolution
+- [x] **Phase 4** — agent quote screens for the four product types, price resolution
 - [ ] **Phase 5** — polish, deploy to b2b.seriestours.com
 
 Each phase ends with a checkpoint for Sonet: what was built, what is left, what
@@ -248,6 +252,43 @@ needs a decision. Do not push silently into the next phase.
   per package. Sonet raised this as an assumption to confirm rather than
   assume; the schema supports the flexible reading. Confirm it matches how the
   boats are actually contracted.
+### Quoting (Phase 4)
+Single-product quoting: one hotel, one boat, one vehicle, or one package per
+quote. Combining products into one multi-line quote is deliberately NOT built.
+
+Two rules run through `src/lib/quote.ts`:
+
+1. **Every price resolves through the agent's rate card, falling back to the
+   catalogue default.** `QuoteLine.usedOverride` records which source supplied
+   each line, so "why is this price what it is" stays answerable.
+
+2. **Seasons resolve per night / per day, not once per trip.** A stay crossing
+   from off-season into peak reprices at the boundary and shows as two lines.
+   Resolving once for the whole trip would silently undercharge on exactly the
+   bookings that matter most. Consecutive nights sharing a rate are grouped into
+   one line, so a quote reads as seasons rather than as a list of days.
+
+   Per-day resolution applies to hotel stays and PER_DAY vehicle hire. Cruises,
+   transfers, per-km hire, and packages are single events priced on their start
+   date — they are one product with one season, not a run of nights.
+
+   Vehicle extra-km bills against the km allowance pooled across the whole
+   hire, not per season segment.
+
+**Quote inputs live in the query string**, not component state, so a priced
+result is refreshable, bookmarkable, and shareable with a colleague.
+
+**Saving recomputes.** `saveQuote` re-prices from the inputs and the chosen
+option key server-side; the total rendered in the browser is never trusted.
+A stale or forged option key is refused rather than persisted.
+
+Quotes are scoped to their agent — `getQuote` filters on `agentId`, so another
+agency's reference 404s.
+
+Reference format `ST-YYMM-NNNN` (e.g. `ST-2609-0042`), short enough to read
+down a phone line. Allocation is read-then-write, so it retries on the unique
+index rather than assuming no collision.
+
 ### Approval notification — manual, by design (confirmed 25 Aug 2026)
 **No email provider, and none is to be built for v1.** Approving an agent does
 not send anything. Instead the admin surfaces a copy-ready handover message

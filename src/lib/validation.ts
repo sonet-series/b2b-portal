@@ -398,3 +398,65 @@ export const rateCardEntrySchema = z.object({
   overridePriceMinor: money("Override price"),
   notes: optionalText(500),
 });
+
+// ---------------------------------------------------------------------------
+// Quote inputs
+//
+// These parse URL search params, not just form posts — the quote screens keep
+// their inputs in the query string so a result is refreshable and shareable.
+// ---------------------------------------------------------------------------
+
+const paxField = (label: string, max = 60) =>
+  z.coerce
+    .number({ error: `${label} must be a number` })
+    .int(`${label} must be a whole number`)
+    .min(1, `${label} must be at least 1`)
+    .max(max, `${label} looks too large`);
+
+export const hotelQuoteSchema = z
+  .object({
+    hotelId: z.string().min(1, "Choose a hotel"),
+    checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a check-in date"),
+    checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a check-out date"),
+    rooms: paxField("Rooms", 40),
+    extraBeds: z.coerce.number().int().min(0).max(40).catch(0),
+  })
+  .superRefine((v, ctx) => {
+    if (v.checkOut <= v.checkIn) {
+      ctx.addIssue({ code: "custom", path: ["checkOut"], message: "Check-out must be after check-in" });
+    }
+  });
+
+export const houseboatQuoteSchema = z.object({
+  houseboatId: z.string().min(1, "Choose a houseboat"),
+  travelDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a cruise date"),
+  pax: paxField("Passengers"),
+});
+
+export const vehicleQuoteSchema = z
+  .object({
+    vehicleId: z.string().min(1, "Choose a vehicle"),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a start date"),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose an end date"),
+    km: z
+      .string()
+      .trim()
+      .optional()
+      .transform((v) => (v === undefined || v === "" ? null : Number(v)))
+      .superRefine((v, ctx) => {
+        if (v !== null && (!Number.isFinite(v) || v < 0 || v > 100000)) {
+          ctx.addIssue({ code: "custom", message: "Distance must be a number of kilometres" });
+        }
+      }),
+  })
+  .superRefine((v, ctx) => {
+    if (v.endDate < v.startDate) {
+      ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date must not be before the start date" });
+    }
+  });
+
+export const itineraryQuoteSchema = z.object({
+  itineraryId: z.string().min(1, "Choose a package"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a departure date"),
+  pax: paxField("Travellers"),
+});

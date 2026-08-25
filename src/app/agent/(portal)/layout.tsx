@@ -5,6 +5,14 @@ import { getAgent, clearSession } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Series Tours B2B" };
 
+const NAV = [
+  { href: "/agent/quote/vehicle", label: "Vehicles" },
+  { href: "/agent/quote/houseboat", label: "Houseboats" },
+  { href: "/agent/quote/hotel", label: "Hotels" },
+  { href: "/agent/quote/package", label: "Packages" },
+  { href: "/agent/quotes", label: "Saved quotes" },
+];
+
 async function signOut() {
   "use server";
   await clearSession("agent");
@@ -23,10 +31,22 @@ export default async function AgentLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <Link href="/agent" className="text-sm font-semibold text-slate-900">
             Series Tours <span className="font-normal text-slate-400">B2B</span>
           </Link>
+
+          <nav className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            {NAV.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="text-slate-600 transition-colors hover:text-blue-700"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
           <form action={signOut} className="ml-auto flex items-center gap-3">
             <span className="hidden text-xs text-slate-500 sm:inline">{agent.agencyName}</span>
             <Link href="/agent/change-password" className="text-sm text-slate-600 hover:text-blue-700">
@@ -38,7 +58,7 @@ export default async function AgentLayout({ children }: { children: React.ReactN
           </form>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
     </div>
   );
 }

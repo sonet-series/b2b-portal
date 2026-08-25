@@ -382,7 +382,16 @@ model Quote {
   /// Trip dates the pricing was resolved against.
   travelStart DateTime
   travelEnd   DateTime
-  pax         Int
+
+  /// WATCH OUT — this column means different things per product type, because
+  /// the four quote screens ask for different things:
+  ///   hotel     -> number of ROOMS (the hotel screen never asks a headcount)
+  ///   houseboat -> passengers
+  ///   itinerary -> travellers
+  ///   vehicle   -> 0 (a vehicle hire has no headcount input)
+  /// Set in travelWindow() in src/lib/quote-store.ts. Do not read it as a
+  /// headcount without checking productType first.
+  pax Int
 
   /// Sum of line totals, in paise.
   totalMinor Int

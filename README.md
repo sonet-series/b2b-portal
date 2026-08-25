@@ -20,12 +20,13 @@ Requires Node 24 (see `.nvmrc`). Open http://localhost:3000.
 
 ## Status
 
-Phases 1–3 complete: project scaffold, database schema, dev container, the
+Phases 1–4 complete: project scaffold, database schema, dev container, the
 Sonet-only admin (catalogue CRUD with seasonal rates and dual pricing modes),
-and agent registration through approval and per-agent rate cards.
+agent registration through approval with per-agent rate cards, and instant
+quoting across all four product types.
 
-Phases 4–5 (agent quote screens, deploy) still to come — see the phase plan in
-CLAUDE.md.
+Phase 5 (polish and deploy to b2b.seriestours.com) still to come — see the
+phase plan in CLAUDE.md.
 
 This portal sends no email. Approving an agent produces a copy-ready message
 that Sonet passes on over WhatsApp or by phone — a deliberate manual step.
