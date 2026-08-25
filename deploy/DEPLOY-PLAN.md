@@ -40,12 +40,25 @@ fallback.** The ERP isolation is meant to hold at the infrastructure level. Do
 not collapse this back onto `frappe_default` for the sake of consistency —
 consistency of *deployment style* is the goal, and that is already met.
 
-One-time setup on the box (additive, reversible with `docker network disconnect`):
+One-time setup on the box. Additive — Traefik keeps every network it already
+has — and reversible with `docker network disconnect`.
 
 ```bash
+# 1. Find the Traefik container's real name.
+docker ps --format '{{.Names}}\t{{.Image}}' | grep -i traefik
+
+# 2. Create the network and attach Traefik to it.
 docker network create edge
-docker network connect edge <traefik-container-name>
+docker network connect edge <traefik-container-name-from-step-1>
+
+# 3. Confirm Traefik is now on BOTH networks.
+docker inspect <traefik-container-name> \
+  --format '{{range $n, $_ := .NetworkSettings.Networks}}{{$n}} {{end}}'
+# expect to see both: edge frappe_default
 ```
+
+Nothing about the ERP or seriestours.com changes. Traefik reloads its config
+from the Docker socket, so no restart is needed.
 
 ---
 
@@ -56,7 +69,7 @@ Prerequisites: DNS for `b2b.seriestours.com` pointing at the box, and the
 
 ```bash
 cd /opt
-git clone <repo-url> b2b-portal
+git clone git@github.com:sonet-series/b2b-portal.git
 cd b2b-portal
 
 # The container runs as uid 1001; the bind mount must be writable by it.
@@ -85,6 +98,24 @@ generates or resets — so it is safe on every container start.
 
 `SEED_DEMO` is deliberately unset in production: the demo catalogue must never
 appear in a real database.
+
+## Verify the ERP isolation actually holds
+
+Do this once after the first deploy. It is the whole point of the `edge`
+network, and it is worth confirming rather than assuming.
+
+```bash
+# The portal must be on `edge` and NOTHING else.
+docker inspect b2b-portal-web \
+  --format '{{range $n, $_ := .NetworkSettings.Networks}}{{$n}} {{end}}'
+# expect exactly: edge
+
+# The portal must not be able to resolve or reach any ERP container.
+docker exec b2b-portal-web getent hosts <erp-container-name> || echo "no route — correct"
+```
+
+The second command failing is the pass condition. If it resolves, the portal is
+on a network it should not be on — stop and fix that before going live.
 
 ## Verify HTTPS before trusting the handover
 
@@ -134,8 +165,16 @@ nightly gzip down to another machine on a schedule.
 
 ## Continuous deploy
 
-`.github/workflows/deploy.yml` deploys on push to `main`. Requires repo
-secrets: `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`.
+Repo: `github.com/sonet-series/b2b-portal` (confirmed 26 Aug 2026).
+
+`.github/workflows/deploy.yml` deploys on push to `main`. Add three repo
+secrets under Settings → Secrets and variables → Actions:
+
+| Secret | Value |
+|---|---|
+| `SERVER_HOST` | the Hetzner box's IP or hostname |
+| `SERVER_USER` | the SSH user used for deploys |
+| `SERVER_SSH_KEY` | private key for that user (the whole PEM, including header and footer lines) |
 
 Unlike seriestours-website's workflow it does **not** `docker compose down`
 before building, so downtime is a restart rather than a full image build, and
