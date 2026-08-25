@@ -306,6 +306,11 @@ model Agent {
   /// Set at registration; login is refused until status == approved.
   passwordHash String
 
+  /// Set when Sonet issues a temporary password. There is no email provider
+  /// and so no self-service reset (see CLAUDE.md) — a temp password is the
+  /// only recovery path, and it must not survive first use.
+  mustChangePassword Boolean @default(false)
+
   /// Internal note from Sonet, e.g. why a signup was rejected.
   adminNotes String?
 

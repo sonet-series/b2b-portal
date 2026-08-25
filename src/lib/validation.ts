@@ -2,6 +2,7 @@ import { z } from "zod";
 import { toMinor } from "./money";
 import { parseDateOnly } from "./dates";
 import {
+  PRODUCT_TYPE,
   MEAL_PLAN,
   HOUSEBOAT_CATEGORY,
   CRUISE_PACKAGE,
@@ -315,3 +316,85 @@ export function toFormState(error: z.ZodError): FormState {
 export function formObject(formData: FormData): Record<string, unknown> {
   return Object.fromEntries(formData.entries());
 }
+
+// ---------------------------------------------------------------------------
+// Agents
+// ---------------------------------------------------------------------------
+
+/**
+ * Public registration. This is the only schema on an unauthenticated route, so
+ * it is the strictest — everything here comes from a stranger.
+ */
+export const agentRegistrationSchema = z
+  .object({
+    agencyName: text("Agency name", 160),
+    contactName: text("Contact name", 120),
+    phone: z
+      .string()
+      .trim()
+      .min(7, "Phone number is required")
+      .max(24, "Phone number is too long")
+      .refine((v) => /^[+\d][\d\s-]*$/.test(v), "Phone number can only contain digits, spaces, + and -"),
+    email: z.string().trim().toLowerCase().email("Enter a valid email address").max(160),
+    gstOrLicenseNumber: text("GST or licence number", 40),
+    password: z
+      .string()
+      .min(10, "Password must be at least 10 characters")
+      .max(200, "Password is too long"),
+    confirmPassword: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.password !== v.confirmPassword) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["confirmPassword"],
+        message: "Passwords do not match",
+      });
+    }
+  });
+
+/** Agent changing their own password, including the forced first-login change. */
+export const passwordChangeSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Enter your current password"),
+    password: z
+      .string()
+      .min(10, "New password must be at least 10 characters")
+      .max(200, "Password is too long"),
+    confirmPassword: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.password !== v.confirmPassword) {
+      ctx.addIssue({ code: "custom", path: ["confirmPassword"], message: "Passwords do not match" });
+    }
+    if (v.password === v.currentPassword) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["password"],
+        message: "New password must be different from the current one",
+      });
+    }
+  });
+
+/** Sonet approving a signup. Rejection reuses the notes field only. */
+export const agentApprovalSchema = z.object({
+  /** "none" leaves the agent on default rates; otherwise clone this agent's overrides. */
+  copyRateCardFromAgentId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === undefined || v === "" || v === "none" ? null : v)),
+  adminNotes: optionalText(2000),
+});
+
+export const agentRejectionSchema = z.object({
+  adminNotes: optionalText(2000),
+});
+
+/** A single per-agent price override. */
+export const rateCardEntrySchema = z.object({
+  productType: z.enum(PRODUCT_TYPE, { error: "Choose a product type" }),
+  referenceId: text("Rate", 60),
+  overridePriceMinor: money("Override price"),
+  notes: optionalText(500),
+});

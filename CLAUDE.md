@@ -16,6 +16,14 @@ No shared database. No API calls into Frappe. No sync, in either direction. No
 import tooling. Sonet re-enters hotel/vehicle/itinerary data by hand through the
 admin screens — that is the intended workflow, not a gap to be helpfully filled.
 
+**Sharing a host does not weaken this.** Confirmed with Sonet 25 Aug 2026: this
+portal deploys to the *same Hetzner box* as seriestours.com and the ERP, in its
+**own container with its own database and no network path to the ERP container
+or its database**. That is an ops-convenience decision — one server to maintain
+— and explicitly not a walk-back of the rule above. Physical proximity is not
+logical coupling. If a future change would open a route between the two
+containers, it is forbidden by default.
+
 If a future phase genuinely needs ERP data, that is a deliberate decision Sonet
 makes explicitly. It is never a default, and never something to build on spec.
 
@@ -184,10 +192,21 @@ src/lib/
   validation.ts        # zod schemas + the mode-dependent field rules
   auth.ts              # admin + agent sessions
 src/components/ui.tsx  # form and table primitives
-src/app/admin/
-  login/               # unguarded
-  (dashboard)/         # guarded by layout.tsx; hotels, houseboats, vehicles,
-                       #   itineraries, agents (read-only until Phase 3)
+  handover.ts          # the copy-ready WhatsApp message (v1 sends no email)
+  temp-password.ts     # CSPRNG temp passwords, no lookalike characters
+  rate-options.ts      # the four rate tables flattened into one pick list
+src/app/
+  page.tsx             # public landing
+  register/            # public agent registration -> pending
+  login/               # public agent sign-in
+  agent/
+    change-password/   # OUTSIDE the (portal) group, so the forced-change
+                       #   redirect cannot loop
+    (portal)/          # guarded; redirects out when mustChangePassword
+  admin/
+    login/             # unguarded
+    (dashboard)/       # guarded by layout.tsx; hotels, houseboats, vehicles,
+                       #   itineraries, agents
 .devcontainer/         # Dockerfile + devcontainer.json (needs Docker installed)
 ```
 
@@ -213,7 +232,7 @@ Node lives at `~/.local/node/bin` and is on PATH via `~/.zshrc`.
 
 - [x] **Phase 1** — scaffold, DB schema, dev container, this file
 - [x] **Phase 2** — admin CRUD (hotels/houseboats/vehicles/itineraries/rates) + Sonet-only auth
-- [ ] **Phase 3** — agent registration, pending queue, approve + assign rate card
+- [x] **Phase 3** — agent registration, pending queue, approve + assign rate card
 - [ ] **Phase 4** — agent quote screens for the four product types, price resolution
 - [ ] **Phase 5** — polish, deploy to b2b.seriestours.com
 
@@ -229,11 +248,42 @@ needs a decision. Do not push silently into the next phase.
   per package. Sonet raised this as an assumption to confirm rather than
   assume; the schema supports the flexible reading. Confirm it matches how the
   boats are actually contracted.
-- **Approval notification** — assumed email for v1. Nothing is wired up yet;
-  no mail provider has been chosen. WhatsApp is a stated business interest but
-  not a v1 requirement.
-- **Hosting** — same Hetzner box as the rest of the Series Tours web family, or
-  a separate one? Nothing has been provisioned. Ask before provisioning anything.
+### Approval notification — manual, by design (confirmed 25 Aug 2026)
+**No email provider, and none is to be built for v1.** Approving an agent does
+not send anything. Instead the admin surfaces a copy-ready handover message
+(portal URL + the agent's sign-in email) that Sonet pastes into WhatsApp or
+reads out over a call.
+
+This is a deliberate manual step, not a placeholder for automation. Do not add
+a mail provider, queue, or background sender without Sonet asking for one.
+
+Because there is no email channel, there is also no self-service password
+reset. That gap is filled by an admin-issued temporary password: Sonet can
+issue one from the agent's page, it is shown to him exactly once to hand over,
+and the agent is forced to change it at next sign-in (`Agent.mustChangePassword`).
+
+#### How the handover actually works
+1. Agent registers at `/register`, choosing their own password. Status `pending`.
+2. Sonet reviews at `/admin/agents/[id]`, checks the GST/licence, and approves —
+   assigning the rate card in the same action (default rates, or clone another
+   agent's overrides).
+3. The approved agent's page renders a copy-ready message with the portal URL
+   and their sign-in email. **This is server-rendered, not held in form state**:
+   approving flips the page to its approved layout, so anything kept in the
+   form component's state would be destroyed at the moment Sonet needs it.
+4. Sonet pastes that into WhatsApp himself.
+5. If the agent has lost their password, "Issue temporary password" generates
+   one, shows it exactly once, and sets `mustChangePassword`.
+
+Registration never reveals whether an email is already registered — it returns
+the same message either way, so a stranger cannot enumerate which agencies work
+with Series Tours.
+
+### Hosting (confirmed 25 Aug 2026)
+Same Hetzner box as seriestours.com and the ERP, in a separate container with a
+separate database and no shared network path to the ERP. See the rule at the
+top of this file. Nothing has been provisioned yet — ask before provisioning.
+
 Resolved:
 - Houseboat schema — confirmed, extended with dual pricing modes (25 Aug 2026).
 - Itinerary seasonality — confirmed, `ItineraryRate` now carries date windows.

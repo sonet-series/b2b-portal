@@ -2,7 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "./db";
-import { verifyPassword } from "./password";
+import { verifyPassword, hashPassword } from "./password";
 
 /**
  * Session handling for the two audiences this portal has: the single admin
@@ -144,10 +144,57 @@ export async function getAgent() {
 
   const agent = await prisma.agent.findUnique({
     where: { id: session.sub },
-    select: { id: true, email: true, agencyName: true, contactName: true, status: true },
+    select: {
+      id: true,
+      email: true,
+      agencyName: true,
+      contactName: true,
+      status: true,
+      mustChangePassword: true,
+    },
   });
 
   // Re-check status on every request: Sonet may have revoked an agent after
   // their cookie was issued, and a 12h session should not outlive that.
   return agent?.status === "approved" ? agent : null;
+}
+
+/**
+ * Changes an agent's own password and clears any forced-change flag.
+ * Verifies the current password first — a stolen session must not be enough to
+ * lock the real agent out.
+ */
+export async function changeAgentPassword(
+  agentId: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<LoginResult> {
+  const agent = await prisma.agent.findUnique({
+    where: { id: agentId },
+    select: { passwordHash: true },
+  });
+  if (!agent) return { ok: false, error: "Account not found." };
+
+  if (!(await verifyPassword(currentPassword, agent.passwordHash))) {
+    return { ok: false, error: "Your current password is incorrect." };
+  }
+
+  await prisma.agent.update({
+    where: { id: agentId },
+    data: {
+      passwordHash: await hashPassword(newPassword),
+      mustChangePassword: false,
+    },
+  });
+  return { ok: true };
+}
+
+/**
+ * The agent's id straight from the session cookie, without the status re-check
+ * that `getAgent` does. Used by the forced password change, which must work
+ * for an agent who cannot yet reach the rest of the portal.
+ */
+export async function getAgentSessionId(): Promise<string | null> {
+  const session = await read("agent");
+  return session?.sub ?? null;
 }
