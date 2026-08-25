@@ -83,25 +83,40 @@ async function seedDemoCatalogue() {
       notes: "SAMPLE DATA — delete before go-live",
       rates: {
         create: [
+          // Whole-boat overnight — the classic Kerala sale.
           {
             cruisePackage: "OVERNIGHT_22HR",
+            pricingMode: "WHOLE_BOAT",
             mealPlan: "AP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            ratePerCruiseMinor: toMinor(14500),
+            rateMinor: toMinor(14500),
             includedPax: 4,
-            maxPax: 6,
             extraPaxRateMinor: toMinor(2500),
+            maxPax: 6,
+          },
+          // Same boat, same duration, sold per head as well. Two rows, so the
+          // agent sees two priced options rather than a mode toggle.
+          {
+            cruisePackage: "OVERNIGHT_22HR",
+            pricingMode: "PER_PERSON",
+            mealPlan: "AP",
+            seasonLabel: "Standard 2026",
+            ...ALL_2026,
+            rateMinor: toMinor(3800),
+            minPax: 4,
+            maxPax: 6,
           },
           {
             cruisePackage: "DAY_CRUISE",
+            pricingMode: "WHOLE_BOAT",
             mealPlan: "MAP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            ratePerCruiseMinor: toMinor(7000),
+            rateMinor: toMinor(7000),
             includedPax: 4,
-            maxPax: 8,
             extraPaxRateMinor: toMinor(900),
+            maxPax: 8,
           },
         ],
       },
@@ -146,9 +161,27 @@ async function seedDemoCatalogue() {
         "Day 4 Thekkady → Alleppey · Day 5 Houseboat · Day 6 Alleppey → Cochin drop",
       inclusions: "Accommodation, daily breakfast, private vehicle, houseboat night",
       exclusions: "Airfare, entry tickets, personal expenses",
-      basePricePerPaxMinor: toMinor(24500),
-      singleSupplementMinor: toMinor(7500),
+      rates: {
+        create: [
+          {
+            pricingMode: "PER_PERSON_TWIN_SHARING",
+            seasonLabel: "Standard 2026",
+            ...ALL_2026,
+            priceMinor: toMinor(24500),
+            singleSupplementMinor: toMinor(7500),
+          },
+          // Same package sold as a flat family rate.
+          {
+            pricingMode: "PER_PACKAGE",
+            seasonLabel: "Standard 2026",
+            ...ALL_2026,
+            priceMinor: toMinor(96000),
+            maxPax: 4,
+          },
+        ],
+      },
     },
+    include: { rates: true },
   });
 
   // A demo agent, already approved, with one override per product type so the
@@ -191,7 +224,7 @@ async function seedDemoCatalogue() {
       {
         agentId: agent.id,
         productType: "itinerary",
-        referenceId: itinerary.id,
+        referenceId: itinerary.rates[0].id,
         overridePriceMinor: toMinor(22900),
       },
     ],

@@ -123,9 +123,15 @@ model HouseboatRate {
   houseboat   Houseboat @relation(fields: [houseboatId], references: [id], onDelete: Cascade)
 
   /// CruisePackage enum: DAY_CRUISE | OVERNIGHT_22HR | TWO_NIGHT
-  /// A Kerala houseboat is sold as a whole-boat cruise package, not a room
-  /// night, which is why this replaces the hotel's roomType axis.
   cruisePackage String
+
+  /// HouseboatPricingMode enum: WHOLE_BOAT | PER_PERSON
+  ///
+  /// Lives on the RATE row, not on Houseboat, because the same boat may sell
+  /// whole-boat for an overnight cruise and per-person on a day cruise. A boat
+  /// that offers both modes for the same duration simply has two rate rows,
+  /// and the agent sees both as separate priced options.
+  pricingMode String
 
   /// Meals bundled into the cruise price. Almost always full board for
   /// overnight; kept explicit so a day cruise can differ.
@@ -135,15 +141,24 @@ model HouseboatRate {
   validFrom   DateTime
   validTo     DateTime
 
-  /// DEFAULT price for the WHOLE BOAT for one cruise, in paise.
-  ratePerCruiseMinor Int
+  /// DEFAULT rate in paise. Its UNIT depends on pricingMode:
+  ///   WHOLE_BOAT -> the whole boat, one cruise
+  ///   PER_PERSON -> one person, one cruise
+  /// Deliberately one required column rather than two nullable ones: a mode
+  /// can never point at a null price. Same pattern as VehicleRate.rateMinor.
+  rateMinor Int
 
-  /// Capacity guardrails for the quote screen. A 2-bedroom boat quoted for
-  /// 6 pax needs an extra-pax charge, not a silent wrong price.
-  includedPax     Int
-  maxPax          Int
-  /// Per extra person beyond includedPax, per cruise, in paise.
+  /// WHOLE_BOAT only: pax covered by rateMinor before extra-pax billing.
+  includedPax Int?
+  /// WHOLE_BOAT only: per extra person beyond includedPax, per cruise, in paise.
   extraPaxRateMinor Int?
+
+  /// PER_PERSON only: the boat will not run below this headcount, so a 2-pax
+  /// enquiry on a 4-pax-minimum boat is quoted at 4, not unrealistically low.
+  minPax Int?
+
+  /// Both modes: physical capacity of the boat. Hard guardrail on the quote screen.
+  maxPax Int
 
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -221,18 +236,55 @@ model Itinerary {
   inclusions   String?
   exclusions   String?
 
-  /// DEFAULT price PER PERSON on twin-sharing, in paise. See CLAUDE.md — this
-  /// is the pricing basis the whole itinerary quote screen assumes.
-  basePricePerPaxMinor Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  /// Single-occupancy supplement per person, in paise. Optional.
+  rates ItineraryRate[]
+
+  @@index([active])
+}
+
+/// Package pricing, split out of Itinerary so a package can carry seasonal
+/// rates in the same [validFrom, validTo] shape as every other product.
+model ItineraryRate {
+  id          String    @id @default(uuid())
+  itineraryId String
+  itinerary   Itinerary @relation(fields: [itineraryId], references: [id], onDelete: Cascade)
+
+  /// ItineraryPricingMode enum: PER_PERSON_TWIN_SHARING | PER_PACKAGE
+  ///
+  /// On the rate row rather than on Itinerary, so a package can be sold per
+  /// person in one season and as a flat family rate in another. A package
+  /// offering both at once simply has two rate rows for that season, and the
+  /// agent sees both as separate priced options.
+  pricingMode String
+
+  seasonLabel String
+  validFrom   DateTime
+  validTo     DateTime
+
+  /// DEFAULT price in paise. Its UNIT depends on pricingMode:
+  ///   PER_PERSON_TWIN_SHARING -> one person, sharing a twin room
+  ///   PER_PACKAGE             -> the whole package, flat, regardless of pax
+  /// One required column rather than two nullable ones, same reasoning as
+  /// HouseboatRate.rateMinor.
+  priceMinor Int
+
+  /// PER_PERSON_TWIN_SHARING only: supplement for a solo traveller, per person.
   singleSupplementMinor Int?
+
+  /// PER_PACKAGE only: headcount guardrail. The rate is flat regardless of pax,
+  /// but a family package still has a ceiling on how many people it can seat.
+  /// Null means no ceiling.
+  maxPax Int?
 
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([active])
+  @@index([itineraryId, active])
+  @@index([validFrom, validTo])
 }
 
 // ---------------------------------------------------------------------------
@@ -286,7 +338,7 @@ model AgentRateCard {
   ///   hotel     -> HotelRate.id
   ///   houseboat -> HouseboatRate.id
   ///   vehicle   -> VehicleRate.id
-  ///   itinerary -> Itinerary.id
+  ///   itinerary -> ItineraryRate.id
   /// Deliberately not a Prisma relation: it is polymorphic across four
   /// tables. Referential integrity is enforced in the application layer —
   /// see src/lib/rate-card.ts.

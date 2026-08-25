@@ -41,6 +41,22 @@ export const CRUISE_PACKAGE_NIGHTS: Record<CruisePackage, number> = {
   TWO_NIGHT: 2,
 };
 
+export const HOUSEBOAT_PRICING_MODE = ["WHOLE_BOAT", "PER_PERSON"] as const;
+export type HouseboatPricingMode = (typeof HOUSEBOAT_PRICING_MODE)[number];
+
+export const HOUSEBOAT_PRICING_MODE_LABEL: Record<HouseboatPricingMode, string> = {
+  WHOLE_BOAT: "Whole boat (one price for the cruise)",
+  PER_PERSON: "Per person (sharing basis)",
+};
+
+export const ITINERARY_PRICING_MODE = ["PER_PERSON_TWIN_SHARING", "PER_PACKAGE"] as const;
+export type ItineraryPricingMode = (typeof ITINERARY_PRICING_MODE)[number];
+
+export const ITINERARY_PRICING_MODE_LABEL: Record<ItineraryPricingMode, string> = {
+  PER_PERSON_TWIN_SHARING: "Per person, twin sharing",
+  PER_PACKAGE: "Flat package rate (whole group)",
+};
+
 export const VEHICLE_RATE_TYPE = ["PER_KM", "PER_DAY", "TRANSFER"] as const;
 export type VehicleRateType = (typeof VEHICLE_RATE_TYPE)[number];
 
@@ -61,3 +77,5 @@ export const isMealPlan = makeGuard(MEAL_PLAN);
 export const isHouseboatCategory = makeGuard(HOUSEBOAT_CATEGORY);
 export const isCruisePackage = makeGuard(CRUISE_PACKAGE);
 export const isVehicleRateType = makeGuard(VEHICLE_RATE_TYPE);
+export const isHouseboatPricingMode = makeGuard(HOUSEBOAT_PRICING_MODE);
+export const isItineraryPricingMode = makeGuard(ITINERARY_PRICING_MODE);

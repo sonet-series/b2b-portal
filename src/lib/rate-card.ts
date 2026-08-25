@@ -80,7 +80,10 @@ export async function assertReferenceExists(
       case "vehicle":
         return prisma.vehicleRate.findUnique({ where: { id: referenceId }, select: { id: true } });
       case "itinerary":
-        return prisma.itinerary.findUnique({ where: { id: referenceId }, select: { id: true } });
+        // Points at ItineraryRate, not Itinerary — packages carry seasonal
+        // rate rows now, so the override attaches to a priced row like the
+        // other three product types.
+        return prisma.itineraryRate.findUnique({ where: { id: referenceId }, select: { id: true } });
     }
   })();
 
