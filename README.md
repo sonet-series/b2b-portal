@@ -20,6 +20,9 @@ Requires Node 24 (see `.nvmrc`). Open http://localhost:3000.
 
 ## Status
 
-Phase 1 complete: project scaffold, database schema, dev container, CLAUDE.md.
-Phases 2–5 (admin CRUD, agent registration/approval, quoting, deploy) still to
+Phases 1–2 complete: project scaffold, database schema, dev container, and the
+Sonet-only admin — catalogue CRUD for hotels, houseboats, vehicles, and
+packages, including their seasonal rates and dual pricing modes.
+
+Phases 3–5 (agent registration and approval, agent quoting, deploy) still to
 come — see the phase plan in CLAUDE.md.

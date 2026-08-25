@@ -49,6 +49,19 @@ makes explicitly. It is never a default, and never something to build on spec.
 | Auth | Own email+password, `bcryptjs` (cost 12) + `jose` JWT cookies | Two separate session audiences: admin and agent. No third-party identity provider for two user classes. |
 | Validation | `zod` | At every request boundary. |
 
+### Auth
+Two audiences, two cookies, two `aud` claims (`admin` / `agent`) — an agent
+token can never satisfy an admin check even if a downstream caller forgets to
+look at the role. Sessions are 12h httpOnly JWTs.
+
+`src/app/admin/(dashboard)/layout.tsx` is the single gate for admin pages.
+**Server actions are a separate entry point and the layout does not run for
+them**, so every action calls `requireAdmin()` itself.
+
+Agent login re-checks `status === "approved"` on every request, not just at
+sign-in, so revoking an agent takes effect immediately rather than when their
+cookie expires.
+
 ### If SQLite ever needs to become Postgres
 The schema was written to make that mostly mechanical: no SQLite-only types,
 money as `Int`, enum-ish columns as `String` fed by `src/lib/enums.ts`. The real
@@ -93,6 +106,44 @@ These are load-bearing. Breaking one produces wrong prices, not a crash.
 Implemented in `src/lib/rate-card.ts`. `QuoteLine.usedOverride` records which
 source supplied each price, so "why is this price what it is" stays answerable.
 
+### Pricing modes (confirmed with Sonet, 25 Aug 2026)
+Houseboats and packages each sell two ways, and both modes must coexist.
+
+| Table | `pricingMode` | Price column means |
+|---|---|---|
+| `HouseboatRate` | `WHOLE_BOAT` | the whole boat, one cruise |
+| `HouseboatRate` | `PER_PERSON` | one person, one cruise |
+| `ItineraryRate` | `PER_PERSON_TWIN_SHARING` | one person, sharing a twin |
+| `ItineraryRate` | `PER_PACKAGE` | the whole package, flat |
+
+Three things about this shape are load-bearing:
+
+1. **The mode is on the RATE row, not the parent.** The same boat can sell
+   whole-boat overnight and per-person on a day cruise; the same package can be
+   per-person in one season and a flat family rate in another. A product sold
+   both ways at once simply has two rate rows.
+
+2. **One required price column, not two nullable ones.** `rateMinor` /
+   `priceMinor` change meaning with the mode. Two nullable columns would allow a
+   row whose mode points at a null price; this cannot. The cost is that the
+   number is only meaningful through `src/lib/pricing.ts` — **nothing else may
+   multiply a rate by a pax count.**
+
+3. **The mode is never an agent input.** The agent picks the product, duration,
+   dates, and pax. If a product sells both ways they see two concrete priced
+   options ("Whole boat ₹14,500" vs "Per person ₹3,800 × 4"). There is no mode
+   toggle in the agent UI — an agent should not need to know the term, and a
+   toggle would let them pick a mode the product does not offer.
+
+Guardrails, so an unrealistic quote is impossible rather than merely unlikely:
+`PER_PERSON` carries `minPax` (a party below it is charged at `minPax`),
+`WHOLE_BOAT` carries `includedPax` + `extraPaxRateMinor`, and both carry
+`maxPax`. `PER_PACKAGE` has an optional `maxPax` ceiling.
+
+Mode-dependent field rules are enforced in `src/lib/validation.ts` — SQLite
+cannot express them and Prisma will not check them, so that file is the only
+thing standing between a typo and a wrong price.
+
 ### Houseboat pricing design (designed fresh — no prior precedent)
 Hotels and vehicles had existing rate shapes to follow. Houseboats did not.
 
@@ -128,6 +179,15 @@ src/lib/
   dates.ts             # UTC calendar-day maths, season window matching
   password.ts          # bcrypt hash/verify
   rate-card.ts         # per-agent override resolution + the fallback rule
+  pricing.ts           # mode-dependent price maths (the ONLY interpreter of
+                       #   rateMinor / priceMinor units)
+  validation.ts        # zod schemas + the mode-dependent field rules
+  auth.ts              # admin + agent sessions
+src/components/ui.tsx  # form and table primitives
+src/app/admin/
+  login/               # unguarded
+  (dashboard)/         # guarded by layout.tsx; hotels, houseboats, vehicles,
+                       #   itineraries, agents (read-only until Phase 3)
 .devcontainer/         # Dockerfile + devcontainer.json (needs Docker installed)
 ```
 
@@ -152,7 +212,7 @@ Node lives at `~/.local/node/bin` and is on PATH via `~/.zshrc`.
 ## Phase plan
 
 - [x] **Phase 1** — scaffold, DB schema, dev container, this file
-- [ ] **Phase 2** — admin CRUD (hotels/houseboats/vehicles/itineraries/rates) + Sonet-only auth
+- [x] **Phase 2** — admin CRUD (hotels/houseboats/vehicles/itineraries/rates) + Sonet-only auth
 - [ ] **Phase 3** — agent registration, pending queue, approve + assign rate card
 - [ ] **Phase 4** — agent quote screens for the four product types, price resolution
 - [ ] **Phase 5** — polish, deploy to b2b.seriestours.com
@@ -164,20 +224,22 @@ needs a decision. Do not push silently into the next phase.
 
 ## Still open — ask Sonet, do not assume
 
-- **Houseboat schema shape** — designed above, needs Sonet's sign-off before
-  Phase 4 builds on it.
-- **Itinerary seasonality** — currently a flat `basePricePerPaxMinor` with no
-  date window, unlike every other product. Does package pricing need seasons?
-- **Itinerary pricing basis** — currently assumed **per person on twin sharing**,
-  with an optional single supplement. Confirm.
+- **Mode per rate row** — implemented so `pricingMode` varies by
+  houseboat+duration and by package+season, rather than being fixed per boat or
+  per package. Sonet raised this as an assumption to confirm rather than
+  assume; the schema supports the flexible reading. Confirm it matches how the
+  boats are actually contracted.
 - **Approval notification** — assumed email for v1. Nothing is wired up yet;
   no mail provider has been chosen. WhatsApp is a stated business interest but
   not a v1 requirement.
 - **Hosting** — same Hetzner box as the rest of the Series Tours web family, or
   a separate one? Nothing has been provisioned. Ask before provisioning anything.
-- **Quote persistence** — `Quote` / `QuoteLine` tables exist so an agent can
-  retrieve a quote by reference. This was not in the blueprint; it is quote
-  *record-keeping*, not booking. Confirm it is wanted.
+Resolved:
+- Houseboat schema — confirmed, extended with dual pricing modes (25 Aug 2026).
+- Itinerary seasonality — confirmed, `ItineraryRate` now carries date windows.
+- Itinerary pricing basis — confirmed, both twin-sharing and flat-package.
+- Quote persistence — confirmed, `Quote` / `QuoteLine` stay as designed.
+- Rate-card fallback — confirmed, defaults apply when no override exists.
 
 ---
 
