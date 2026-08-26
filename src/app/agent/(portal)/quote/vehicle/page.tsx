@@ -2,8 +2,10 @@ import { requireAgent } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { quoteVehicle } from "@/lib/quote";
 import { PricingError } from "@/lib/pricing";
-import { vehicleQuoteSchema, type FormState } from "@/lib/validation";
-import { Field, FormError, PageHeader, Select, EmptyState } from "@/components/ui";
+import { vehicleQuoteSchema, parseVehicleLegs, type FormState } from "@/lib/validation";
+import { FormError, PageHeader, Select, EmptyState } from "@/components/ui";
+import { DateField } from "@/components/date-field";
+import { LegsField } from "./legs-field";
 import { SearchForm, todayIso } from "../search-form";
 import { QuoteResults } from "../quote-results";
 import { saveQuoteAction } from "../actions";
@@ -25,7 +27,9 @@ export default async function VehicleQuotePage({
     select: { id: true, type: true, capacity: true },
   });
 
-  const parsed = vehicleQuoteSchema.safeParse(params);
+  // Legs arrive as parallel repeated params; zip them before validating.
+  const legRows = parseVehicleLegs(params);
+  const parsed = vehicleQuoteSchema.safeParse({ ...params, legs: legRows });
   const attempted = Boolean(params.vehicleId);
 
   let result: QuoteResult | null = null;
@@ -76,36 +80,30 @@ export default async function VehicleQuotePage({
               }))}
               error={fieldErrors.vehicleId}
             />
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DateField
                 label="Start date"
                 name="startDate"
-                type="date"
+                
                 required
                 min={todayIso()}
                 defaultValue={typeof params.startDate === "string" ? params.startDate : ""}
                 error={fieldErrors.startDate}
               />
-              <Field
+              <DateField
                 label="End date"
                 name="endDate"
-                type="date"
+                
                 required
                 min={todayIso()}
                 defaultValue={typeof params.endDate === "string" ? params.endDate : ""}
                 hint="Same day for a transfer."
                 error={fieldErrors.endDate}
               />
-              <Field
-                label="Estimated distance"
-                name="km"
-                type="number"
-                min={0}
-                defaultValue={typeof params.km === "string" ? params.km : ""}
-                hint="Total km. Needed for per-km rates."
-                error={fieldErrors.km}
-              />
             </div>
+
+            <LegsField initial={legRows} />
+            {fieldErrors.legs && <FormError message={fieldErrors.legs} />}
           </SearchForm>
 
           {error && <FormError message={error} />}

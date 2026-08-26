@@ -4,7 +4,7 @@ import { resolvePrices, overrideKey } from "./rate-card";
 import { priceHouseboat, priceItinerary, PricingError } from "./pricing";
 import {
   parseDateOnly,
-  formatDateOnly,
+  formatDateDisplay,
   nightsBetween,
   daysBetween,
   eachNight,
@@ -25,6 +25,7 @@ import {
   type ItineraryPricingMode,
 } from "./enums";
 import { sumMinor } from "./money";
+import { totalLegKm } from "./quote-types";
 import type {
   QuotingAgent,
   QuoteLineDraft,
@@ -124,8 +125,8 @@ function resolveCharge(
 
 function seasonSpan(from: Date, to: Date): string {
   return from.getTime() === to.getTime()
-    ? formatDateOnly(from)
-    : `${formatDateOnly(from)}–${formatDateOnly(to)}`;
+    ? formatDateDisplay(from)
+    : `${formatDateDisplay(from)}–${formatDateDisplay(to)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +173,7 @@ export async function quoteHotel(
     if (uncovered.length > 0) {
       unavailable.push({
         title,
-        reason: `No rate loaded for ${uncovered.length} night${uncovered.length === 1 ? "" : "s"} of this stay (from ${formatDateOnly(uncovered[0])}).`,
+        reason: `No rate loaded for ${uncovered.length} night${uncovered.length === 1 ? "" : "s"} of this stay (from ${formatDateDisplay(uncovered[0])}).`,
       });
       continue;
     }
@@ -336,7 +337,7 @@ export async function quoteHouseboat(
         key: rate.id,
         productType: "houseboat",
         title: label,
-        detail: `${formatDateOnly(date)} · ${input.pax} pax · ${MEAL_PLAN_LABEL[rate.mealPlan as MealPlan] ?? rate.mealPlan}`,
+        detail: `${formatDateDisplay(date)} · ${input.pax} pax · ${MEAL_PLAN_LABEL[rate.mealPlan as MealPlan] ?? rate.mealPlan}`,
         lines,
         totalMinor: breakdown.totalMinor,
         usedOverride: override !== undefined || (extraPax?.usedOverride ?? false),
@@ -369,6 +370,10 @@ export async function quoteVehicle(
 
   const days = daysBetween(start, end);
 
+  // The itinerary is what the agent knows; the total is derived from it. The
+  // pricing below is unchanged — it still consumes one number.
+  const km = totalLegKm(input.legs);
+
   const vehicle = await prisma.vehicle.findFirst({
     where: { id: input.vehicleId, active: true },
     include: { rates: { where: { active: true } } },
@@ -398,7 +403,7 @@ export async function quoteVehicle(
     if (uncovered.length > 0) {
       unavailable.push({
         title,
-        reason: `No rate loaded for ${uncovered.length} day${uncovered.length === 1 ? "" : "s"} of this hire (from ${formatDateOnly(uncovered[0])}).`,
+        reason: `No rate loaded for ${uncovered.length} day${uncovered.length === 1 ? "" : "s"} of this hire (from ${formatDateDisplay(uncovered[0])}).`,
       });
     } else {
       const lines: QuoteLineDraft[] = [];
@@ -443,8 +448,8 @@ export async function quoteVehicle(
 
       // Extra km bill against the allowance accumulated across all segments,
       // not per segment — the allowance is a trip-level pool.
-      if (input.km != null && input.km > includedKm) {
-        const extraKm = input.km - includedKm;
+      if (km != null && km > includedKm) {
+        const extraKm = km - includedKm;
         const extraRate = resolveCharge(
           agent, overrides, segments[0].rate.id, "EXTRA_KM",
           segments[0].rate.extraKmKeralaMinor, segments[0].rate.extraKmOutsideKeralaMinor
@@ -452,12 +457,16 @@ export async function quoteVehicle(
         if (!extraRate) {
           unavailable.push({
             title,
-            reason: `This hire includes ${includedKm} km and no extra-km rate is loaded, so ${input.km} km cannot be quoted.`,
+            reason: `This hire includes ${includedKm} km and no extra-km rate is loaded, so ${km} km cannot be quoted.`,
           });
         } else {
           if (extraRate.usedOverride) usedOverride = true;
+          const legSummary =
+            input.legs.length > 0
+              ? ` across ${input.legs.length} leg${input.legs.length === 1 ? "" : "s"}`
+              : "";
           lines.push({
-            description: `Extra km (${input.km} km travelled, ${includedKm} km included)`,
+            description: `Extra km (${km} km${legSummary}, ${includedKm} km included)`,
             quantity: extraKm,
             unitMinor: extraRate.minor,
             totalMinor: extraRate.minor * extraKm,
@@ -496,25 +505,28 @@ export async function quoteVehicle(
       });
 
     if (rate.rateType === "PER_KM") {
-      if (input.km == null || input.km < 1) {
-        unavailable.push({ title, reason: "Enter an estimated distance to price a per-km rate." });
+      if (km == null || km < 1) {
+        unavailable.push({
+          title,
+          reason: "Add at least one leg with a distance to price a per-km rate.",
+        });
         continue;
       }
       options.push({
         key: rate.id,
         productType: "vehicle",
         title,
-        detail: `${input.km} km · ${rate.seasonLabel}`,
+        detail: `${km} km · ${rate.seasonLabel}`,
         lines: [
           {
-            description: `${input.km} km · ${rate.seasonLabel}`,
-            quantity: input.km,
+            description: `${km} km · ${rate.seasonLabel}`,
+            quantity: km,
             unitMinor,
-            totalMinor: unitMinor * input.km,
+            totalMinor: unitMinor * km,
             usedOverride: override !== undefined,
           },
         ],
-        totalMinor: unitMinor * input.km,
+        totalMinor: unitMinor * km,
         usedOverride: override !== undefined,
       });
     } else {
@@ -621,7 +633,7 @@ export async function quoteItinerary(
         key: rate.id,
         productType: "itinerary",
         title,
-        detail: `${itinerary.durationNights} night${itinerary.durationNights === 1 ? "" : "s"} from ${formatDateOnly(start)} · ${input.pax} pax`,
+        detail: `${itinerary.durationNights} night${itinerary.durationNights === 1 ? "" : "s"} from ${formatDateDisplay(start)} · ${input.pax} pax`,
         lines,
         totalMinor: breakdown.totalMinor,
         usedOverride: override !== undefined || (supplement?.usedOverride ?? false),

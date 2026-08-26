@@ -2,9 +2,10 @@ import { notFound } from "next/navigation";
 import { requireAgent } from "@/lib/auth";
 import { getQuote } from "@/lib/quote-store";
 import { formatMinor } from "@/lib/money";
-import { formatDateOnly } from "@/lib/dates";
+import { formatDateDisplay } from "@/lib/dates";
 import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
 import type { ProductType } from "@/lib/enums";
+import type { VehicleLeg } from "@/lib/quote-types";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,19 @@ export default async function QuoteDetailPage({
 
   const usedOverride = quote.lines.some((l) => l.usedOverride);
 
+  // The itinerary a vehicle quote's distance was built from. Frozen at save
+  // time alongside the rest of the inputs.
+  let legs: VehicleLeg[] = [];
+  try {
+    const snapshot = JSON.parse(quote.snapshotJson) as { legs?: VehicleLeg[] };
+    legs = Array.isArray(snapshot.legs) ? snapshot.legs : [];
+  } catch {
+    // A quote saved before legs existed, or malformed JSON — show the priced
+    // lines regardless rather than failing the whole page.
+    legs = [];
+  }
+  const legTotal = legs.reduce((s, l) => s + l.km + l.bufferKm, 0);
+
   return (
     <>
       <PageHeader
@@ -42,9 +56,9 @@ export default async function QuoteDetailPage({
           <div className="text-sm text-slate-600">
             <p>
               <span className="text-slate-400">Travel: </span>
-              {formatDateOnly(quote.travelStart) === formatDateOnly(quote.travelEnd)
-                ? formatDateOnly(quote.travelStart)
-                : `${formatDateOnly(quote.travelStart)} → ${formatDateOnly(quote.travelEnd)}`}
+              {formatDateDisplay(quote.travelStart) === formatDateDisplay(quote.travelEnd)
+                ? formatDateDisplay(quote.travelStart)
+                : `${formatDateDisplay(quote.travelStart)} → ${formatDateDisplay(quote.travelEnd)}`}
             </p>
             <p>
               <span className="text-slate-400">Agency: </span>
@@ -53,6 +67,41 @@ export default async function QuoteDetailPage({
           </div>
           {usedOverride && <Badge tone="green">Your agency rate applied</Badge>}
         </div>
+
+        {legs.length > 0 && (
+          <section className="mt-5 rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Itinerary
+            </h2>
+            <table className="mt-2 w-full text-sm">
+              <tbody className="divide-y divide-slate-200">
+                {legs.map((leg, i) => (
+                  <tr key={i}>
+                    <td className="py-1.5 pr-3 text-slate-700">
+                      {leg.label || `Leg ${i + 1}`}
+                    </td>
+                    <td className="whitespace-nowrap py-1.5 pr-3 text-right tabular-nums text-slate-600">
+                      {leg.km.toLocaleString("en-IN")} km
+                    </td>
+                    <td className="whitespace-nowrap py-1.5 text-right tabular-nums text-slate-500">
+                      {leg.bufferKm > 0
+                        ? `+ ${leg.bufferKm.toLocaleString("en-IN")} km sightseeing`
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-300">
+                  <td className="pt-2 font-medium text-slate-900">Total distance</td>
+                  <td className="pt-2 text-right font-semibold tabular-nums text-slate-900" colSpan={2}>
+                    {legTotal.toLocaleString("en-IN")} km
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </section>
+        )}
 
         <table className="mt-5 w-full text-sm">
           <thead>

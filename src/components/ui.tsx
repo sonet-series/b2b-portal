@@ -116,7 +116,7 @@ const controlBase =
   "block w-full rounded-md border-0 px-3 py-2 text-sm text-slate-900 shadow-sm ring-1 ring-inset " +
   "placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-blue-600";
 
-function Wrapper({
+export function FieldShell({
   label,
   name,
   hint,
@@ -156,7 +156,7 @@ export function Field({
   ...props
 }: ComponentProps<"input"> & { label: string; name: string; hint?: string; error?: string }) {
   return (
-    <Wrapper label={label} name={name} hint={hint} error={error} required={required}>
+    <FieldShell label={label} name={name} hint={hint} error={error} required={required}>
       <input
         id={name}
         name={name}
@@ -164,7 +164,7 @@ export function Field({
         className={cx(controlBase, error ? "ring-red-400" : "ring-slate-300")}
         {...props}
       />
-    </Wrapper>
+    </FieldShell>
   );
 }
 
@@ -196,7 +196,7 @@ export function FileField({
   accept?: string;
 }) {
   return (
-    <Wrapper label={label} name={name} hint={hint} error={error} required={required}>
+    <FieldShell label={label} name={name} hint={hint} error={error} required={required}>
       <input
         id={name}
         name={name}
@@ -212,7 +212,7 @@ export function FileField({
           error && "ring-1 ring-red-400"
         )}
       />
-    </Wrapper>
+    </FieldShell>
   );
 }
 
@@ -225,7 +225,7 @@ export function TextArea({
   ...props
 }: ComponentProps<"textarea"> & { label: string; name: string; hint?: string; error?: string }) {
   return (
-    <Wrapper label={label} name={name} hint={hint} error={error} required={required}>
+    <FieldShell label={label} name={name} hint={hint} error={error} required={required}>
       <textarea
         id={name}
         name={name}
@@ -234,7 +234,7 @@ export function TextArea({
         className={cx(controlBase, error ? "ring-red-400" : "ring-slate-300")}
         {...props}
       />
-    </Wrapper>
+    </FieldShell>
   );
 }
 
@@ -254,7 +254,7 @@ export function Select({
   options: readonly { value: string; label: string }[];
 }) {
   return (
-    <Wrapper label={label} name={name} hint={hint} error={error} required={required}>
+    <FieldShell label={label} name={name} hint={hint} error={error} required={required}>
       <select
         id={name}
         name={name}
@@ -268,7 +268,7 @@ export function Select({
           </option>
         ))}
       </select>
-    </Wrapper>
+    </FieldShell>
   );
 }
 

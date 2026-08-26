@@ -588,27 +588,59 @@ export const houseboatQuoteSchema = z.object({
   pax: paxField("Passengers"),
 });
 
+const legKm = (label: string) =>
+  z.coerce
+    .number({ error: `${label} must be a number` })
+    .min(0, `${label} cannot be negative`)
+    .max(20000, `${label} looks too large`);
+
+export const vehicleLegSchema = z.object({
+  label: z.string().trim().max(120, "Leg description is too long"),
+  km: legKm("Distance"),
+  bufferKm: legKm("Sightseeing buffer"),
+});
+
 export const vehicleQuoteSchema = z
   .object({
     vehicleId: z.string().min(1, "Choose a vehicle"),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a start date"),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose an end date"),
-    km: z
-      .string()
-      .trim()
-      .optional()
-      .transform((v) => (v === undefined || v === "" ? null : Number(v)))
-      .superRefine((v, ctx) => {
-        if (v !== null && (!Number.isFinite(v) || v < 0 || v > 100000)) {
-          ctx.addIssue({ code: "custom", message: "Distance must be a number of kilometres" });
-        }
-      }),
+    legs: z.array(vehicleLegSchema).max(40, "That is a lot of legs — split the trip"),
   })
   .superRefine((v, ctx) => {
     if (v.endDate < v.startDate) {
       ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date must not be before the start date" });
     }
   });
+
+/**
+ * Legs travel in the query string as three PARALLEL repeated params, which is
+ * what a plain GET form produces without any client-side serialising:
+ *   ?legLabel=Cochin+→+Munnar&legKm=130&legBufferKm=60&legLabel=…
+ *
+ * They are zipped back together by index. A row with no distance and no label
+ * is dropped rather than rejected — that is just an empty row the agent added
+ * and did not fill in.
+ */
+export function parseVehicleLegs(params: Record<string, string | string[] | undefined>) {
+  const asArray = (v: string | string[] | undefined): string[] =>
+    v === undefined ? [] : Array.isArray(v) ? v : [v];
+
+  const labels = asArray(params.legLabel);
+  const kms = asArray(params.legKm);
+  const buffers = asArray(params.legBufferKm);
+  const count = Math.max(labels.length, kms.length, buffers.length);
+
+  const rows: { label: string; km: string; bufferKm: string }[] = [];
+  for (let i = 0; i < count; i++) {
+    const label = (labels[i] ?? "").trim();
+    const km = (kms[i] ?? "").trim();
+    const bufferKm = (buffers[i] ?? "").trim();
+    if (label === "" && km === "" && bufferKm === "") continue;
+    rows.push({ label, km: km === "" ? "0" : km, bufferKm: bufferKm === "" ? "0" : bufferKm });
+  }
+  return rows;
+}
 
 export const itineraryQuoteSchema = z.object({
   itineraryId: z.string().min(1, "Choose a package"),

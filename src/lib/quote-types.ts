@@ -68,13 +68,40 @@ export type HouseboatQuoteInput = {
   pax: number;
 };
 
+/**
+ * One hop of a multi-stop itinerary — e.g. "Cochin → Munnar", 130 km, plus a
+ * 60 km sightseeing buffer for a day out at Munnar.
+ *
+ * Agents book one vehicle for a whole trip but build the distance up leg by
+ * leg, so a single "estimated distance" box lost the reasoning behind the
+ * number. The legs are what the agent actually knows; the total is derived.
+ */
+export type VehicleLeg = {
+  /** Free text, the agent's own reference. Never parsed. */
+  label: string;
+  /** Point-to-point distance for this leg, km. */
+  km: number;
+  /** Local sightseeing km added on top of the transfer, km. */
+  bufferKm: number;
+};
+
 export type VehicleQuoteInput = {
   vehicleId: string;
   startDate: string;
   endDate: string;
-  /** Estimated total km. Required for per-km rates, optional elsewhere. */
-  km: number | null;
+  /**
+   * The itinerary. Total km is the sum of every leg's distance and buffer, and
+   * that total feeds the existing per-day / per-km pricing unchanged.
+   * Empty is allowed: a point-to-point transfer needs no distance.
+   */
+  legs: VehicleLeg[];
 };
+
+/** Total km for an itinerary. The single number the pricing logic consumes. */
+export function totalLegKm(legs: readonly VehicleLeg[]): number | null {
+  if (legs.length === 0) return null;
+  return legs.reduce((sum, l) => sum + l.km + l.bufferKm, 0);
+}
 
 export type ItineraryQuoteInput = {
   itineraryId: string;

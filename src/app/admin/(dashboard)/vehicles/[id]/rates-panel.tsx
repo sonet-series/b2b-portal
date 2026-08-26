@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatMinor } from "@/lib/money";
-import { formatDateOnly } from "@/lib/dates";
+import { formatDateDisplay } from "@/lib/dates";
 import { VEHICLE_RATE_TYPE_LABEL, type VehicleRateType } from "@/lib/enums";
 import { Badge, Button, EmptyState, Table, Td } from "@/components/ui";
 import { VehicleRateForm, type VehicleRateValues } from "./rate-form";
@@ -85,7 +85,7 @@ export function RatesPanel({
               <Td>
                 <div>{r.seasonLabel}</div>
                 <div className="text-xs text-slate-500">
-                  {formatDateOnly(r.validFrom)} → {formatDateOnly(r.validTo)}
+                  {formatDateDisplay(r.validFrom)} → {formatDateDisplay(r.validTo)}
                 </div>
               </Td>
               <Td className="font-medium whitespace-nowrap">{formatMinor(r.rateKeralaMinor)}</Td>

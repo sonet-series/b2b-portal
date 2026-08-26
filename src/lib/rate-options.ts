@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
-import { formatDateOnly } from "./dates";
+import { formatDateDisplay } from "./dates";
 import type { AgentTier, RateCharge } from "./enums";
 import { RATE_CHARGE_LABEL } from "./enums";
 import {
@@ -80,7 +80,7 @@ export async function listRateOptions(tier: AgentTier): Promise<RateOption[]> {
   ]);
 
   const season = (from: Date, to: Date, label: string) =>
-    `${label} ${formatDateOnly(from)}→${formatDateOnly(to)}`;
+    `${label} ${formatDateDisplay(from)}→${formatDateDisplay(to)}`;
 
   return [
     ...hotelRates.map((r) => ({

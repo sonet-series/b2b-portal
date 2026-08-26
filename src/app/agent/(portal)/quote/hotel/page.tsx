@@ -4,6 +4,7 @@ import { quoteHotel } from "@/lib/quote";
 import { PricingError } from "@/lib/pricing";
 import { hotelQuoteSchema, type FormState } from "@/lib/validation";
 import { Field, FormError, PageHeader, Select, EmptyState } from "@/components/ui";
+import { DateField } from "@/components/date-field";
 import { SearchForm, todayIso } from "../search-form";
 import { QuoteResults } from "../quote-results";
 import { saveQuoteAction } from "../actions";
@@ -73,19 +74,19 @@ export default async function HotelQuotePage({
               error={fieldErrors.hotelId}
             />
             <div className="grid gap-4 sm:grid-cols-4">
-              <Field
+              <DateField
                 label="Check-in"
                 name="checkIn"
-                type="date"
+                
                 required
                 min={todayIso()}
                 defaultValue={typeof params.checkIn === "string" ? params.checkIn : ""}
                 error={fieldErrors.checkIn}
               />
-              <Field
+              <DateField
                 label="Check-out"
                 name="checkOut"
-                type="date"
+                
                 required
                 min={todayIso()}
                 defaultValue={typeof params.checkOut === "string" ? params.checkOut : ""}

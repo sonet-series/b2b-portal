@@ -4,6 +4,7 @@ import { quoteItinerary } from "@/lib/quote";
 import { PricingError } from "@/lib/pricing";
 import { itineraryQuoteSchema, type FormState } from "@/lib/validation";
 import { Card, Field, FormError, PageHeader, Select, EmptyState } from "@/components/ui";
+import { DateField } from "@/components/date-field";
 import { SearchForm, todayIso } from "../search-form";
 import { QuoteResults } from "../quote-results";
 import { saveQuoteAction } from "../actions";
@@ -83,10 +84,10 @@ export default async function PackageQuotePage({
               error={fieldErrors.itineraryId}
             />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field
+              <DateField
                 label="Departure date"
                 name="startDate"
-                type="date"
+                
                 required
                 min={todayIso()}
                 defaultValue={typeof params.startDate === "string" ? params.startDate : ""}

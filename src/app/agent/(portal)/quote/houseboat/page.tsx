@@ -4,6 +4,7 @@ import { quoteHouseboat } from "@/lib/quote";
 import { PricingError } from "@/lib/pricing";
 import { houseboatQuoteSchema, type FormState } from "@/lib/validation";
 import { Field, FormError, PageHeader, Select, EmptyState } from "@/components/ui";
+import { DateField } from "@/components/date-field";
 import { SearchForm, todayIso } from "../search-form";
 import { QuoteResults } from "../quote-results";
 import { saveQuoteAction } from "../actions";
@@ -77,10 +78,10 @@ export default async function HouseboatQuotePage({
               error={fieldErrors.houseboatId}
             />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field
+              <DateField
                 label="Cruise date"
                 name="travelDate"
-                type="date"
+                
                 required
                 min={todayIso()}
                 defaultValue={typeof params.travelDate === "string" ? params.travelDate : ""}

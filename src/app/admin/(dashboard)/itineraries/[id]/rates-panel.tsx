@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatMinor } from "@/lib/money";
-import { formatDateOnly } from "@/lib/dates";
+import { formatDateDisplay } from "@/lib/dates";
 import { ITINERARY_PRICING_MODE_LABEL, type ItineraryPricingMode } from "@/lib/enums";
 import { Badge, Button, EmptyState, Table, Td } from "@/components/ui";
 import { ItineraryRateForm, type ItineraryRateValues } from "./rate-form";
@@ -88,7 +88,7 @@ export function RatesPanel({
                 <Td>
                   <div>{r.seasonLabel}</div>
                   <div className="text-xs text-slate-500">
-                    {formatDateOnly(r.validFrom)} → {formatDateOnly(r.validTo)}
+                    {formatDateDisplay(r.validFrom)} → {formatDateDisplay(r.validTo)}
                   </div>
                 </Td>
                 <Td className="font-medium whitespace-nowrap">

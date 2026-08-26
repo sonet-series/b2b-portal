@@ -15,6 +15,7 @@ import {
   MoneyField,
   Select,
 } from "@/components/ui";
+import { DateField } from "@/components/date-field";
 
 export type HotelRateValues = {
   roomType: string;
@@ -87,18 +88,18 @@ export function HotelRateForm({
             hint="Shown on the quote."
             error={err.seasonLabel}
           />
-          <Field
+          <DateField
             label="Valid from"
             name="validFrom"
-            type="date"
+            
             required
             defaultValue={rate ? formatDateOnly(rate.validFrom) : ""}
             error={err.validFrom}
           />
-          <Field
+          <DateField
             label="Valid to"
             name="validTo"
-            type="date"
+            
             required
             defaultValue={rate ? formatDateOnly(rate.validTo) : ""}
             hint="Inclusive."

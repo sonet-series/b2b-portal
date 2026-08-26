@@ -342,6 +342,42 @@ needs a decision. Do not push silently into the next phase.
   per package. Sonet raised this as an assumption to confirm rather than
   assume; the schema supports the flexible reading. Confirm it matches how the
   boats are actually contracted.
+### Dates are dd/mm/yyyy everywhere (26 Aug 2026)
+Native `<input type="date">` renders in the **browser's** locale, not the
+app's — there is no attribute that changes it, so a US-defaulted machine shows
+mm/dd/yyyy. Everyone here is in India and an ambiguous 03/04/2026 is a booking
+error waiting to happen.
+
+`src/components/date-field.tsx` replaces every one of them. The visible control
+is a text input under our control (auto-inserts slashes, rejects dates that do
+not exist like 31/02); a **hidden input carries the ISO value**, so actions,
+zod schemas and query strings all keep receiving `YYYY-MM-DD` unchanged. Do not
+reintroduce `type="date"`.
+
+Two date formatters, and the distinction is load-bearing:
+`formatDateOnly` returns ISO and feeds form values, query strings and
+comparisons; `formatDateDisplay` returns dd/mm/yyyy and is for anything a
+person reads. Swapping them silently breaks either display or parsing.
+
+### Vehicle quotes are multi-leg (26 Aug 2026)
+Agents book one vehicle for a whole trip but build the distance up leg by leg —
+Cochin → Munnar, a day's sightseeing at Munnar, Munnar → Thekkady, and so on.
+A single "estimated distance" box discarded that reasoning.
+
+`VehicleQuoteInput.legs` is a list of `{ label, km, bufferKm }`, where
+`bufferKm` is local sightseeing running on top of the transfer distance. Legs
+travel as three PARALLEL repeated query params (`legLabel` / `legKm` /
+`legBufferKm`) so a plain GET form produces them with no serialising, and
+`parseVehicleLegs()` zips them back by index.
+
+**The pricing maths is untouched.** `totalLegKm()` reduces the legs to the one
+number the existing per-day / per-km logic already consumed.
+
+The legs are recorded in `Quote.snapshotJson` and rendered as an itinerary
+block on the saved quote, so a reference explains where its distance came from.
+They are deliberately NOT `QuoteLine` rows: they are inputs to one priced line,
+not charges, and zero-value lines would break "lines sum to the total".
+
 ### Quoting (Phase 4)
 Single-product quoting: one hotel, one boat, one vehicle, or one package per
 quote. Combining products into one multi-line quote is deliberately NOT built.

@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
-import { parseDateOnly, formatDateOnly, MS_PER_DAY, startOfUtcDay } from "./dates";
+import { parseDateOnly, formatDateDisplay, MS_PER_DAY, startOfUtcDay } from "./dates";
 import { quoteHotel, quoteHouseboat, quoteVehicle, quoteItinerary } from "./quote";
 import { PricingError } from "./pricing";
 import type { AnyQuoteInput, QuoteOption, QuotingAgent } from "./quote-types";
@@ -106,6 +106,12 @@ export async function saveQuote(
 
   const snapshot = {
     input,
+    // For a vehicle hire this is what makes a saved reference readable later:
+    // the itinerary the km total was built from, not just the lump sum. The
+    // legs are inputs to one priced line, not charges of their own, so they
+    // are recorded here rather than as zero-value QuoteLine rows that would
+    // break "lines sum to the total".
+    legs: input.productType === "vehicle" ? input.legs : undefined,
     // Recorded so a saved quote explains itself later, after a tier override
     // or a rate change would otherwise make the number look arbitrary.
     tier: agent.tier,
@@ -178,8 +184,8 @@ export async function listQuotes(agentId: string): Promise<SavedQuoteSummary[]> 
 
   return quotes.map((q) => ({
     ...q,
-    travelStart: formatDateOnly(q.travelStart),
-    travelEnd: formatDateOnly(q.travelEnd),
+    travelStart: formatDateDisplay(q.travelStart),
+    travelEnd: formatDateDisplay(q.travelEnd),
   }));
 }
 

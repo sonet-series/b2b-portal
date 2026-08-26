@@ -66,3 +66,17 @@ export function rangesOverlap(aFrom: Date, aTo: Date, bFrom: Date, bTo: Date): b
   return startOfUtcDay(aFrom).getTime() <= startOfUtcDay(bTo).getTime() &&
     startOfUtcDay(bFrom).getTime() <= startOfUtcDay(aTo).getTime();
 }
+
+/**
+ * Date -> "03/10/2026", for anything a person reads.
+ *
+ * Distinct from formatDateOnly, which returns ISO and must keep doing so —
+ * that one feeds form values, query strings and comparisons. This one is for
+ * display only. Everyone using this portal is in India, so dd/mm/yyyy is the
+ * format that will not be misread.
+ */
+export function formatDateDisplay(date: Date): string {
+  const iso = formatDateOnly(date);
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
