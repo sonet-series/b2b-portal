@@ -4,16 +4,17 @@ import { getQuote } from "@/lib/quote-store";
 import { formatMinor } from "@/lib/money";
 import { formatDateDisplay } from "@/lib/dates";
 import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
-import type { ProductType } from "@/lib/enums";
 import type { VehicleLeg } from "@/lib/quote-types";
 
 export const dynamic = "force-dynamic";
 
-const PRODUCT_LABEL: Record<ProductType, string> = {
+/** "combined" is not a ProductType — a mixed trip is not one of the four. */
+const PRODUCT_LABEL: Record<string, string> = {
   hotel: "Hotel",
   houseboat: "Houseboat",
   vehicle: "Vehicle",
   itinerary: "Package",
+  combined: "Combined trip",
 };
 
 export default async function QuoteDetailPage({
@@ -47,7 +48,7 @@ export default async function QuoteDetailPage({
     <>
       <PageHeader
         title={`Quote ${quote.reference}`}
-        description={`${PRODUCT_LABEL[quote.productType as ProductType] ?? quote.productType} · quoted ${quote.createdAt.toISOString().slice(0, 10)}`}
+        description={`${PRODUCT_LABEL[quote.productType] ?? quote.productType} · quoted ${quote.createdAt.toISOString().slice(0, 10)}`}
         action={<LinkButton href="/agent/quotes">All quotes</LinkButton>}
       />
 
@@ -103,6 +104,11 @@ export default async function QuoteDetailPage({
           </section>
         )}
 
+        {/*
+          A combined quote's lines are grouped back into the items the agent
+          added; a single-product quote has one group and reads exactly as
+          before.
+        */}
         <table className="mt-5 w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
@@ -112,7 +118,18 @@ export default async function QuoteDetailPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {quote.lines.map((line) => (
+            {quote.lines.map((line, i) => {
+              const previous = i > 0 ? quote.lines[i - 1] : null;
+              const startsItem = !previous || previous.itemIndex !== line.itemIndex;
+              return (
+              <>
+              {startsItem && line.itemLabel && (
+                <tr key={`${line.id}-head`} className="bg-slate-50">
+                  <td className="px-1 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500" colSpan={3}>
+                    {line.itemLabel}
+                  </td>
+                </tr>
+              )}
               <tr key={line.id}>
                 <td className="py-2 pr-3 text-slate-700">{line.description}</td>
                 <td className="whitespace-nowrap py-2 pr-3 text-right text-slate-500">
@@ -122,7 +139,9 @@ export default async function QuoteDetailPage({
                   {formatMinor(line.totalMinor)}
                 </td>
               </tr>
-            ))}
+              </>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-slate-300">

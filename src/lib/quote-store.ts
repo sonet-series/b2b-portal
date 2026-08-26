@@ -3,7 +3,8 @@ import { prisma } from "./db";
 import { parseDateOnly, formatDateDisplay, MS_PER_DAY, startOfUtcDay } from "./dates";
 import { quoteHotel, quoteHouseboat, quoteVehicle, quoteItinerary } from "./quote";
 import { PricingError } from "./pricing";
-import type { AnyQuoteInput, QuoteOption, QuotingAgent } from "./quote-types";
+import { priceCart, itemLabel } from "./combined-quote";
+import type { AnyQuoteInput, CombinedItem, QuoteOption, QuotingAgent } from "./quote-types";
 
 /**
  * Persisting a quote.
@@ -153,6 +154,82 @@ export async function saveQuote(
       const isUniqueViolation =
         typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "P2002";
       if (!isUniqueViolation || attempt === 2) throw e;
+    }
+  }
+  throw new Error("Could not allocate a quote reference.");
+}
+
+/**
+ * Saves a whole trip as one Quote with grouped lines.
+ *
+ * Re-prices the entire cart from its inputs first — the browser's total is
+ * never trusted, exactly as for a single-product save. If any item can no
+ * longer be priced the save is refused outright rather than quietly dropping
+ * it, because a quote that silently loses a hotel is worse than one that
+ * fails loudly.
+ */
+export async function saveCombinedQuote(
+  agent: QuotingAgent,
+  items: readonly CombinedItem[]
+): Promise<string> {
+  if (items.length === 0) {
+    throw new PricingError("Add at least one item before saving.");
+  }
+
+  const { cart, problems } = await priceCart(agent, items);
+  if (problems.length > 0) {
+    throw new PricingError(
+      `Item ${problems[0].index + 1}: ${problems[0].reason}`
+    );
+  }
+
+  const productTypes = new Set(cart.items.map((i) => i.productType));
+  const snapshot = {
+    combined: true,
+    items: items.map((it, i) => ({ input: it.input, optionKey: it.optionKey, label: itemLabel(cart.items[i]) })),
+    quotedAt: new Date().toISOString(),
+    note: "Frozen at quote time. Catalogue rate and markup changes do not affect this record.",
+  };
+
+  // One flat line list, grouped by itemIndex so the saved quote can be read
+  // back as the items the agent actually chose.
+  const lines = cart.items.flatMap((item) =>
+    item.lines.map((line, lineIndex) => ({
+      description: line.description,
+      quantity: line.quantity,
+      unitMinor: line.unitMinor,
+      totalMinor: line.totalMinor,
+      usedOverride: line.usedOverride,
+      productType: item.productType,
+      itemIndex: item.index,
+      itemLabel: itemLabel(item),
+      sortOrder: item.index * 100 + lineIndex,
+    }))
+  );
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const quote = await prisma.quote.create({
+        data: {
+          reference: await nextReference(),
+          agentId: agent.id,
+          // "combined" only when it genuinely holds more than one product, so
+          // a one-item cart still reads as a hotel quote in the list.
+          productType: productTypes.size === 1 ? [...productTypes][0] : "combined",
+          travelStart: parseDateOnly(cart.travelStart),
+          travelEnd: parseDateOnly(cart.travelEnd),
+          pax: 0, // no single headcount spans a mixed trip
+          totalMinor: cart.totalMinor,
+          snapshotJson: JSON.stringify(snapshot),
+          lines: { create: lines },
+        },
+        select: { reference: true },
+      });
+      return quote.reference;
+    } catch (e) {
+      const isUnique =
+        typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "P2002";
+      if (!isUnique || attempt === 2) throw e;
     }
   }
   throw new Error("Could not allocate a quote reference.");

@@ -101,7 +101,11 @@ export default async function HouseboatQuotePage({
           </SearchForm>
 
           {error && <FormError message={error} />}
-          {result && <QuoteResults result={result} saveActions={saveActions} />}
+          {result && <QuoteResults
+              result={result}
+              saveActions={saveActions}
+              input={parsed.success ? { productType: "houseboat", ...parsed.data } : undefined}
+            />}
         </>
       )}
     </>

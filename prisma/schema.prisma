@@ -465,7 +465,9 @@ model Quote {
   agentId String
   agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
-  /// ProductType enum — which quote screen produced this.
+  /// ProductType enum, or "combined" when the quote holds more than one
+  /// product. Single-product quotes keep their own type so the list stays
+  /// readable at a glance.
   productType String
 
   /// Trip dates the pricing was resolved against.
@@ -478,6 +480,7 @@ model Quote {
   ///   houseboat -> passengers
   ///   itinerary -> travellers
   ///   vehicle   -> 0 (a vehicle hire has no headcount input)
+  ///   combined  -> 0 (no single headcount spans a mixed trip)
   /// Set in travelWindow() in src/lib/quote-store.ts. Do not read it as a
   /// headcount without checking productType first.
   pax Int
@@ -512,6 +515,25 @@ model QuoteLine {
   /// True when an AgentRateCard override supplied unitMinor, false when the
   /// catalogue default did. Makes "why is this price what it is" answerable.
   usedOverride Boolean @default(false)
+
+  /// Which product this line came from. Lines had no provenance before, which
+  /// is fine while a quote holds one product and useless once it holds four —
+  /// a combined quote has to be able to group its lines back into the items
+  /// the agent added.
+  ///
+  /// Nullable only so lines written before combined quoting existed still
+  /// load; everything written since sets it.
+  productType String?
+
+  /// Groups lines belonging to the same added item. A hotel stay that splits
+  /// across two seasons produces two lines with the SAME itemIndex — the split
+  /// is pricing detail within one thing the agent chose, not two choices.
+  itemIndex Int @default(0)
+
+  /// What the agent picked, e.g. "Demo Hill Resort · Deluxe · CP". Frozen at
+  /// save time so a saved quote reads correctly even if the catalogue is
+  /// renamed later.
+  itemLabel String?
 
   sortOrder Int @default(0)
 

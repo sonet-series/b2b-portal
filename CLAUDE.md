@@ -408,9 +408,38 @@ block on the saved quote, so a reference explains where its distance came from.
 They are deliberately NOT `QuoteLine` rows: they are inputs to one priced line,
 not charges, and zero-value lines would break "lines sum to the total".
 
+### Combined trip quoting (26 Aug 2026)
+An agent assembles a whole trip — one vehicle, several hotel stays, a houseboat
+— and saves it as ONE quote with one total.
+
+**The schema needed a change, contrary to a first read.** `Quote`/`QuoteLine`
+supported multi-LINE but not multi-PRODUCT: lines carried no provenance, so
+they could not be grouped back into the items the agent chose. `QuoteLine` now
+has `productType`, `itemIndex` and `itemLabel`. A hotel stay split across two
+seasons produces two lines with the SAME `itemIndex` — the split is pricing
+detail within one chosen thing, not two choices.
+
+`Quote.productType` is `"combined"` only when the quote genuinely holds more
+than one product, so a one-item trip still reads as a hotel quote in the list.
+
+**The cart lives in sessionStorage, holding INPUTS only — never prices.**
+Adding items means moving between the four product screens, so the URL would
+be unusable at six items. Every render of `/agent/trip` re-prices the whole
+cart server-side, and `saveCombinedQuote` re-prices again before writing, so a
+total from the browser is never trusted.
+
+**Every item is priced by the SAME engine as a single-product quote.**
+`src/lib/combined-quote.ts` only assembles; it never prices. If a combined and
+a single quote for the same thing ever disagreed, that is a bug in the
+assembler, not two pricing paths to reconcile.
+
+One item failing does not fail the cart — it is flagged against that item so
+the agent can fix or drop it. Saving with any unpriceable item is refused
+outright rather than silently dropping it.
+
 ### Quoting (Phase 4)
-Single-product quoting: one hotel, one boat, one vehicle, or one package per
-quote. Combining products into one multi-line quote is deliberately NOT built.
+Single-product quoting still exists and is unchanged: one hotel, one boat, one
+vehicle, or one package. It is now one path into the same storage as a trip.
 
 Two rules run through `src/lib/quote.ts`:
 

@@ -114,3 +114,42 @@ export type AnyQuoteInput =
   | ({ productType: "houseboat" } & HouseboatQuoteInput)
   | ({ productType: "vehicle" } & VehicleQuoteInput)
   | ({ productType: "itinerary" } & ItineraryQuoteInput);
+
+
+// ---------------------------------------------------------------------------
+// Combined quotes
+// ---------------------------------------------------------------------------
+
+/**
+ * One thing the agent added to a combined quote: the inputs they chose plus
+ * which priced option they picked.
+ *
+ * Only the INPUTS are carried, never a price. The whole cart is re-priced
+ * server-side when it is saved, so a total that arrives from the browser is
+ * never trusted — the same rule single-product saving already follows.
+ */
+export type CombinedItem = {
+  input: AnyQuoteInput;
+  /** Identifies the chosen option within that product's result. */
+  optionKey: string;
+};
+
+/** A priced cart item, ready to render. */
+export type PricedItem = {
+  index: number;
+  productType: AnyQuoteInput["productType"];
+  /** What the agent chose, e.g. "Demo Hill Resort · Deluxe · CP". */
+  label: string;
+  detail: string;
+  lines: QuoteLineDraft[];
+  subtotalMinor: number;
+  usedOverride: boolean;
+};
+
+export type PricedCart = {
+  items: PricedItem[];
+  totalMinor: number;
+  /** Earliest and latest travel dates across every item, ISO. */
+  travelStart: string;
+  travelEnd: string;
+};

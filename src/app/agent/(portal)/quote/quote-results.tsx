@@ -4,7 +4,8 @@ import { useActionState } from "react";
 import { formatMinor } from "@/lib/money";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/validation";
 import { Badge, Button, Card, EmptyState, FormError } from "@/components/ui";
-import type { QuoteResult } from "@/lib/quote-types";
+import { useTripCart } from "@/components/trip-cart";
+import type { AnyQuoteInput, QuoteResult } from "@/lib/quote-types";
 
 function SaveButton({ action }: { action: (prev: FormState) => Promise<FormState> }) {
   const [state, formAction, pending] = useActionState(
@@ -13,9 +14,9 @@ function SaveButton({ action }: { action: (prev: FormState) => Promise<FormState
   );
 
   return (
-    <form action={formAction} className="mt-4">
+    <form action={formAction}>
       <FormError message={state.message} />
-      <Button type="submit" disabled={pending} className="mt-2">
+      <Button type="submit" disabled={pending}>
         {pending ? "Saving…" : "Save this quote"}
       </Button>
     </form>
@@ -30,11 +31,18 @@ function SaveButton({ action }: { action: (prev: FormState) => Promise<FormState
 export function QuoteResults({
   result,
   saveActions,
+  input,
 }: {
   result: QuoteResult;
   /** One bound save action per option key. */
   saveActions: Record<string, (prev: FormState) => Promise<FormState>>;
+  /**
+   * The inputs behind this result. Needed so an option can be added to a trip
+   * — the cart stores inputs, never prices, so it can be re-priced on save.
+   */
+  input?: AnyQuoteInput;
 }) {
+  const cart = useTripCart();
   if (result.options.length === 0 && result.unavailable.length === 0) {
     return (
       <EmptyState
@@ -81,9 +89,24 @@ export function QuoteResults({
             </tbody>
           </table>
 
-          {saveActions[option.key] && (
-            <SaveButton action={saveActions[option.key]} />
-          )}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {saveActions[option.key] && <SaveButton action={saveActions[option.key]} />}
+            {input && (
+              <Button
+                type="button"
+                tone="secondary"
+                onClick={() =>
+                  cart.add({
+                    input,
+                    optionKey: option.key,
+                    label: `${option.title} · ${option.detail}`,
+                  })
+                }
+              >
+                Add to trip
+              </Button>
+            )}
+          </div>
         </Card>
       ))}
 

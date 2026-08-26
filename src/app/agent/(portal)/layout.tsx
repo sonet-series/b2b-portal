@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAgent, clearSession } from "@/lib/auth";
+import { TripCartProvider, TripCartBar } from "@/components/trip-cart";
 
 export const metadata: Metadata = { title: "Series Tours B2B" };
 
@@ -10,6 +11,7 @@ const NAV = [
   { href: "/agent/quote/houseboat", label: "Houseboats" },
   { href: "/agent/quote/hotel", label: "Hotels" },
   { href: "/agent/quote/package", label: "Packages" },
+  { href: "/agent/trip", label: "Current trip" },
   { href: "/agent/quotes", label: "Saved quotes" },
 ];
 
@@ -29,7 +31,8 @@ export default async function AgentLayout({ children }: { children: React.ReactN
   if (agent.mustChangePassword) redirect("/agent/change-password");
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <TripCartProvider>
+    <div className="flex min-h-screen flex-col bg-slate-100">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <Link href="/agent" className="text-sm font-semibold text-slate-900">
@@ -58,7 +61,9 @@ export default async function AgentLayout({ children }: { children: React.ReactN
           </form>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
+      <TripCartBar />
     </div>
+    </TripCartProvider>
   );
 }

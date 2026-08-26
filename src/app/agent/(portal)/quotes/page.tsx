@@ -2,15 +2,16 @@ import { requireAgent } from "@/lib/auth";
 import { listQuotes } from "@/lib/quote-store";
 import { formatMinor } from "@/lib/money";
 import { Badge, EmptyState, PageHeader, Table, Td } from "@/components/ui";
-import type { ProductType } from "@/lib/enums";
 
 export const dynamic = "force-dynamic";
 
-const PRODUCT_LABEL: Record<ProductType, string> = {
+/** "combined" is not a ProductType — a mixed trip is not one of the four. */
+const PRODUCT_LABEL: Record<string, string> = {
   hotel: "Hotel",
   houseboat: "Houseboat",
   vehicle: "Vehicle",
   itinerary: "Package",
+  combined: "Combined trip",
 };
 
 export default async function QuotesPage() {
@@ -37,7 +38,7 @@ export default async function QuotesPage() {
                 <span className="font-mono font-medium text-slate-900">{q.reference}</span>
               </Td>
               <Td>
-                <Badge tone="blue">{PRODUCT_LABEL[q.productType as ProductType] ?? q.productType}</Badge>
+                <Badge tone="blue">{PRODUCT_LABEL[q.productType] ?? q.productType}</Badge>
               </Td>
               <Td className="whitespace-nowrap">
                 {q.travelStart === q.travelEnd

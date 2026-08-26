@@ -131,7 +131,11 @@ export default async function PackageQuotePage({
           )}
 
           {error && <FormError message={error} />}
-          {result && <QuoteResults result={result} saveActions={saveActions} />}
+          {result && <QuoteResults
+              result={result}
+              saveActions={saveActions}
+              input={parsed.success ? { productType: "itinerary", ...parsed.data } : undefined}
+            />}
         </>
       )}
     </>
