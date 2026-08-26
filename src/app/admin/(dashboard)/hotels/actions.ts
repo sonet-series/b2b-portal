@@ -47,6 +47,26 @@ export async function updateHotel(
   return { ok: true, message: "Hotel saved." };
 }
 
+/**
+ * THE write path for a hotel rate. Manual entry and the AI rate-sheet import
+ * both go through here, so there is no second insert that could drift from the
+ * validated one — every invariant (season ordering, cost required, mode rules)
+ * applies identically whoever is writing.
+ *
+ * Takes the same loose field shape a form submits: strings straight from the
+ * user or from a staged import row.
+ */
+export async function writeHotelRate(
+  hotelId: string,
+  fields: Record<string, unknown>
+): Promise<FormState> {
+  const parsed = hotelRateSchema.safeParse(fields);
+  if (!parsed.success) return toFormState(parsed.error);
+
+  await prisma.hotelRate.create({ data: { ...parsed.data, hotelId } });
+  return { ok: true };
+}
+
 export async function createHotelRate(
   hotelId: string,
   _prev: FormState,
@@ -54,10 +74,9 @@ export async function createHotelRate(
 ): Promise<FormState> {
   await requireAdmin();
 
-  const parsed = hotelRateSchema.safeParse(formObject(formData));
-  if (!parsed.success) return toFormState(parsed.error);
+  const result = await writeHotelRate(hotelId, formObject(formData));
+  if (!result.ok) return result;
 
-  await prisma.hotelRate.create({ data: { ...parsed.data, hotelId } });
   revalidatePath(`/admin/hotels/${hotelId}`);
   return { ok: true, message: "Rate added." };
 }

@@ -154,6 +154,28 @@ generates or resets — so it is safe on every container start.
 `SEED_DEMO` is deliberately unset in production: the demo catalogue must never
 appear in a real database.
 
+## AI rate-sheet import needs an API key
+
+The hotel rate-sheet importer calls the Claude API. **Add an Anthropic API key
+to `.env.production` before that feature will work live:**
+
+```bash
+cd /opt/b2b-portal
+printf 'ANTHROPIC_API_KEY=sk-ant-...\n' >> .env.production
+docker compose up -d --force-recreate web
+```
+
+Without it the feature does not silently degrade — in production it refuses and
+says the key is missing. The fabricated dev stub is gated on
+`NODE_ENV !== "production"` and can never run on the server, because a stub
+quietly producing invented room rates would be far worse than the feature being
+unavailable.
+
+Optional: `ANTHROPIC_MODEL` overrides the default `claude-opus-5`.
+
+Rate sheets are uploaded to the Claude API for extraction. Sonet confirmed on
+26 Aug 2026 that this is acceptable for supplier rate sheets.
+
 ## Verify the ERP isolation actually holds
 
 Do this once after the first deploy. It is the whole point of the `edge`

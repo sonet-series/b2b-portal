@@ -56,7 +56,8 @@ model Hotel {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  rates HotelRate[]
+  rates   HotelRate[]
+  imports RateSheetImport[]
 
   @@index([active, location])
 }
@@ -572,4 +573,74 @@ model MarkupRule {
   updatedAt DateTime @updatedAt
 
   @@unique([productType, tier])
+}
+
+/// An uploaded hotel rate sheet and what the AI extracted from it.
+///
+/// Extraction results are STAGED here, never written straight to HotelRate.
+/// A bad extraction becomes a wrong price quoted to a real customer, so a
+/// human confirms every row first. Staging in the database rather than the
+/// browser means a review of sixty rows survives a refresh, and leaves a
+/// record of what was proposed versus what was accepted.
+model RateSheetImport {
+  id      String @id @default(uuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  /// The uploaded file, kept so a disputed rate can be checked against source.
+  storedName   String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+
+  /// ImportStatus enum: PENDING_REVIEW | CONFIRMED | DISCARDED
+  status String @default("PENDING_REVIEW")
+
+  /// Which model produced these rows, so a systematic error is traceable.
+  model String
+
+  /// Anything the model flagged about the sheet as a whole.
+  notes String?
+
+  createdAt   DateTime  @default(now())
+  confirmedAt DateTime?
+
+  rows RateSheetRow[]
+
+  @@index([hotelId, status])
+}
+
+/// One proposed HotelRate, held for review.
+///
+/// Fields are stored as STRINGS exactly as the manual rate form would submit
+/// them. On confirm each row is fed through the same zod schema and the same
+/// create call as manual entry — so a staged row is literally a form
+/// submission, and there is no second write path that could drift from the
+/// first.
+model RateSheetRow {
+  id       String          @id @default(uuid())
+  importId String
+  import   RateSheetImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  roomType    String
+  mealPlan    String
+  seasonLabel String
+  /// ISO YYYY-MM-DD, or "" when the model could not read a date confidently.
+  validFrom   String
+  validTo     String
+  /// Rupees as typed, e.g. "4500" — converted to paise by the shared schema.
+  costInput   String
+
+  /// Confidence enum: HIGH | LOW. LOW rows are surfaced for attention; they
+  /// are not rejected, because the reviewer is the one who decides.
+  confidence String  @default("HIGH")
+  /// Why the model was unsure, in its own words.
+  issues     String?
+
+  /// Cleared by the reviewer to drop a row without deleting the audit trail.
+  included Boolean @default(true)
+
+  sortOrder Int @default(0)
+
+  @@index([importId])
 }

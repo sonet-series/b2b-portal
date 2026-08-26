@@ -59,6 +59,7 @@ export function DateField({
   hint,
   error,
   min,
+  onIsoChange,
 }: {
   label: string;
   name: string;
@@ -69,6 +70,8 @@ export function DateField({
   error?: string;
   /** ISO YYYY-MM-DD. Dates before this are rejected client-side. */
   min?: string;
+  /** Called with the ISO value (or "") whenever a complete date is typed. */
+  onIsoChange?: (iso: string) => void;
 }) {
   const [display, setDisplay] = useState(() => isoToDisplay(defaultValue));
   const [localError, setLocalError] = useState<string | null>(null);
@@ -80,7 +83,8 @@ export function DateField({
     setDisplay(formatted);
 
     if (formatted === "") {
-      setLocalError(required ? null : null); // emptiness is the server's business
+      onIsoChange?.("");
+      setLocalError(null); // emptiness is the server's business
       return;
     }
     if (formatted.length < 10) {
@@ -89,6 +93,7 @@ export function DateField({
     }
 
     const parsed = displayToIso(formatted);
+    onIsoChange?.(parsed ?? "");
     if (!parsed) {
       setLocalError("That date does not exist — use dd/mm/yyyy");
     } else if (min && parsed < min) {

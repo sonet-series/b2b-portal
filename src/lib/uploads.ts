@@ -44,6 +44,18 @@ export function uploadDir(): string {
  * browser sent, which is supplied by the client and trivially wrong — by
  * accident or on purpose. Returns null for anything unrecognised.
  */
+/** Cheap heuristic: mostly printable ASCII in the first kilobyte. */
+function looksLikeText(bytes: Uint8Array): boolean {
+  const sample = bytes.subarray(0, 1024);
+  if (sample.length === 0) return false;
+  let printable = 0;
+  for (const b of sample) {
+    if (b === 9 || b === 10 || b === 13 || (b >= 32 && b < 127)) printable++;
+    else if (b === 0) return false; // a NUL byte means binary
+  }
+  return printable / sample.length > 0.9;
+}
+
 function sniffMimeType(bytes: Uint8Array): string | null {
   const startsWith = (...sig: number[]) => sig.every((b, i) => bytes[i] === b);
 
@@ -74,7 +86,11 @@ export type StoredUpload = {
  * a label — using it on disk would let a crafted name escape the upload
  * directory.
  */
-export async function storeUpload(file: File, label: string): Promise<StoredUpload> {
+export async function storeUpload(
+  file: File,
+  label: string,
+  opts?: { extraTypes?: readonly string[] }
+): Promise<StoredUpload> {
   if (!file || file.size === 0) {
     throw new UploadError(`${label} is required`);
   }
@@ -84,13 +100,24 @@ export async function storeUpload(file: File, label: string): Promise<StoredUplo
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const mimeType = sniffMimeType(bytes);
+  let mimeType = sniffMimeType(bytes);
 
-  if (!mimeType || !(mimeType in ACCEPTED)) {
+  // Text formats have no magic number to sniff. They are allowed only where
+  // the caller opts in (rate sheets), never for identity documents, and only
+  // after confirming the bytes really are text rather than something binary
+  // wearing a .csv name.
+  if (!mimeType && opts?.extraTypes?.length && looksLikeText(bytes)) {
+    const declared = file.type || "text/plain";
+    if (opts.extraTypes.includes(declared)) mimeType = declared;
+    else if (opts.extraTypes.includes("text/plain")) mimeType = "text/plain";
+  }
+
+  const allowed = mimeType && (mimeType in ACCEPTED || opts?.extraTypes?.includes(mimeType));
+  if (!mimeType || !allowed) {
     throw new UploadError(`${label} must be a ${ACCEPTED_LABEL}`);
   }
 
-  const storedName = `${randomUUID()}${ACCEPTED[mimeType]}`;
+  const storedName = `${randomUUID()}${ACCEPTED[mimeType] ?? ".txt"}`;
   const dir = uploadDir();
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, storedName), bytes, { mode: 0o600 });
@@ -112,7 +139,7 @@ export async function storeUpload(file: File, label: string): Promise<StoredUplo
  * check is cheap, and this function serves files to a browser.
  */
 export async function readUpload(storedName: string): Promise<Buffer> {
-  if (!/^[0-9a-f-]{36}\.(jpg|png|webp|pdf)$/.test(storedName)) {
+  if (!/^[0-9a-f-]{36}\.(jpg|png|webp|pdf|txt)$/.test(storedName)) {
     throw new UploadError("Not a valid document reference.");
   }
 

@@ -20,10 +20,10 @@ export default async function HotelDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ created?: string }>;
+  searchParams: Promise<{ created?: string; imported?: string }>;
 }) {
   const { id } = await params;
-  const { created } = await searchParams;
+  const { created, imported } = await searchParams;
 
   const hotel = await prisma.hotel.findUnique({
     where: { id },
@@ -42,8 +42,21 @@ export default async function HotelDetailPage({
       <PageHeader
         title={hotel.name}
         description={hotel.location}
-        action={<LinkButton href="/admin/hotels">Back to hotels</LinkButton>}
+        action={
+          <div className="flex gap-2">
+            <LinkButton href={`/admin/hotels/${hotel.id}/import`} tone="primary">
+              Import rate sheet
+            </LinkButton>
+            <LinkButton href="/admin/hotels">Back to hotels</LinkButton>
+          </div>
+        }
       />
+
+      {imported && (
+        <div className="mb-4">
+          <FormSuccess message={`Imported ${imported} rate${imported === "1" ? "" : "s"} from the rate sheet.`} />
+        </div>
+      )}
 
       {created && (
         <div className="mb-4">

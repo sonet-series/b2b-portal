@@ -474,6 +474,33 @@ Reference format `ST-YYMM-NNNN` (e.g. `ST-2609-0042`), short enough to read
 down a phone line. Allocation is read-then-write, so it retries on the unique
 index rather than assuming no collision.
 
+### AI rate-sheet import — hotels only (26 Aug 2026)
+Sonet cannot hand-type hundreds of room rates, so `/admin/hotels/[id]/import`
+reads a hotel's own rate sheet (PDF, scan, photo or CSV) with the Claude API
+and PROPOSES rows.
+
+**The review step is the feature, not a nicety.** Extraction results are staged
+in `RateSheetImport` / `RateSheetRow` and nothing reaches `HotelRate` until a
+human confirms. A bad extraction becomes a wrong price quoted to a real
+customer. Staged rows are stored as the STRINGS the manual form would submit,
+so confirming feeds each one through `writeHotelRate()` — the same zod schema
+and the same create as manual entry. There is deliberately no second insert
+path that could drift from the validated one.
+
+**Confirm is all-or-nothing.** Every included row is validated before anything
+is written, so a bad row at line 40 cannot leave 1–39 committed. Half an
+imported rate sheet is a silent pricing gap nobody would notice.
+
+Rate sheets quote NET/COST rates, so extraction produces cost; the markup rules
+turn that into the two agent prices, shown beside each row during review.
+
+**`ANTHROPIC_API_KEY` is required in production.** Without it the feature
+refuses. Locally, a clearly-labelled fabricated stub runs instead, gated on
+`NODE_ENV !== "production"` so it can never reach the live site — a stub
+quietly inventing room rates would be worse than no feature.
+
+Houseboats and packages can follow the same pattern once hotels are proven.
+
 ### Agent documents (26 Aug 2026)
 Registration collects three files — PAN card, business proof, visiting card —
 which replaced the free-text GST/licence field. Address, alternative phone and
