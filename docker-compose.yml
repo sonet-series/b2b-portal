@@ -30,6 +30,9 @@ services:
       # The database file lives on the bind mount below, not in the image.
       - DATABASE_URL=file:/app/data/prod.db
       - PORTAL_URL=https://b2b.seriestours.com
+      # Agent documents live beside prod.db on the SAME bind mount, so they
+      # survive a container rebuild exactly like the database does.
+      - UPLOAD_DIR=/app/data/uploads
       # Runs the admin upsert on boot; the seeded password is one-time and the
       # app forces a change at first sign-in.
       - RUN_SEED_ON_START=1

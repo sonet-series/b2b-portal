@@ -298,6 +298,15 @@ export type FormState = {
   message?: string;
   /** Field name -> first error message. */
   errors?: Record<string, string>;
+  /**
+   * What the user typed, echoed back so a rejected form can be re-rendered
+   * with their input intact. Browsers always clear file inputs on re-render
+   * for security, so those must be re-picked regardless — but making someone
+   * retype nine text fields because one of them was wrong is its own defect.
+   *
+   * Passwords are deliberately never included.
+   */
+  values?: Record<string, string>;
 };
 
 export const EMPTY_FORM_STATE: FormState = { ok: false };
@@ -325,18 +334,51 @@ export function formObject(formData: FormData): Record<string, unknown> {
  * Public registration. This is the only schema on an unauthenticated route, so
  * it is the strictest — everything here comes from a stranger.
  */
+const phoneRule = (label: string, min: number) =>
+  z
+    .string()
+    .trim()
+    .min(min, `${label} is required`)
+    .max(24, `${label} is too long`)
+    .refine((v) => /^[+\d][\d\s-]*$/.test(v), `${label} can only contain digits, spaces, + and -`);
+
+/** Optional phone / email: blank is fine, but anything entered must be valid. */
+const optionalPhone = z
+  .string()
+  .trim()
+  .optional()
+  .transform((v) => (v === undefined || v === "" ? null : v))
+  .superRefine((v, ctx) => {
+    if (v !== null && !/^[+\d][\d\s-]{5,23}$/.test(v)) {
+      ctx.addIssue({ code: "custom", message: "Enter a valid phone number, or leave this blank" });
+    }
+  });
+
+const optionalEmail = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .optional()
+  .transform((v) => (v === undefined || v === "" ? null : v))
+  .superRefine((v, ctx) => {
+    if (v !== null && !z.string().email().safeParse(v).success) {
+      ctx.addIssue({ code: "custom", message: "Enter a valid email address, or leave this blank" });
+    }
+  });
+
 export const agentRegistrationSchema = z
   .object({
     agencyName: text("Agency name", 160),
     contactName: text("Contact name", 120),
-    phone: z
+    address: z
       .string()
       .trim()
-      .min(7, "Phone number is required")
-      .max(24, "Phone number is too long")
-      .refine((v) => /^[+\d][\d\s-]*$/.test(v), "Phone number can only contain digits, spaces, + and -"),
+      .min(10, "Enter the agency's full address")
+      .max(600, "Address is too long"),
+    phone: phoneRule("Phone number", 7),
     email: z.string().trim().toLowerCase().email("Enter a valid email address").max(160),
-    gstOrLicenseNumber: text("GST or licence number", 40),
+    altPhone: optionalPhone,
+    altEmail: optionalEmail,
     password: z
       .string()
       .min(10, "Password must be at least 10 characters")
@@ -349,6 +391,20 @@ export const agentRegistrationSchema = z
         code: "custom",
         path: ["confirmPassword"],
         message: "Passwords do not match",
+      });
+    }
+    if (v.altEmail && v.altEmail === v.email) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["altEmail"],
+        message: "The alternative email must differ from the primary one",
+      });
+    }
+    if (v.altPhone && v.altPhone.replace(/\D/g, "") === v.phone.replace(/\D/g, "")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["altPhone"],
+        message: "The alternative number must differ from the primary one",
       });
     }
   });

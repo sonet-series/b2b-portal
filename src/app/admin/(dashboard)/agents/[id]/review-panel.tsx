@@ -35,7 +35,7 @@ export function ReviewPanel({
     <Card>
       <h2 className="text-base font-semibold text-slate-900">Review this registration</h2>
       <p className="mt-1 text-sm text-slate-500">
-        Check the GST or licence number before approving.
+        Check the documents above before approving.
       </p>
 
       <div className="mt-4 flex gap-2">

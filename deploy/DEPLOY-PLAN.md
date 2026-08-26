@@ -203,6 +203,11 @@ of a live database can capture a torn write), verifies with `PRAGMA
 integrity_check`, gzips, and prunes past 30 days. CI also runs it before every
 deploy, since migrations apply on container start.
 
+It also tars `data/uploads` — the agent documents (PAN card, business proof,
+visiting card) live on disk, not in the database. Restoring only prod.db would
+give you agent rows whose documents are missing, and the approval screen for
+those agents would be unusable.
+
 `deploy/restore.sh <backup.db.gz>` restores one, keeping the current database
 alongside as `.pre-restore-*`.
 

@@ -289,6 +289,37 @@ Reference format `ST-YYMM-NNNN` (e.g. `ST-2609-0042`), short enough to read
 down a phone line. Allocation is read-then-write, so it retries on the unique
 index rather than assuming no collision.
 
+### Agent documents (26 Aug 2026)
+Registration collects three files — PAN card, business proof, visiting card —
+which replaced the free-text GST/licence field. Address, alternative phone and
+alternative email were added at the same time.
+
+**Files go on disk, not in SQLite.** Blobs would bloat every `.backup` copy,
+and cheap copying is the whole point of a single-file database. They live under
+`UPLOAD_DIR` (`/app/data/uploads` in production) — the **same bind mount as
+prod.db**, so documents survive a rebuild exactly like the database. Anywhere
+else and they vanish on the next deploy. `deploy/backup.sh` tars them alongside
+the nightly database dump; backing up only the DB would restore agent rows
+whose documents no longer exist.
+
+**They are never served statically.** A PAN card is sensitive personal data.
+Nothing is written under `public/`; the only read path is
+`/admin/agents/[id]/documents/[kind]`, which re-checks the admin session on
+every request (a route handler is its own entry point — the dashboard layout
+does not run for it). Verified: unauthenticated, agent-token, and direct static
+paths all fail.
+
+**File type comes from the bytes, not the browser.** `src/lib/uploads.ts`
+sniffs magic numbers; a text file sent as `image/png` is rejected. Stored names
+are generated UUIDs — the browser-supplied filename is kept only as a label,
+never used as a path.
+
+**`next.config.ts` raises `serverActions.bodySizeLimit` to 16mb.** Next's
+default is 1MB *for the whole request body*, which is below a single phone
+photo — uploads failed with an opaque server error before the app's own 5MB
+check could produce a useful message. The per-file 5MB limit is still the real
+guard.
+
 ### Approval notification — manual, by design (confirmed 25 Aug 2026)
 **No email provider, and none is to be built for v1.** Approving an agent does
 not send anything. Instead the admin surfaces a copy-ready handover message

@@ -297,12 +297,23 @@ model ItineraryRate {
 // ---------------------------------------------------------------------------
 
 model Agent {
-  id                 String  @id @default(uuid())
-  agencyName         String
-  contactName        String
-  phone              String
-  email              String  @unique
-  gstOrLicenseNumber String
+  id          String @id @default(uuid())
+  agencyName  String
+  contactName String
+
+  /// Primary contact. Both `alt` fields are genuinely optional.
+  phone    String
+  email    String  @unique
+  altPhone String?
+  altEmail String?
+
+  /// Full postal address of the agency. Multi-line free text.
+  ///
+  /// Defaulted to "" only so this column could be added to rows that predate
+  /// it — the GST/licence text field it replaced was never an address. Every
+  /// registration since populates it, and validation.ts requires a real value,
+  /// so an empty one means a row older than this migration.
+  address String @default("")
 
   /// AgentStatus enum: pending | approved | rejected
   /// Registration always lands on `pending`. Nothing auto-approves.
@@ -326,8 +337,44 @@ model Agent {
 
   rateCardEntries AgentRateCard[]
   quotes          Quote[]
+  documents       AgentDocument[]
 
   @@index([status, createdAt])
+}
+
+/// Identity and business documents uploaded at registration.
+///
+/// The files themselves live on disk under UPLOAD_DIR (the same bind mount as
+/// prod.db, so they survive container rebuilds); only metadata lives here.
+///
+/// These are identity documents — a PAN card is sensitive personal data. They
+/// are deliberately NOT stored under public/ and are never served statically.
+/// The only way to read one is through the admin-authenticated route at
+/// /admin/agents/[id]/documents/[kind].
+model AgentDocument {
+  id      String @id @default(uuid())
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  /// DocumentKind enum: PAN_CARD | BUSINESS_PROOF | VISITING_CARD
+  kind String
+
+  /// Filename on disk, generated — never the name the browser supplied, which
+  /// is attacker-controlled and could contain path separators.
+  storedName String
+
+  /// What the agent called it. Display and download only, never a filesystem path.
+  originalName String
+
+  /// Sniffed from the file's leading bytes, not taken from the upload headers.
+  mimeType  String
+  sizeBytes Int
+
+  createdAt DateTime @default(now())
+
+  /// One document per kind per agent; re-uploading replaces rather than piles up.
+  @@unique([agentId, kind])
+  @@index([agentId])
 }
 
 /// Per-agent price overrides. This is what makes pricing per-customer rather

@@ -20,15 +20,17 @@ function AgentTable({
     contactName: string;
     email: string;
     phone: string;
-    gstOrLicenseNumber: string;
+    address: string;
+    altPhone: string | null;
+    altEmail: string | null;
     status: string;
     createdAt: Date;
     mustChangePassword: boolean;
-    _count: { rateCardEntries: number };
+    _count: { rateCardEntries: number; documents: number };
   }[];
 }) {
   return (
-    <Table head={["Agency", "Contact", "GST / licence", "Status", "Rate card", "Registered", ""]}>
+    <Table head={["Agency", "Contact", "Documents", "Status", "Rate card", "Registered", ""]}>
       {agents.map((a) => (
         <tr key={a.id}>
           <Td>
@@ -40,7 +42,15 @@ function AgentTable({
               {a.email} · {a.phone}
             </div>
           </Td>
-          <Td className="font-mono text-xs">{a.gstOrLicenseNumber}</Td>
+          <Td className="text-xs">
+            {a._count.documents === 3 ? (
+              <span className="text-slate-600">3 uploaded</span>
+            ) : a._count.documents === 0 ? (
+              <span className="text-slate-400">none</span>
+            ) : (
+              <span className="text-amber-700">{a._count.documents} of 3</span>
+            )}
+          </Td>
           <Td>
             <Badge tone={STATUS_TONE[a.status as AgentStatus] ?? "slate"}>
               {STATUS_LABEL[a.status as AgentStatus] ?? a.status}
@@ -75,11 +85,13 @@ export default async function AgentsPage() {
     contactName: true,
     email: true,
     phone: true,
-    gstOrLicenseNumber: true,
+    address: true,
+    altPhone: true,
+    altEmail: true,
     status: true,
     createdAt: true,
     mustChangePassword: true,
-    _count: { select: { rateCardEntries: true } },
+    _count: { select: { rateCardEntries: true, documents: true } },
   } as const;
 
   const [pending, others] = await Promise.all([

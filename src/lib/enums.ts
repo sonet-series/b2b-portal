@@ -66,6 +66,10 @@ export const VEHICLE_RATE_TYPE_LABEL: Record<VehicleRateType, string> = {
   TRANSFER: "Point-to-point transfer (flat)",
 };
 
+/** The three documents every agent uploads at registration. */
+export const DOCUMENT_KIND = ["PAN_CARD", "BUSINESS_PROOF", "VISITING_CARD"] as const;
+export type DocumentKind = (typeof DOCUMENT_KIND)[number];
+
 function makeGuard<T extends readonly string[]>(values: T) {
   const set = new Set<string>(values);
   return (v: unknown): v is T[number] => typeof v === "string" && set.has(v);
@@ -77,5 +81,6 @@ export const isMealPlan = makeGuard(MEAL_PLAN);
 export const isHouseboatCategory = makeGuard(HOUSEBOAT_CATEGORY);
 export const isCruisePackage = makeGuard(CRUISE_PACKAGE);
 export const isVehicleRateType = makeGuard(VEHICLE_RATE_TYPE);
+export const isDocumentKind = makeGuard(DOCUMENT_KIND);
 export const isHouseboatPricingMode = makeGuard(HOUSEBOAT_PRICING_MODE);
 export const isItineraryPricingMode = makeGuard(ITINERARY_PRICING_MODE);

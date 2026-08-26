@@ -37,5 +37,18 @@ fi
 gzip -f "$OUT"
 echo "[$(date -uIs)] ok: ${OUT}.gz ($(du -h "${OUT}.gz" | cut -f1))"
 
+# Agent documents live on disk, not in the database. Backing up only prod.db
+# would restore to agent rows whose PAN card and business proof files no longer
+# exist — the approval screen would then be unusable for those agents.
+UPLOADS="$APP_DIR/data/uploads"
+if [ -d "$UPLOADS" ] && [ -n "$(ls -A "$UPLOADS" 2>/dev/null)" ]; then
+  UPLOAD_OUT="$BACKUP_DIR/uploads-$STAMP.tar.gz"
+  tar -czf "$UPLOAD_OUT" -C "$APP_DIR/data" uploads
+  echo "[$(date -uIs)] ok: ${UPLOAD_OUT} ($(du -h "$UPLOAD_OUT" | cut -f1))"
+else
+  echo "[$(date -uIs)] no uploads to back up yet"
+fi
+
 find "$BACKUP_DIR" -name 'prod-*.db.gz' -mtime "+$KEEP_DAYS" -delete
+find "$BACKUP_DIR" -name 'uploads-*.tar.gz' -mtime "+$KEEP_DAYS" -delete
 echo "[$(date -uIs)] pruned backups older than $KEEP_DAYS days"

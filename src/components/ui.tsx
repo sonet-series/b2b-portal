@@ -180,6 +180,42 @@ export function MoneyField(props: ComponentProps<typeof Field>) {
   );
 }
 
+export function FileField({
+  label,
+  name,
+  hint,
+  error,
+  required,
+  accept,
+}: {
+  label: string;
+  name: string;
+  hint?: string;
+  error?: string;
+  required?: boolean;
+  accept?: string;
+}) {
+  return (
+    <Wrapper label={label} name={name} hint={hint} error={error} required={required}>
+      <input
+        id={name}
+        name={name}
+        type="file"
+        accept={accept}
+        required={required}
+        aria-invalid={error ? true : undefined}
+        className={cx(
+          "block w-full cursor-pointer rounded-md text-sm text-slate-700",
+          "file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-100",
+          "file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700",
+          "hover:file:bg-slate-200",
+          error && "ring-1 ring-red-400"
+        )}
+      />
+    </Wrapper>
+  );
+}
+
 export function TextArea({
   label,
   name,

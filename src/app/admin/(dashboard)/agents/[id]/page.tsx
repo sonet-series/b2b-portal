@@ -7,6 +7,7 @@ import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
 import { ReviewPanel } from "./review-panel";
 import { TempPasswordPanel } from "./handover-panel";
 import { RateCardPanel } from "./rate-card-panel";
+import { DocumentsPanel } from "./documents-panel";
 import { CopyBlock } from "@/components/copy-block";
 import { approveAgent, rejectAgent, issueTempPassword, addRateCardEntry, removeRateCardEntry } from "../actions";
 
@@ -24,7 +25,10 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
   const [agent, options, otherAgents] = await Promise.all([
     prisma.agent.findUnique({
       where: { id },
-      include: { rateCardEntries: { orderBy: { productType: "asc" } } },
+      include: {
+        rateCardEntries: { orderBy: { productType: "asc" } },
+        documents: true,
+      },
     }),
     listRateOptions(),
     prisma.agent.findMany({
@@ -66,10 +70,20 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
               <span className="text-slate-500">Status: </span>
               <Badge tone={STATUS_TONE[status] ?? "slate"}>{STATUS_LABEL[status] ?? status}</Badge>
             </p>
-            <p>
-              <span className="text-slate-500">GST / licence: </span>
-              <span className="font-mono">{agent.gstOrLicenseNumber}</span>
+            <p className="max-w-md">
+              <span className="text-slate-500">Address: </span>
+              {agent.address ? (
+                <span className="whitespace-pre-wrap">{agent.address}</span>
+              ) : (
+                <span className="text-slate-400">not recorded</span>
+              )}
             </p>
+            {(agent.altPhone || agent.altEmail) && (
+              <p>
+                <span className="text-slate-500">Also: </span>
+                {[agent.altEmail, agent.altPhone].filter(Boolean).join(" · ")}
+              </p>
+            )}
             <p className="text-slate-500">
               Registered {agent.createdAt.toISOString().slice(0, 10)}
               {agent.approvedAt && ` · approved ${agent.approvedAt.toISOString().slice(0, 10)}`}
@@ -89,6 +103,8 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
           )}
         </div>
       </Card>
+
+      <DocumentsPanel agentId={agent.id} documents={agent.documents} />
 
       {status === "pending" && (
         <div className="mb-6">

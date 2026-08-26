@@ -45,3 +45,6 @@ next-env.d.ts
 *.db
 *.db-journal
 prisma/dev.db*
+
+# uploaded agent documents (identity documents — never committed)
+data/
