@@ -158,9 +158,14 @@ contradict rules already in the schema.
 What must never happen is one tier priced and the other blank — that is the
 "cannot price somebody" failure the required main-rate columns prevent. So the
 invariant is enforced as **both-or-neither in `src/lib/validation.ts`**, which
-is the only write path. If a DB-level guarantee is ever wanted, SQLite CHECK
-constraints would do it, but Prisma does not model them and would silently drop
-them on the next table rebuild — hence validation instead.
+is the only write path.
+
+**Confirmed with Sonet, 26 Aug 2026: code-level enforcement only. Do NOT add
+SQLite CHECK constraints.** They were considered and rejected on purpose —
+Prisma does not model them, so it would silently drop them on the next table
+rebuild, leaving a guarantee everyone believes in and nothing enforces. The
+single-write-path architecture is what makes validation sufficient; if a second
+write path is ever added, this reasoning stops holding and must be revisited.
 
 ### Rate-card overrides are per CHARGE (26 Aug 2026)
 `AgentRateCard.charge` says which charge on the referenced row an override
@@ -171,6 +176,9 @@ One row per charge rather than one wide row, so an agency can get a special room
 rate **without** also inheriting a special extra-bed rate. Every lookup goes
 through `overrideKey()` in `src/lib/rate-card.ts` — never build the key by hand,
 or the lookup silently misses and the tier default applies.
+
+**Confirmed with Sonet, 26 Aug 2026:** the per-charge dimension is the intended
+scope, not an over-reach to be simplified away later.
 
 The resolution order above holds for ancillary charges exactly as for main
 rates: override for that charge, else the tier default, else the charge is not
