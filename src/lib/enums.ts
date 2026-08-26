@@ -112,6 +112,21 @@ export const CHARGES_BY_PRODUCT: Record<ProductType, readonly RateCharge[]> = {
   itinerary: ["MAIN", "SINGLE_SUPPLEMENT"],
 };
 
+/**
+ * How a markup turns a cost into a sell price.
+ *
+ * One required `value` column carries both, with the meaning set by the kind —
+ * the same shape as pricingMode / rateMinor elsewhere, so a rule can never
+ * point at a null number.
+ */
+export const MARKUP_KIND = ["FLAT", "PERCENT"] as const;
+export type MarkupKind = (typeof MARKUP_KIND)[number];
+
+export const MARKUP_KIND_LABEL: Record<MarkupKind, string> = {
+  FLAT: "Flat amount (₹)",
+  PERCENT: "Percentage (%)",
+};
+
 /** The three documents every agent uploads at registration. */
 export const DOCUMENT_KIND = ["PAN_CARD", "BUSINESS_PROOF", "VISITING_CARD"] as const;
 export type DocumentKind = (typeof DOCUMENT_KIND)[number];
@@ -130,5 +145,6 @@ export const isVehicleRateType = makeGuard(VEHICLE_RATE_TYPE);
 export const isDocumentKind = makeGuard(DOCUMENT_KIND);
 export const isAgentTier = makeGuard(AGENT_TIER);
 export const isRateCharge = makeGuard(RATE_CHARGE);
+export const isMarkupKind = makeGuard(MARKUP_KIND);
 export const isHouseboatPricingMode = makeGuard(HOUSEBOAT_PRICING_MODE);
 export const isItineraryPricingMode = makeGuard(ITINERARY_PRICING_MODE);

@@ -7,6 +7,9 @@ import { MEAL_PLAN_LABEL, type MealPlan } from "@/lib/enums";
 import { Badge, Button, EmptyState, Table, Td } from "@/components/ui";
 import { HotelRateForm, type HotelRateValues } from "./rate-form";
 import type { FormState } from "@/lib/validation";
+import { applyMarkup } from "@/lib/markup";
+import type { ProductMarkup } from "@/components/sell-preview";
+import type { AgentTier } from "@/lib/enums";
 
 export type RateRow = HotelRateValues & { id: string };
 
@@ -21,13 +24,23 @@ export function RatesPanel({
   updateAction,
   archiveAction,
   restoreAction,
+  markup,
 }: {
   rates: RateRow[];
   createAction: (prev: FormState, fd: FormData) => Promise<FormState>;
   updateAction: (id: string, prev: FormState, fd: FormData) => Promise<FormState>;
   archiveAction: (id: string) => Promise<void>;
   restoreAction: (id: string) => Promise<void>;
+  markup: ProductMarkup;
 }) {
+  // Sell prices are never stored; the panel derives them the same way a quote
+  // does, so what Sonet sees here is what an agent would be charged.
+  const sell = (costMinor: number, tier: AgentTier) =>
+    applyMarkup(costMinor, {
+      productType: "hotel",
+      tier,
+      ...(tier === "KERALA" ? markup.kerala : markup.outsideKerala),
+    });
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -53,7 +66,7 @@ export function RatesPanel({
         <div className="mb-4">
           <HotelRateForm
             action={createAction}
-            submitLabel="Add rate"
+            submitLabel="Add rate" markup={markup}
             onDone={() => setAdding(false)}
           />
           <button
@@ -71,7 +84,7 @@ export function RatesPanel({
           <HotelRateForm
             action={updateAction.bind(null, editing.id)}
             rate={editing}
-            submitLabel="Save rate"
+            submitLabel="Save rate" markup={markup}
             onDone={() => setEditingId(null)}
           />
           <button
@@ -90,7 +103,7 @@ export function RatesPanel({
           hint="Agents cannot quote this hotel until it has at least one rate."
         />
       ) : (
-        <Table head={["Room type", "Meal plan", "Season", "Kerala", "Outside Kerala", "Extra bed", ""]}>
+        <Table head={["Room type", "Meal plan", "Season", "Cost", "Kerala", "Outside Kerala", "Extra bed", ""]}>
           {rates.map((r) => (
             <tr key={r.id} className={r.active ? undefined : "bg-slate-50 text-slate-400"}>
               <Td>
@@ -108,14 +121,15 @@ export function RatesPanel({
                   {formatDateDisplay(r.validFrom)} → {formatDateDisplay(r.validTo)}
                 </div>
               </Td>
-              <Td className="font-medium whitespace-nowrap">{formatMinor(r.ratePerNightKeralaMinor)}</Td>
-              <Td className="font-medium whitespace-nowrap">{formatMinor(r.ratePerNightOutsideKeralaMinor)}</Td>
+              <Td className="whitespace-nowrap text-slate-500">{formatMinor(r.costPerNightMinor)}</Td>
+              <Td className="font-medium whitespace-nowrap">{formatMinor(sell(r.costPerNightMinor, "KERALA"))}</Td>
+              <Td className="font-medium whitespace-nowrap">{formatMinor(sell(r.costPerNightMinor, "OUTSIDE_KERALA"))}</Td>
               <Td className="text-xs whitespace-nowrap">
-                {r.extraBedKeralaMinor ? (
+                {r.extraBedCostMinor ? (
                   <>
-                    <div>{formatMinor(r.extraBedKeralaMinor)}</div>
+                    <div>{formatMinor(sell(r.extraBedCostMinor, "KERALA"))}</div>
                     <div className="text-slate-500">
-                      {formatMinor(r.extraBedOutsideKeralaMinor ?? 0)} outside
+                      {formatMinor(sell(r.extraBedCostMinor, "OUTSIDE_KERALA"))} outside
                     </div>
                   </>
                 ) : (

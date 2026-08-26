@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/validation";
 import { MEAL_PLAN, MEAL_PLAN_LABEL } from "@/lib/enums";
 import { toMajor } from "@/lib/money";
@@ -16,6 +16,7 @@ import {
   Select,
 } from "@/components/ui";
 import { DateField } from "@/components/date-field";
+import { SellPreview, type ProductMarkup } from "@/components/sell-preview";
 
 export type HotelRateValues = {
   roomType: string;
@@ -23,10 +24,8 @@ export type HotelRateValues = {
   seasonLabel: string;
   validFrom: Date;
   validTo: Date;
-  ratePerNightKeralaMinor: number;
-  ratePerNightOutsideKeralaMinor: number;
-  extraBedKeralaMinor: number | null;
-  extraBedOutsideKeralaMinor: number | null;
+  costPerNightMinor: number;
+  extraBedCostMinor: number | null;
   active: boolean;
 };
 
@@ -37,12 +36,19 @@ export function HotelRateForm({
   rate,
   submitLabel,
   onDone,
+  markup,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   rate?: HotelRateValues;
   submitLabel: string;
   onDone?: () => void;
+  markup: ProductMarkup;
 }) {
+  // Tracked so the preview updates as Sonet types, before anything is saved.
+  const [cost, setCost] = useState(rate ? String(toMajor(rate.costPerNightMinor)) : "");
+  const [extraBed, setExtraBed] = useState(
+    rate?.extraBedCostMinor ? String(toMajor(rate.extraBedCostMinor)) : ""
+  );
   const [state, formAction, pending] = useActionState(
     async (prev: FormState, fd: FormData) => {
       const next = await action(prev, fd);
@@ -109,47 +115,48 @@ export function HotelRateForm({
 
         <div className="rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Rate per night — both tiers required
+            Cost per night — what the hotel charges us
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <MoneyField
-              label="Kerala agencies"
-              name="ratePerNightKeralaMinor"
+              label="Cost per night"
+              name="costPerNightMinor"
               required
-              defaultValue={rate ? toMajor(rate.ratePerNightKeralaMinor) : ""}
-              error={err.ratePerNightKeralaMinor}
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+              hint="Net rate from the hotel. Agent prices are derived from this."
+              error={err.costPerNightMinor}
             />
-            <MoneyField
-              label="Outside-Kerala agencies"
-              name="ratePerNightOutsideKeralaMinor"
-              required
-              defaultValue={rate ? toMajor(rate.ratePerNightOutsideKeralaMinor) : ""}
-              error={err.ratePerNightOutsideKeralaMinor}
-            />
+          </div>
+          <div className="mt-3">
+            <SellPreview costInput={cost} kerala={markup.kerala} outsideKerala={markup.outsideKerala} />
           </div>
         </div>
 
         <div className="rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Extra bed, per night — optional, but set both tiers or neither
+            Extra bed — optional, same hotel markup
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <MoneyField
-              label="Kerala agencies"
-              name="extraBedKeralaMinor"
-              defaultValue={rate?.extraBedKeralaMinor ? toMajor(rate.extraBedKeralaMinor) : ""}
-              error={err.extraBedKeralaMinor}
-            />
-            <MoneyField
-              label="Outside-Kerala agencies"
-              name="extraBedOutsideKeralaMinor"
-              defaultValue={
-                rate?.extraBedOutsideKeralaMinor ? toMajor(rate.extraBedOutsideKeralaMinor) : ""
-              }
-              hint="Leave both blank if no extra bed is offered."
-              error={err.extraBedOutsideKeralaMinor}
+              label="Extra bed cost"
+              name="extraBedCostMinor"
+              value={extraBed}
+              onChange={(e) => setExtraBed(e.target.value)}
+              hint="Leave blank if no extra bed is offered."
+              error={err.extraBedCostMinor}
             />
           </div>
+          {extraBed.trim() !== "" && (
+            <div className="mt-3">
+              <SellPreview
+                costInput={extraBed}
+                kerala={markup.kerala}
+                outsideKerala={markup.outsideKerala}
+                label="Extra bed"
+              />
+            </div>
+          )}
         </div>
 
         <Checkbox label="Active" name="active" defaultChecked={rate?.active ?? true} />

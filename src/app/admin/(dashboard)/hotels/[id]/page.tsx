@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { loadMarkupTable } from "@/lib/markup-store";
+import { markupKey } from "@/lib/markup";
 import { PageHeader, LinkButton, FormSuccess } from "@/components/ui";
 import { HotelForm } from "../hotel-form";
 import { RatesPanel } from "./rates-panel";
@@ -29,6 +31,12 @@ export default async function HotelDetailPage({
   });
   if (!hotel) notFound();
 
+  const table = await loadMarkupTable();
+  const markup = {
+    kerala: table.get(markupKey("hotel", "KERALA"))!,
+    outsideKerala: table.get(markupKey("hotel", "OUTSIDE_KERALA"))!,
+  };
+
   return (
     <>
       <PageHeader
@@ -46,6 +54,7 @@ export default async function HotelDetailPage({
       <HotelForm action={updateHotel.bind(null, hotel.id)} hotel={hotel} submitLabel="Save hotel" />
 
       <RatesPanel
+        markup={markup}
         rates={hotel.rates}
         createAction={createHotelRate.bind(null, hotel.id)}
         updateAction={async (rateId, prev, fd) => {

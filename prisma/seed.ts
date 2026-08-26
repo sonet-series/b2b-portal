@@ -125,6 +125,47 @@ async function seedAdmin() {
   }
 }
 
+/**
+ * The eight markup rules, at the confirmed defaults.
+ *
+ * Created only when missing and NEVER overwritten, so a value Sonet edits at
+ * /admin/settings survives every redeploy — the same reasoning as the admin
+ * password, and the same bug if it were an upsert.
+ *
+ * Values are inline rather than imported from src/lib/markup.ts because this
+ * file must not import from src/ — see the banner at the top. They are checked
+ * against that module by a unit check rather than shared at runtime.
+ */
+async function seedMarkupRules() {
+  const DEFAULTS: [string, string, "FLAT" | "PERCENT", number][] = [
+    ["hotel", "KERALA", "FLAT", 100_00], // cost + ₹100
+    ["hotel", "OUTSIDE_KERALA", "PERCENT", 500], // cost + 5%
+    ["vehicle", "KERALA", "PERCENT", 1000], // cost + 10%
+    ["vehicle", "OUTSIDE_KERALA", "PERCENT", 1500], // cost + 15%
+    ["houseboat", "KERALA", "PERCENT", 500], // cost + 5%
+    ["houseboat", "OUTSIDE_KERALA", "PERCENT", 1200], // cost + 12%
+    ["itinerary", "KERALA", "PERCENT", 1500], // cost + 15%
+    ["itinerary", "OUTSIDE_KERALA", "PERCENT", 2700], // cost + 27%
+  ];
+
+  let created = 0;
+  for (const [productType, tier, kind, value] of DEFAULTS) {
+    const existing = await prisma.markupRule.findUnique({
+      where: { productType_tier: { productType, tier } },
+      select: { id: true },
+    });
+    if (existing) continue;
+    await prisma.markupRule.create({ data: { productType, tier, kind, value } });
+    created++;
+  }
+
+  console.log(
+    created > 0
+      ? `✔ markup rules: created ${created} of 8 at their defaults`
+      : "✔ markup rules: all 8 present, left untouched"
+  );
+}
+
 async function seedDemoCatalogue() {
   console.log("• SEED_DEMO=1 — creating sample catalogue rows");
 
@@ -141,18 +182,15 @@ async function seedDemoCatalogue() {
             mealPlan: "CP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            ratePerNightKeralaMinor: 450_000, // ₹4,500 Kerala
-            ratePerNightOutsideKeralaMinor: 504_000, // ₹5,040 outside Kerala
-            extraBedKeralaMinor: 120_000, // ₹1,200 Kerala
-            extraBedOutsideKeralaMinor: 134_400, // ₹1,344 outside Kerala
+            costPerNightMinor: 450_000, // ₹4,500 cost
+            extraBedCostMinor: 120_000, // ₹1,200 cost
           },
           {
             roomType: "Suite",
             mealPlan: "MAP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            ratePerNightKeralaMinor: 820_000, // ₹8,200 Kerala
-            ratePerNightOutsideKeralaMinor: 918_400, // ₹9,184 outside Kerala
+            costPerNightMinor: 820_000, // ₹8,200 cost
           },
         ],
       },
@@ -178,11 +216,9 @@ async function seedDemoCatalogue() {
             mealPlan: "AP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateKeralaMinor: 1450_000, // ₹14,500 Kerala
-            rateOutsideKeralaMinor: 1624_000, // ₹16,240 outside Kerala
+            costMinor: 1450_000, // ₹14,500 cost
             includedPax: 4,
-            extraPaxKeralaMinor: 250_000, // ₹2,500 Kerala
-            extraPaxOutsideKeralaMinor: 280_000, // ₹2,800 outside Kerala
+            extraPaxCostMinor: 250_000, // ₹2,500 cost
             maxPax: 6,
           },
           // Same boat, same duration, sold per head as well. Two rows, so the
@@ -193,8 +229,7 @@ async function seedDemoCatalogue() {
             mealPlan: "AP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateKeralaMinor: 380_000, // ₹3,800 Kerala
-            rateOutsideKeralaMinor: 425_600, // ₹4,256 outside Kerala
+            costMinor: 380_000, // ₹3,800 cost
             minPax: 4,
             maxPax: 6,
           },
@@ -204,11 +239,9 @@ async function seedDemoCatalogue() {
             mealPlan: "MAP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateKeralaMinor: 700_000, // ₹7,000 Kerala
-            rateOutsideKeralaMinor: 784_000, // ₹7,840 outside Kerala
+            costMinor: 700_000, // ₹7,000 cost
             includedPax: 4,
-            extraPaxKeralaMinor: 90_000, // ₹900 Kerala
-            extraPaxOutsideKeralaMinor: 100_800, // ₹1,008 outside Kerala
+            extraPaxCostMinor: 90_000, // ₹900 cost
             maxPax: 8,
           },
         ],
@@ -228,20 +261,16 @@ async function seedDemoCatalogue() {
             rateType: "PER_DAY",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateKeralaMinor: 380_000, // ₹3,800 Kerala
-            rateOutsideKeralaMinor: 425_600, // ₹4,256 outside Kerala
+            costMinor: 380_000, // ₹3,800 cost
             includedKmPerDay: 250,
-            extraKmKeralaMinor: 1_800, // ₹18 Kerala
-            extraKmOutsideKeralaMinor: 2_000, // ₹20 outside Kerala
-            driverAllowanceKeralaMinor: 50_000, // ₹500 Kerala
-            driverAllowanceOutsideKeralaMinor: 56_000, // ₹560 outside Kerala
+            extraKmCostMinor: 1_800, // ₹18 cost
+            driverAllowanceCostMinor: 50_000, // ₹500 cost
           },
           {
             rateType: "TRANSFER",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateKeralaMinor: 320_000, // ₹3,200 Kerala
-            rateOutsideKeralaMinor: 358_400, // ₹3,584 outside Kerala
+            costMinor: 320_000, // ₹3,200 cost
           },
         ],
       },
@@ -264,18 +293,15 @@ async function seedDemoCatalogue() {
             pricingMode: "PER_PERSON_TWIN_SHARING",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            priceKeralaMinor: 2450_000, // ₹24,500 Kerala
-            priceOutsideKeralaMinor: 2744_000, // ₹27,440 outside Kerala
-            singleSupplementKeralaMinor: 750_000, // ₹7,500 Kerala
-            singleSupplementOutsideKeralaMinor: 840_000, // ₹8,400 outside Kerala
+            costMinor: 2450_000, // ₹24,500 cost
+            singleSupplementCostMinor: 750_000, // ₹7,500 cost
           },
           // Same package sold as a flat family rate.
           {
             pricingMode: "PER_PACKAGE",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            priceKeralaMinor: 9600_000, // ₹96,000 Kerala
-            priceOutsideKeralaMinor: 10752_000, // ₹107,520 outside Kerala
+            costMinor: 9600_000, // ₹96,000 cost
             maxPax: 4,
           },
         ],
@@ -362,6 +388,8 @@ async function seedDemoCatalogue() {
 
 async function main() {
   await seedAdmin();
+
+  await seedMarkupRules();
 
   if (process.env.SEED_DEMO === "1") {
     const existing = await prisma.hotel.count();

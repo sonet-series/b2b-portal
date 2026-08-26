@@ -7,6 +7,9 @@ import { VEHICLE_RATE_TYPE_LABEL, type VehicleRateType } from "@/lib/enums";
 import { Badge, Button, EmptyState, Table, Td } from "@/components/ui";
 import { VehicleRateForm, type VehicleRateValues } from "./rate-form";
 import type { FormState } from "@/lib/validation";
+import { applyMarkup } from "@/lib/markup";
+import type { ProductMarkup } from "@/components/sell-preview";
+import type { AgentTier } from "@/lib/enums";
 
 export type RateRow = VehicleRateValues & { id: string };
 
@@ -16,13 +19,23 @@ export function RatesPanel({
   updateAction,
   archiveAction,
   restoreAction,
+  markup,
 }: {
   rates: RateRow[];
   createAction: (prev: FormState, fd: FormData) => Promise<FormState>;
   updateAction: (id: string, prev: FormState, fd: FormData) => Promise<FormState>;
   archiveAction: (id: string) => Promise<void>;
   restoreAction: (id: string) => Promise<void>;
+  markup: ProductMarkup;
 }) {
+  // Sell prices are never stored; the panel derives them the same way a quote
+  // does, so what Sonet sees here is what an agent would be charged.
+  const sell = (costMinor: number, tier: AgentTier) =>
+    applyMarkup(costMinor, {
+      productType: "vehicle",
+      tier,
+      ...(tier === "KERALA" ? markup.kerala : markup.outsideKerala),
+    });
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = rates.find((r) => r.id === editingId);
@@ -45,7 +58,7 @@ export function RatesPanel({
 
       {adding && (
         <div className="mb-4">
-          <VehicleRateForm action={createAction} submitLabel="Add rate" onDone={() => setAdding(false)} />
+          <VehicleRateForm action={createAction} submitLabel="Add rate" markup={markup} onDone={() => setAdding(false)} />
           <button type="button" onClick={() => setAdding(false)} className="mt-2 text-sm text-slate-500 hover:text-slate-700">
             Cancel
           </button>
@@ -57,7 +70,7 @@ export function RatesPanel({
           <VehicleRateForm
             action={updateAction.bind(null, editing.id)}
             rate={editing}
-            submitLabel="Save rate"
+            submitLabel="Save rate" markup={markup}
             onDone={() => setEditingId(null)}
           />
           <button type="button" onClick={() => setEditingId(null)} className="mt-2 text-sm text-slate-500 hover:text-slate-700">
@@ -69,7 +82,7 @@ export function RatesPanel({
       {rates.length === 0 ? (
         <EmptyState title="No rates yet" hint="Agents cannot quote this vehicle until it has at least one rate." />
       ) : (
-        <Table head={["Rate type", "Season", "Kerala", "Outside Kerala", "Per-day extras", ""]}>
+        <Table head={["Rate type", "Season", "Cost", "Kerala", "Outside Kerala", "Per-day extras", ""]}>
           {rates.map((r) => (
             <tr key={r.id} className={r.active ? undefined : "bg-slate-50 text-slate-400"}>
               <Td>
@@ -88,22 +101,23 @@ export function RatesPanel({
                   {formatDateDisplay(r.validFrom)} → {formatDateDisplay(r.validTo)}
                 </div>
               </Td>
-              <Td className="font-medium whitespace-nowrap">{formatMinor(r.rateKeralaMinor)}</Td>
-              <Td className="font-medium whitespace-nowrap">{formatMinor(r.rateOutsideKeralaMinor)}</Td>
+              <Td className="whitespace-nowrap text-slate-500">{formatMinor(r.costMinor)}</Td>
+              <Td className="font-medium whitespace-nowrap">{formatMinor(sell(r.costMinor, "KERALA"))}</Td>
+              <Td className="font-medium whitespace-nowrap">{formatMinor(sell(r.costMinor, "OUTSIDE_KERALA"))}</Td>
               <Td className="text-xs">
                 {r.rateType === "PER_DAY" ? (
                   <>
                     <div>{r.includedKmPerDay ? `${r.includedKmPerDay} km/day` : "no km allowance"}</div>
-                    {r.extraKmKeralaMinor && (
+                    {r.extraKmCostMinor && (
                       <div className="text-slate-500">
-                        +{formatMinor(r.extraKmKeralaMinor)} /{" "}
-                        {formatMinor(r.extraKmOutsideKeralaMinor ?? 0)} per km
+                        +{formatMinor(sell(r.extraKmCostMinor, "KERALA"))} /{" "}
+                        {formatMinor(sell(r.extraKmCostMinor, "OUTSIDE_KERALA"))} per km
                       </div>
                     )}
-                    {r.driverAllowanceKeralaMinor && (
+                    {r.driverAllowanceCostMinor && (
                       <div className="text-slate-500">
-                        bata {formatMinor(r.driverAllowanceKeralaMinor)} /{" "}
-                        {formatMinor(r.driverAllowanceOutsideKeralaMinor ?? 0)}
+                        bata {formatMinor(sell(r.driverAllowanceCostMinor, "KERALA"))} /{" "}
+                        {formatMinor(sell(r.driverAllowanceCostMinor, "OUTSIDE_KERALA"))}
                       </div>
                     )}
                   </>

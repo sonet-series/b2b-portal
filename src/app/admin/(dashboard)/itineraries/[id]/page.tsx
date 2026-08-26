@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { loadMarkupTable } from "@/lib/markup-store";
+import { markupKey } from "@/lib/markup";
 import { PageHeader, LinkButton, FormSuccess } from "@/components/ui";
 import { ItineraryForm } from "../itinerary-form";
 import { RatesPanel } from "./rates-panel";
@@ -29,6 +31,12 @@ export default async function ItineraryDetailPage({
   });
   if (!itinerary) notFound();
 
+  const table = await loadMarkupTable();
+  const markup = {
+    kerala: table.get(markupKey("itinerary", "KERALA"))!,
+    outsideKerala: table.get(markupKey("itinerary", "OUTSIDE_KERALA"))!,
+  };
+
   return (
     <>
       <PageHeader
@@ -50,6 +58,7 @@ export default async function ItineraryDetailPage({
       />
 
       <RatesPanel
+        markup={markup}
         rates={itinerary.rates}
         createAction={createItineraryRate.bind(null, itinerary.id)}
         updateAction={async (rateId, prev, fd) => {

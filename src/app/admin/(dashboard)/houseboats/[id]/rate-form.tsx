@@ -15,6 +15,7 @@ import { toMajor } from "@/lib/money";
 import { formatDateOnly } from "@/lib/dates";
 import { Button, Card, Checkbox, Field, FormError, FormSuccess, MoneyField, Select } from "@/components/ui";
 import { DateField } from "@/components/date-field";
+import { SellPreview, type ProductMarkup } from "@/components/sell-preview";
 
 export type HouseboatRateValues = {
   cruisePackage: string;
@@ -23,11 +24,9 @@ export type HouseboatRateValues = {
   seasonLabel: string;
   validFrom: Date;
   validTo: Date;
-  rateKeralaMinor: number;
-  rateOutsideKeralaMinor: number;
+  costMinor: number;
   includedPax: number | null;
-  extraPaxKeralaMinor: number | null;
-  extraPaxOutsideKeralaMinor: number | null;
+  extraPaxCostMinor: number | null;
   minPax: number | null;
   maxPax: number;
   active: boolean;
@@ -45,17 +44,24 @@ export function HouseboatRateForm({
   rate,
   submitLabel,
   onDone,
+  markup,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   rate?: HouseboatRateValues;
   submitLabel: string;
   onDone?: () => void;
+  markup: ProductMarkup;
 }) {
   // The mode decides which price fields mean anything. Switching it swaps the
   // fields rather than showing all of them greyed out — the irrelevant ones
   // are rejected by the schema anyway, so showing them only invites errors.
   const [mode, setMode] = useState<HouseboatPricingMode>(
     (rate?.pricingMode as HouseboatPricingMode) ?? "WHOLE_BOAT"
+  );
+
+  const [cost, setCost] = useState(rate ? String(toMajor(rate.costMinor)) : "");
+  const [extraPax, setExtraPax] = useState(
+    rate?.extraPaxCostMinor ? String(toMajor(rate.extraPaxCostMinor)) : ""
   );
 
   const [state, formAction, pending] = useActionState(
@@ -133,25 +139,18 @@ export function HouseboatRateForm({
 
         <div className="rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {mode === "WHOLE_BOAT" ? "Whole-boat pricing" : "Per-person pricing"}
+            {mode === "WHOLE_BOAT" ? "Whole-boat cost" : "Per-person cost"}
           </p>
 
           <div className="grid gap-4 sm:grid-cols-3">
             <MoneyField
-              label={`Kerala — ${mode === "WHOLE_BOAT" ? "per cruise" : "per person"}`}
-              name="rateKeralaMinor"
+              label={mode === "WHOLE_BOAT" ? "Cost per cruise" : "Cost per person"}
+              name="costMinor"
               required
-              defaultValue={rate ? toMajor(rate.rateKeralaMinor) : ""}
-              hint={mode === "WHOLE_BOAT" ? "Whole boat, one cruise." : "One person, one cruise."}
-              error={err.rateKeralaMinor}
-            />
-            <MoneyField
-              label={`Outside Kerala — ${mode === "WHOLE_BOAT" ? "per cruise" : "per person"}`}
-              name="rateOutsideKeralaMinor"
-              required
-              defaultValue={rate ? toMajor(rate.rateOutsideKeralaMinor) : ""}
-              hint="Both tiers are required."
-              error={err.rateOutsideKeralaMinor}
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+              hint="What the operator charges us."
+              error={err.costMinor}
             />
 
             {mode === "WHOLE_BOAT" ? (
@@ -163,24 +162,16 @@ export function HouseboatRateForm({
                   min={1}
                   required
                   defaultValue={rate?.includedPax ?? ""}
-                  hint="Covered by the rate above."
+                  hint="Covered by the cost above."
                   error={err.includedPax}
                 />
                 <MoneyField
-                  label="Kerala — extra pax"
-                  name="extraPaxKeralaMinor"
-                  defaultValue={rate?.extraPaxKeralaMinor ? toMajor(rate.extraPaxKeralaMinor) : ""}
+                  label="Extra pax cost"
+                  name="extraPaxCostMinor"
+                  value={extraPax}
+                  onChange={(e) => setExtraPax(e.target.value)}
                   hint="Per person beyond included."
-                  error={err.extraPaxKeralaMinor}
-                />
-                <MoneyField
-                  label="Outside Kerala — extra pax"
-                  name="extraPaxOutsideKeralaMinor"
-                  defaultValue={
-                    rate?.extraPaxOutsideKeralaMinor ? toMajor(rate.extraPaxOutsideKeralaMinor) : ""
-                  }
-                  hint="Set both or neither."
-                  error={err.extraPaxOutsideKeralaMinor}
+                  error={err.extraPaxCostMinor}
                 />
               </>
             ) : (
@@ -205,6 +196,18 @@ export function HouseboatRateForm({
               hint="Boat capacity."
               error={err.maxPax}
             />
+          </div>
+
+          <div className="mt-3 space-y-1">
+            <SellPreview costInput={cost} kerala={markup.kerala} outsideKerala={markup.outsideKerala} />
+            {mode === "WHOLE_BOAT" && extraPax.trim() !== "" && (
+              <SellPreview
+                costInput={extraPax}
+                kerala={markup.kerala}
+                outsideKerala={markup.outsideKerala}
+                label="Extra pax"
+              />
+            )}
           </div>
         </div>
 

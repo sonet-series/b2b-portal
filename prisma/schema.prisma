@@ -29,8 +29,8 @@ datasource db {
 
 /// Sonet only. v1 deliberately has no multi-admin, no roles, no invites.
 model AdminUser {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String  @id @default(uuid())
+  email        String  @unique
   passwordHash String
   name         String?
 
@@ -76,31 +76,23 @@ model HotelRate {
   /// Inclusive.
   validTo     DateTime
 
-  /// DEFAULT rate per room per night, in paise — one per agency tier.
+  /// COST per room per night, in paise — what the hotel charges Series Tours.
   ///
-  /// BOTH are required. Two NOT NULL columns rather than a nullable pair, for
-  /// the same reason the pricing-mode columns are shaped that way: a rate row
-  /// must not be able to exist that cannot price somebody. There is no
-  /// fallback below these — if a tier price is missing the quote is wrong, so
-  /// the schema makes missing impossible.
+  /// Sell prices are NOT stored. Both tiers are derived at read time from this
+  /// cost and the current MarkupRule, so editing a markup takes effect on the
+  /// next quote rather than leaving stale numbers in the catalogue. See
+  /// src/lib/markup.ts.
   ///
-  /// An agent rate-card override still beats both.
-  ratePerNightKeralaMinor        Int
-  ratePerNightOutsideKeralaMinor Int
+  /// An agent rate-card override is an absolute price and beats both tiers.
+  costPerNightMinor Int
 
-  /// Extra bed / extra adult sharing, per night, in paise — one per tier.
+  /// Extra bed COST per night, in paise. Null when not offered.
   ///
-  /// Nullable as a PAIR, not individually. These charges are genuinely
-  /// optional (a room type may not offer an extra bed at all), so NOT NULL
-  /// would force a price for something that does not exist — and for three of
-  /// the five ancillary charges the pricing-mode rules actively FORBID a value.
-  /// What must never happen is one tier set and the other missing: that is the
-  /// "cannot price somebody" failure the required main-rate columns prevent.
-  ///
-  /// Both-or-neither is enforced in src/lib/validation.ts, which is the only
-  /// write path.
-  extraBedKeralaMinor        Int?
-  extraBedOutsideKeralaMinor Int?
+  /// Ancillary charges inherit their PARENT PRODUCT's markup — an extra bed is
+  /// marked up by the hotel rule, not one of its own. A single nullable column
+  /// replaces the old both-or-neither pair: with one cost there is no second
+  /// half to leave blank, so that invariant now holds by shape.
+  extraBedCostMinor Int?
 
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -165,20 +157,17 @@ model HouseboatRate {
   validFrom   DateTime
   validTo     DateTime
 
-  /// DEFAULT rate in paise, one per agency tier. Its UNIT depends on
-  /// pricingMode:
+  /// COST in paise. Its UNIT depends on pricingMode:
   ///   WHOLE_BOAT -> the whole boat, one cruise
   ///   PER_PERSON -> one person, one cruise
-  /// Both required — see the note on HotelRate.
-  rateKeralaMinor        Int
-  rateOutsideKeralaMinor Int
+  /// Sell prices are derived — see HotelRate.costPerNightMinor.
+  costMinor Int
 
   /// WHOLE_BOAT only: pax covered by rateMinor before extra-pax billing.
-  includedPax Int?
-  /// WHOLE_BOAT only: per extra person beyond includedPax, per cruise, in
-  /// paise — one per tier, both-or-neither. See HotelRate.extraBed*.
-  extraPaxKeralaMinor        Int?
-  extraPaxOutsideKeralaMinor Int?
+  includedPax       Int?
+  /// WHOLE_BOAT only: extra-person COST beyond includedPax, per cruise, in
+  /// paise. Marked up by the houseboat rule. Null when not offered.
+  extraPaxCostMinor Int?
 
   /// PER_PERSON only: the boat will not run below this headcount, so a 2-pax
   /// enquiry on a 4-pax-minimum boat is quoted at 4, not unrealistically low.
@@ -229,21 +218,18 @@ model VehicleRate {
   validFrom   DateTime
   validTo     DateTime
 
-  /// DEFAULT rate in paise, one per agency tier. Unit depends on rateType:
-  /// per km, per day, or flat for the transfer. Both required.
-  rateKeralaMinor        Int
-  rateOutsideKeralaMinor Int
+  /// COST in paise. Unit depends on rateType: per km, per day, or flat for
+  /// the transfer. Sell prices are derived.
+  costMinor Int
 
   /// PER_DAY only: km included before extra-km billing kicks in.
-  includedKmPerDay Int?
-  /// PER_DAY only: charge per km beyond includedKmPerDay, in paise — one per
-  /// tier, both-or-neither. See HotelRate.extraBed*.
-  extraKmKeralaMinor        Int?
-  extraKmOutsideKeralaMinor Int?
-  /// PER_DAY only: driver bata / night halt allowance per day, in paise —
-  /// one per tier, both-or-neither. See HotelRate.extraBed*.
-  driverAllowanceKeralaMinor        Int?
-  driverAllowanceOutsideKeralaMinor Int?
+  includedKmPerDay         Int?
+  /// PER_DAY only: COST per km beyond includedKmPerDay, in paise. Marked up
+  /// by the vehicle rule. Null when not offered.
+  extraKmCostMinor         Int?
+  /// PER_DAY only: driver bata / night halt COST per day, in paise. Marked up
+  /// by the vehicle rule. Null when not offered.
+  driverAllowanceCostMinor Int?
 
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -296,18 +282,15 @@ model ItineraryRate {
   validFrom   DateTime
   validTo     DateTime
 
-  /// DEFAULT price in paise, one per agency tier. Its UNIT depends on
-  /// pricingMode:
+  /// COST in paise. Its UNIT depends on pricingMode:
   ///   PER_PERSON_TWIN_SHARING -> one person, sharing a twin room
   ///   PER_PACKAGE             -> the whole package, flat, regardless of pax
-  /// Both required — see the note on HotelRate.
-  priceKeralaMinor        Int
-  priceOutsideKeralaMinor Int
+  /// Sell prices are derived — see HotelRate.costPerNightMinor.
+  costMinor Int
 
-  /// PER_PERSON_TWIN_SHARING only: supplement for a solo traveller, per
-  /// person — one per tier, both-or-neither. See HotelRate.extraBed*.
-  singleSupplementKeralaMinor        Int?
-  singleSupplementOutsideKeralaMinor Int?
+  /// PER_PERSON_TWIN_SHARING only: solo-traveller supplement COST, per
+  /// person. Marked up by the package rule. Null when not offered.
+  singleSupplementCostMinor Int?
 
   /// PER_PACKAGE only: headcount guardrail. The rate is flat regardless of pax,
   /// but a family package still has a ceiling on how many people it can seat.
@@ -374,9 +357,9 @@ model Agent {
   /// Internal note from Sonet, e.g. why a signup was rejected.
   adminNotes String?
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  approvedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  approvedAt  DateTime?
   lastLoginAt DateTime?
 
   rateCardEntries AgentRateCard[]
@@ -475,7 +458,7 @@ model AgentRateCard {
 // ---------------------------------------------------------------------------
 
 model Quote {
-  id      String @id @default(uuid())
+  id        String @id @default(uuid())
   /// Short human reference shown to the agent, e.g. "ST-2609-0042".
   reference String @unique
 
@@ -533,4 +516,38 @@ model QuoteLine {
   sortOrder Int @default(0)
 
   @@index([quoteId])
+}
+
+/// How a cost becomes the two agent-facing sell prices.
+///
+/// Editable by Sonet at /admin/settings — the markup must not require a code
+/// change. Exactly one row per (productType, tier); the seed creates all eight
+/// and nothing deletes them.
+///
+/// Changing a rule affects FUTURE calculations only. Saved Quote/QuoteLine
+/// rows keep the numbers they were saved with, because they store computed
+/// totals rather than referencing this table.
+model MarkupRule {
+  id String @id @default(uuid())
+
+  /// ProductType enum: hotel | houseboat | vehicle | itinerary
+  productType String
+  /// AgentTier enum: KERALA | OUTSIDE_KERALA
+  tier        String
+
+  /// MarkupKind enum: FLAT | PERCENT
+  kind String
+
+  /// ONE required column whose meaning follows `kind`:
+  ///   FLAT    -> paise added to the cost   (₹100 -> 10000)
+  ///   PERCENT -> basis points added        (5%   -> 500)
+  ///
+  /// Basis points rather than a float, for the same reason money is Int: the
+  /// arithmetic must be exact. A nullable pair would allow a rule whose kind
+  /// points at a missing number; this cannot.
+  value Int
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([productType, tier])
 }

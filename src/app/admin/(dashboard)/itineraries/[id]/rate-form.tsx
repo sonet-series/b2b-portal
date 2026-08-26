@@ -11,16 +11,15 @@ import { toMajor } from "@/lib/money";
 import { formatDateOnly } from "@/lib/dates";
 import { Button, Card, Checkbox, Field, FormError, FormSuccess, MoneyField, Select } from "@/components/ui";
 import { DateField } from "@/components/date-field";
+import { SellPreview, type ProductMarkup } from "@/components/sell-preview";
 
 export type ItineraryRateValues = {
   pricingMode: string;
   seasonLabel: string;
   validFrom: Date;
   validTo: Date;
-  priceKeralaMinor: number;
-  priceOutsideKeralaMinor: number;
-  singleSupplementKeralaMinor: number | null;
-  singleSupplementOutsideKeralaMinor: number | null;
+  costMinor: number;
+  singleSupplementCostMinor: number | null;
   maxPax: number | null;
   active: boolean;
 };
@@ -35,17 +34,24 @@ export function ItineraryRateForm({
   rate,
   submitLabel,
   onDone,
+  markup,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   rate?: ItineraryRateValues;
   submitLabel: string;
   onDone?: () => void;
+  markup: ProductMarkup;
 }) {
   // Twin-sharing prices per head and needs a solo supplement; a flat package
   // price ignores headcount entirely. Showing both sets at once would imply
   // the supplement applies to flat rates, which the schema rejects.
   const [mode, setMode] = useState<ItineraryPricingMode>(
     (rate?.pricingMode as ItineraryPricingMode) ?? "PER_PERSON_TWIN_SHARING"
+  );
+
+  const [cost, setCost] = useState(rate ? String(toMajor(rate.costMinor)) : "");
+  const [supplement, setSupplement] = useState(
+    rate?.singleSupplementCostMinor ? String(toMajor(rate.singleSupplementCostMinor)) : ""
   );
 
   const [state, formAction, pending] = useActionState(
@@ -104,52 +110,29 @@ export function ItineraryRateForm({
 
         <div className="rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {ITINERARY_PRICING_MODE_LABEL[mode]}
+            {ITINERARY_PRICING_MODE_LABEL[mode]} — cost
           </p>
 
           <div className="grid gap-4 sm:grid-cols-3">
             <MoneyField
-              label={perPerson ? "Kerala — per person" : "Kerala — package price"}
-              name="priceKeralaMinor"
+              label={perPerson ? "Cost per person" : "Package cost"}
+              name="costMinor"
               required
-              defaultValue={rate ? toMajor(rate.priceKeralaMinor) : ""}
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
               hint={perPerson ? "On twin sharing." : "Flat, whatever the headcount."}
-              error={err.priceKeralaMinor}
-            />
-            <MoneyField
-              label={perPerson ? "Outside Kerala — per person" : "Outside Kerala — package price"}
-              name="priceOutsideKeralaMinor"
-              required
-              defaultValue={rate ? toMajor(rate.priceOutsideKeralaMinor) : ""}
-              hint="Both tiers are required."
-              error={err.priceOutsideKeralaMinor}
+              error={err.costMinor}
             />
 
             {perPerson ? (
-              <>
-                <MoneyField
-                  label="Kerala — single supplement"
-                  name="singleSupplementKeralaMinor"
-                  defaultValue={
-                    rate?.singleSupplementKeralaMinor
-                      ? toMajor(rate.singleSupplementKeralaMinor)
-                      : ""
-                  }
-                  hint="Without it, solo cannot be quoted."
-                  error={err.singleSupplementKeralaMinor}
-                />
-                <MoneyField
-                  label="Outside Kerala — single supplement"
-                  name="singleSupplementOutsideKeralaMinor"
-                  defaultValue={
-                    rate?.singleSupplementOutsideKeralaMinor
-                      ? toMajor(rate.singleSupplementOutsideKeralaMinor)
-                      : ""
-                  }
-                  hint="Set both or neither."
-                  error={err.singleSupplementOutsideKeralaMinor}
-                />
-              </>
+              <MoneyField
+                label="Single supplement cost"
+                name="singleSupplementCostMinor"
+                value={supplement}
+                onChange={(e) => setSupplement(e.target.value)}
+                hint="Without it, solo cannot be quoted."
+                error={err.singleSupplementCostMinor}
+              />
             ) : (
               <Field
                 label="Maximum pax"
@@ -160,6 +143,13 @@ export function ItineraryRateForm({
                 hint="Optional ceiling. Blank means no limit."
                 error={err.maxPax}
               />
+            )}
+          </div>
+
+          <div className="mt-3 space-y-1">
+            <SellPreview costInput={cost} kerala={markup.kerala} outsideKerala={markup.outsideKerala} />
+            {perPerson && supplement.trim() !== "" && (
+              <SellPreview costInput={supplement} kerala={markup.kerala} outsideKerala={markup.outsideKerala} label="Single supplement" />
             )}
           </div>
         </div>

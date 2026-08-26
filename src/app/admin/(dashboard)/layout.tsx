@@ -12,6 +12,7 @@ const NAV = [
   { href: "/admin/vehicles", label: "Vehicles" },
   { href: "/admin/itineraries", label: "Packages" },
   { href: "/admin/agents", label: "Agents" },
+  { href: "/admin/settings", label: "Settings" },
 ];
 
 async function signOut() {

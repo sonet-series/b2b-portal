@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { loadMarkupTable } from "@/lib/markup-store";
+import { markupKey } from "@/lib/markup";
 import { PageHeader, LinkButton, FormSuccess } from "@/components/ui";
 import { VehicleForm } from "../vehicle-form";
 import { RatesPanel } from "./rates-panel";
@@ -29,6 +31,12 @@ export default async function VehicleDetailPage({
   });
   if (!vehicle) notFound();
 
+  const table = await loadMarkupTable();
+  const markup = {
+    kerala: table.get(markupKey("vehicle", "KERALA"))!,
+    outsideKerala: table.get(markupKey("vehicle", "OUTSIDE_KERALA"))!,
+  };
+
   return (
     <>
       <PageHeader
@@ -46,6 +54,7 @@ export default async function VehicleDetailPage({
       <VehicleForm action={updateVehicle.bind(null, vehicle.id)} vehicle={vehicle} submitLabel="Save vehicle" />
 
       <RatesPanel
+        markup={markup}
         rates={vehicle.rates}
         createAction={createVehicleRate.bind(null, vehicle.id)}
         updateAction={async (rateId, prev, fd) => {

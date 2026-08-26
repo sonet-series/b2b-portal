@@ -1,6 +1,8 @@
 import "server-only";
 import { prisma } from "./db";
 import { resolvePrices, overrideKey } from "./rate-card";
+import { loadMarkupTable } from "./markup-store";
+import { sellPrice, sellPriceOptional, type MarkupTable } from "./markup";
 import { priceHouseboat, priceItinerary, PricingError } from "./pricing";
 import {
   parseDateOnly,
@@ -12,6 +14,7 @@ import {
   MS_PER_DAY,
   startOfUtcDay,
 } from "./dates";
+import type { ProductType } from "./enums";
 import {
   CRUISE_PACKAGE_LABEL,
   VEHICLE_RATE_TYPE_LABEL,
@@ -44,11 +47,13 @@ import type {
  * Two rules run through everything here:
  *
  *  1. **Price resolution runs in three steps**, highest priority first:
- *       a. the agent's own rate-card override, if one exists;
- *       b. otherwise the catalogue default FOR THAT AGENT'S TIER — Kerala or
- *          outside-Kerala;
- *       c. there is no step c. Both tier prices are required columns, so a
- *          rate row that cannot price somebody does not exist.
+ *       a. the agent's own rate-card override, if one exists — an absolute
+ *          price, unaffected by markup;
+ *       b. otherwise the stored COST marked up for that agent's tier, using
+ *          the current MarkupRule (src/lib/markup.ts). Sell prices are never
+ *          stored, so editing a markup takes effect on the next quote;
+ *       c. there is no step c. Cost is a required column, so a rate row that
+ *          cannot price somebody does not exist.
  *     A missing override never blocks a quote. Every line records whether an
  *     override supplied its price, so "why is this price what it is" stays
  *     answerable.
@@ -90,14 +95,16 @@ function segmentByRate<T extends { id: string }>(
 }
 
 /**
- * The catalogue default for this agent's tier. Every rate table stores both, so
- * this is a straight pick, never a fallback — see the header note.
+ * The catalogue default for this agent's tier: the stored cost, marked up.
+ * Never a fallback — cost is required, so this always produces a number.
  */
 function tierDefault(
+  markup: MarkupTable,
+  productType: ProductType,
   tier: QuotingAgent["tier"],
-  rate: { kerala: number; outsideKerala: number }
+  costMinor: number
 ): number {
-  return tier === "KERALA" ? rate.kerala : rate.outsideKerala;
+  return sellPrice(markup, productType, tier, costMinor);
 }
 
 /**
@@ -110,17 +117,20 @@ function tierDefault(
  */
 function resolveCharge(
   agent: QuotingAgent,
+  markup: MarkupTable,
+  productType: ProductType,
   overrides: Map<string, number>,
   referenceId: string,
   charge: RateCharge,
-  kerala: number | null,
-  outsideKerala: number | null
+  costMinor: number | null
 ): { minor: number; usedOverride: boolean } | null {
   const override = overrides.get(overrideKey(referenceId, charge));
   if (override !== undefined) return { minor: override, usedOverride: true };
 
-  const fallback = agent.tier === "KERALA" ? kerala : outsideKerala;
-  return fallback === null ? null : { minor: fallback, usedOverride: false };
+  // Ancillary charges inherit the PARENT PRODUCT's markup — an extra bed is
+  // marked up by the hotel rule, not one of its own.
+  const marked = sellPriceOptional(markup, productType, agent.tier, costMinor);
+  return marked === null ? null : { minor: marked, usedOverride: false };
 }
 
 function seasonSpan(from: Date, to: Date): string {
@@ -148,6 +158,8 @@ export async function quoteHotel(
   });
   if (!hotel) throw new PricingError("That hotel is not available.");
 
+  // Loaded per quote, never cached: the settings screen must take effect now.
+  const markup = await loadMarkupTable();
   const overrides = await resolvePrices(agent.id, "hotel", hotel.rates.map((r) => r.id));
   const stayNights = eachNight(checkIn, checkOut);
 
@@ -184,11 +196,7 @@ export async function quoteHotel(
     for (const seg of segments) {
       const override = overrides.get(overrideKey(seg.rate.id, "MAIN"));
       const unitMinor =
-        override ??
-        tierDefault(agent.tier, {
-          kerala: seg.rate.ratePerNightKeralaMinor,
-          outsideKerala: seg.rate.ratePerNightOutsideKeralaMinor,
-        });
+        override ?? tierDefault(markup, "hotel", agent.tier, seg.rate.costPerNightMinor);
       if (override !== undefined) usedOverride = true;
 
       const quantity = seg.units * input.rooms;
@@ -209,8 +217,8 @@ export async function quoteHotel(
       // per season for what is usually a single small charge.
       const first = segments[0];
       const extraBed = resolveCharge(
-        agent, overrides, first.rate.id, "EXTRA_BED",
-        first.rate.extraBedKeralaMinor, first.rate.extraBedOutsideKeralaMinor
+        agent, markup, "hotel", overrides, first.rate.id, "EXTRA_BED",
+        first.rate.extraBedCostMinor
       );
       if (!extraBed) {
         unavailable.push({
@@ -261,6 +269,8 @@ export async function quoteHouseboat(
   });
   if (!boat) throw new PricingError("That houseboat is not available.");
 
+  // Loaded per quote, never cached: the settings screen must take effect now.
+  const markup = await loadMarkupTable();
   const overrides = await resolvePrices(agent.id, "houseboat", boat.rates.map((r) => r.id));
 
   const options: QuoteOption[] = [];
@@ -276,16 +286,10 @@ export async function quoteHouseboat(
     if (!isWithin(date, rate.validFrom, rate.validTo)) continue;
 
     const override = overrides.get(overrideKey(rate.id, "MAIN"));
-    const unitMinor =
-      override ??
-      tierDefault(agent.tier, {
-        kerala: rate.rateKeralaMinor,
-        outsideKerala: rate.rateOutsideKeralaMinor,
-      });
+    const unitMinor = override ?? tierDefault(markup, "houseboat", agent.tier, rate.costMinor);
 
     const extraPax = resolveCharge(
-      agent, overrides, rate.id, "EXTRA_PAX",
-      rate.extraPaxKeralaMinor, rate.extraPaxOutsideKeralaMinor
+      agent, markup, "houseboat", overrides, rate.id, "EXTRA_PAX", rate.extraPaxCostMinor
     );
 
     try {
@@ -380,6 +384,8 @@ export async function quoteVehicle(
   });
   if (!vehicle) throw new PricingError("That vehicle is not available.");
 
+  // Loaded per quote, never cached: the settings screen must take effect now.
+  const markup = await loadMarkupTable();
   const overrides = await resolvePrices(agent.id, "vehicle", vehicle.rates.map((r) => r.id));
 
   const options: QuoteOption[] = [];
@@ -413,11 +419,7 @@ export async function quoteVehicle(
       for (const seg of segments) {
         const override = overrides.get(overrideKey(seg.rate.id, "MAIN"));
         const unitMinor =
-          override ??
-          tierDefault(agent.tier, {
-            kerala: seg.rate.rateKeralaMinor,
-            outsideKerala: seg.rate.rateOutsideKeralaMinor,
-          });
+          override ?? tierDefault(markup, "vehicle", agent.tier, seg.rate.costMinor);
         if (override !== undefined) usedOverride = true;
 
         includedKm += (seg.rate.includedKmPerDay ?? 0) * seg.units;
@@ -431,8 +433,8 @@ export async function quoteVehicle(
         });
 
         const bata = resolveCharge(
-          agent, overrides, seg.rate.id, "DRIVER_ALLOWANCE",
-          seg.rate.driverAllowanceKeralaMinor, seg.rate.driverAllowanceOutsideKeralaMinor
+          agent, markup, "vehicle", overrides, seg.rate.id, "DRIVER_ALLOWANCE",
+          seg.rate.driverAllowanceCostMinor
         );
         if (bata) {
           if (bata.usedOverride) usedOverride = true;
@@ -451,8 +453,8 @@ export async function quoteVehicle(
       if (km != null && km > includedKm) {
         const extraKm = km - includedKm;
         const extraRate = resolveCharge(
-          agent, overrides, segments[0].rate.id, "EXTRA_KM",
-          segments[0].rate.extraKmKeralaMinor, segments[0].rate.extraKmOutsideKeralaMinor
+          agent, markup, "vehicle", overrides, segments[0].rate.id, "EXTRA_KM",
+          segments[0].rate.extraKmCostMinor
         );
         if (!extraRate) {
           unavailable.push({
@@ -497,12 +499,7 @@ export async function quoteVehicle(
     if (!isWithin(start, rate.validFrom, rate.validTo)) continue;
 
     const override = overrides.get(overrideKey(rate.id, "MAIN"));
-    const unitMinor =
-      override ??
-      tierDefault(agent.tier, {
-        kerala: rate.rateKeralaMinor,
-        outsideKerala: rate.rateOutsideKeralaMinor,
-      });
+    const unitMinor = override ?? tierDefault(markup, "vehicle", agent.tier, rate.costMinor);
 
     if (rate.rateType === "PER_KM") {
       if (km == null || km < 1) {
@@ -570,6 +567,8 @@ export async function quoteItinerary(
   });
   if (!itinerary) throw new PricingError("That package is not available.");
 
+  // Loaded per quote, never cached: the settings screen must take effect now.
+  const markup = await loadMarkupTable();
   const overrides = await resolvePrices(agent.id, "itinerary", itinerary.rates.map((r) => r.id));
 
   const options: QuoteOption[] = [];
@@ -583,16 +582,11 @@ export async function quoteItinerary(
     if (!isWithin(start, rate.validFrom, rate.validTo)) continue;
 
     const override = overrides.get(overrideKey(rate.id, "MAIN"));
-    const unitMinor =
-      override ??
-      tierDefault(agent.tier, {
-        kerala: rate.priceKeralaMinor,
-        outsideKerala: rate.priceOutsideKeralaMinor,
-      });
+    const unitMinor = override ?? tierDefault(markup, "itinerary", agent.tier, rate.costMinor);
 
     const supplement = resolveCharge(
-      agent, overrides, rate.id, "SINGLE_SUPPLEMENT",
-      rate.singleSupplementKeralaMinor, rate.singleSupplementOutsideKeralaMinor
+      agent, markup, "itinerary", overrides, rate.id, "SINGLE_SUPPLEMENT",
+      rate.singleSupplementCostMinor
     );
 
     try {

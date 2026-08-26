@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { loadMarkupTable } from "@/lib/markup-store";
+import { markupKey } from "@/lib/markup";
 import { PageHeader, LinkButton, FormSuccess } from "@/components/ui";
 import { HouseboatForm } from "../houseboat-form";
 import { RatesPanel } from "./rates-panel";
@@ -33,6 +35,12 @@ export default async function HouseboatDetailPage({
   });
   if (!boat) notFound();
 
+  const table = await loadMarkupTable();
+  const markup = {
+    kerala: table.get(markupKey("houseboat", "KERALA"))!,
+    outsideKerala: table.get(markupKey("houseboat", "OUTSIDE_KERALA"))!,
+  };
+
   return (
     <>
       <PageHeader
@@ -54,6 +62,7 @@ export default async function HouseboatDetailPage({
       />
 
       <RatesPanel
+        markup={markup}
         rates={boat.rates}
         createAction={createHouseboatRate.bind(null, boat.id)}
         updateAction={async (rateId, prev, fd) => {

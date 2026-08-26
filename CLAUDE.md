@@ -106,13 +106,43 @@ These are load-bearing. Breaking one produces wrong prices, not a crash.
 6. **Quotes are snapshotted.** `Quote.snapshotJson` freezes inputs and resolved
    pricing. Catalogue rates change; a quote already sent must not change with them.
 
-### Price resolution — three steps, in order (26 Aug 2026)
-1. **The agent's own rate-card override**, if one exists. Wins over everything.
-2. **Otherwise the catalogue default for that agent's TIER** — Kerala or
-   outside-Kerala. Every rate row stores both.
-3. **There is no step 3.** Both tier columns are `NOT NULL`, so a rate row that
-   cannot price somebody cannot exist. If you find yourself writing a fallback
-   below step 2, something upstream is wrong.
+### The catalogue stores COST, not sell prices (26 Aug 2026)
+Every rate row holds ONE cost. Neither agent-facing price is persisted — both
+are derived at read time from the cost and the current `MarkupRule`.
+
+A stored sell price goes stale the moment a markup is edited, and a stale price
+is indistinguishable from a correct one until somebody is quoted the wrong
+number. This is the same principle as saving a quote re-pricing server-side
+rather than trusting a number computed earlier.
+
+Confirmed rules (seeded, editable at `/admin/settings`):
+
+| Product | Kerala | Outside Kerala |
+|---|---|---|
+| Hotels | cost + ₹100 | cost + 5% |
+| Vehicles | cost + 10% | cost + 15% |
+| Houseboats | cost + 5% | cost + 12% |
+| Packages | cost + 15% | cost + 27% |
+
+**Ancillary charges inherit their PARENT PRODUCT's rule** — a hotel's extra bed
+is marked up by the hotel rule, a vehicle's extra km by the vehicle rule.
+
+`MarkupRule.value` is one required column whose meaning follows `kind`: paise
+for `FLAT`, **basis points** for `PERCENT` (500 = 5%). Basis points, not a
+float, for the same reason money is `Int` — the arithmetic must be exact.
+
+Editing a rule affects FUTURE calculations only. Saved `Quote`/`QuoteLine` rows
+store computed totals and never reference this table, so they cannot be
+retroactively rewritten. Verified: changing hotel/Kerala to +₹250 moved a new
+quote ₹8,300 → ₹8,450 while the saved quote stayed at ₹8,300.
+
+### Price resolution — three steps, in order
+1. **The agent's own rate-card override**, if one exists. An absolute price,
+   unaffected by markup. Wins over everything.
+2. **Otherwise the stored cost, marked up for that agent's tier.**
+3. **There is no step 3.** Cost is `NOT NULL`, so a rate row that cannot price
+   somebody cannot exist. If you find yourself writing a fallback below step 2,
+   something upstream is wrong.
 
 A missing override never blocks a quote and never hides a product (confirmed
 with Sonet, 25 Aug 2026). `QuoteLine.usedOverride` records whether an override

@@ -3,6 +3,7 @@ import { toMinor } from "./money";
 import { parseDateOnly } from "./dates";
 import {
   AGENT_TIER,
+  MARKUP_KIND,
   RATE_CHARGE,
   PRODUCT_TYPE,
   MEAL_PLAN,
@@ -98,39 +99,6 @@ const seasonFields = {
   validTo: dateOnly("Valid to"),
 };
 
-/**
- * An ancillary charge is optional, but it is optional as a PAIR. One tier
- * priced and the other blank is the "cannot price somebody" failure that the
- * required main-rate columns exist to prevent — it just cannot be expressed as
- * NOT NULL, because the charge itself may legitimately not exist.
- *
- * So it is enforced here, and this is the only write path.
- */
-function checkTierPair(
-  ctx: z.RefinementCtx,
-  label: string,
-  keralaField: string,
-  outsideField: string,
-  kerala: number | null,
-  outside: number | null
-) {
-  if (kerala === null && outside === null) return; // not offered — fine
-  if (kerala === null) {
-    ctx.addIssue({
-      code: "custom",
-      path: [keralaField],
-      message: `Set the Kerala ${label} too, or clear both`,
-    });
-  }
-  if (outside === null) {
-    ctx.addIssue({
-      code: "custom",
-      path: [outsideField],
-      message: `Set the outside-Kerala ${label} too, or clear both`,
-    });
-  }
-}
-
 function checkSeasonOrder(
   v: { validFrom: Date; validTo: Date },
   ctx: z.RefinementCtx
@@ -166,19 +134,12 @@ export const hotelRateSchema = z
     roomType: text("Room type", 80),
     mealPlan: z.enum(MEAL_PLAN, { error: "Choose a meal plan" }),
     ...seasonFields,
-    ratePerNightKeralaMinor: money("Kerala rate per night"),
-    ratePerNightOutsideKeralaMinor: money("Outside-Kerala rate per night"),
-    extraBedKeralaMinor: optionalMoney("Kerala extra bed rate"),
-    extraBedOutsideKeralaMinor: optionalMoney("Outside-Kerala extra bed rate"),
+    costPerNightMinor: money("Cost per night"),
+    extraBedCostMinor: optionalMoney("Extra bed cost"),
     active: checkbox,
   })
   .superRefine((v, ctx) => {
     checkSeasonOrder(v, ctx);
-    checkTierPair(
-      ctx, "extra bed rate",
-      "extraBedKeralaMinor", "extraBedOutsideKeralaMinor",
-      v.extraBedKeralaMinor, v.extraBedOutsideKeralaMinor
-    );
   });
 
 // ---------------------------------------------------------------------------
@@ -202,11 +163,9 @@ export const houseboatRateSchema = z
     pricingMode: z.enum(HOUSEBOAT_PRICING_MODE, { error: "Choose a pricing mode" }),
     mealPlan: z.enum(MEAL_PLAN, { error: "Choose a meal plan" }),
     ...seasonFields,
-    rateKeralaMinor: money("Kerala rate"),
-    rateOutsideKeralaMinor: money("Outside-Kerala rate"),
+    costMinor: money("Cost"),
     includedPax: optionalPosInt("Included pax"),
-    extraPaxKeralaMinor: optionalMoney("Kerala extra pax rate"),
-    extraPaxOutsideKeralaMinor: optionalMoney("Outside-Kerala extra pax rate"),
+    extraPaxCostMinor: optionalMoney("Extra pax cost"),
     minPax: optionalPosInt("Minimum pax"),
     maxPax: posInt("Maximum pax"),
     active: checkbox,
@@ -252,23 +211,16 @@ export const houseboatRateSchema = z
           message: "Included pax applies to whole-boat pricing only",
         });
       }
-      for (const field of ["extraPaxKeralaMinor", "extraPaxOutsideKeralaMinor"] as const) {
-        if (v[field] !== null) {
-          ctx.addIssue({
-            code: "custom",
-            path: [field],
-            message: "Extra pax rate applies to whole-boat pricing only",
-          });
-        }
+      if (v.extraPaxCostMinor !== null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["extraPaxCostMinor"],
+          message: "Extra pax cost applies to whole-boat pricing only",
+        });
       }
     }
 
     if (v.pricingMode === "WHOLE_BOAT") {
-      checkTierPair(
-        ctx, "extra pax rate",
-        "extraPaxKeralaMinor", "extraPaxOutsideKeralaMinor",
-        v.extraPaxKeralaMinor, v.extraPaxOutsideKeralaMinor
-      );
     }
   });
 
@@ -287,13 +239,10 @@ export const vehicleRateSchema = z
   .object({
     rateType: z.enum(VEHICLE_RATE_TYPE, { error: "Choose a rate type" }),
     ...seasonFields,
-    rateKeralaMinor: money("Kerala rate"),
-    rateOutsideKeralaMinor: money("Outside-Kerala rate"),
+    costMinor: money("Cost"),
     includedKmPerDay: optionalPosInt("Included km per day"),
-    extraKmKeralaMinor: optionalMoney("Kerala extra km rate"),
-    extraKmOutsideKeralaMinor: optionalMoney("Outside-Kerala extra km rate"),
-    driverAllowanceKeralaMinor: optionalMoney("Kerala driver allowance"),
-    driverAllowanceOutsideKeralaMinor: optionalMoney("Outside-Kerala driver allowance"),
+    extraKmCostMinor: optionalMoney("Extra km cost"),
+    driverAllowanceCostMinor: optionalMoney("Driver allowance cost"),
     active: checkbox,
   })
   .superRefine((v, ctx) => {
@@ -304,10 +253,8 @@ export const vehicleRateSchema = z
     if (v.rateType !== "PER_DAY") {
       const perDayOnly = [
         "includedKmPerDay",
-        "extraKmKeralaMinor",
-        "extraKmOutsideKeralaMinor",
-        "driverAllowanceKeralaMinor",
-        "driverAllowanceOutsideKeralaMinor",
+        "extraKmCostMinor",
+        "driverAllowanceCostMinor",
       ] as const;
       for (const field of perDayOnly) {
         if (v[field] !== null) {
@@ -318,17 +265,6 @@ export const vehicleRateSchema = z
           });
         }
       }
-    } else {
-      checkTierPair(
-        ctx, "extra km rate",
-        "extraKmKeralaMinor", "extraKmOutsideKeralaMinor",
-        v.extraKmKeralaMinor, v.extraKmOutsideKeralaMinor
-      );
-      checkTierPair(
-        ctx, "driver allowance",
-        "driverAllowanceKeralaMinor", "driverAllowanceOutsideKeralaMinor",
-        v.driverAllowanceKeralaMinor, v.driverAllowanceOutsideKeralaMinor
-      );
     }
   });
 
@@ -349,10 +285,8 @@ export const itineraryRateSchema = z
   .object({
     pricingMode: z.enum(ITINERARY_PRICING_MODE, { error: "Choose a pricing mode" }),
     ...seasonFields,
-    priceKeralaMinor: money("Kerala price"),
-    priceOutsideKeralaMinor: money("Outside-Kerala price"),
-    singleSupplementKeralaMinor: optionalMoney("Kerala single supplement"),
-    singleSupplementOutsideKeralaMinor: optionalMoney("Outside-Kerala single supplement"),
+    costMinor: money("Cost"),
+    singleSupplementCostMinor: optionalMoney("Single supplement cost"),
     maxPax: optionalPosInt("Maximum pax"),
     active: checkbox,
   })
@@ -360,21 +294,14 @@ export const itineraryRateSchema = z
     checkSeasonOrder(v, ctx);
 
     if (v.pricingMode === "PER_PACKAGE") {
-      for (const field of ["singleSupplementKeralaMinor", "singleSupplementOutsideKeralaMinor"] as const) {
-        if (v[field] !== null) {
-          ctx.addIssue({
-            code: "custom",
-            path: [field],
-            message: "Single supplement applies to per-person pricing only",
-          });
-        }
+      if (v.singleSupplementCostMinor !== null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["singleSupplementCostMinor"],
+          message: "Single supplement applies to per-person pricing only",
+        });
       }
     } else {
-      checkTierPair(
-        ctx, "single supplement",
-        "singleSupplementKeralaMinor", "singleSupplementOutsideKeralaMinor",
-        v.singleSupplementKeralaMinor, v.singleSupplementOutsideKeralaMinor
-      );
     }
   });
 
@@ -553,6 +480,34 @@ export const rateCardEntrySchema = z.object({
   overridePriceMinor: money("Override price"),
   notes: optionalText(500),
 });
+
+/**
+ * One markup rule. `value` means paise for FLAT and basis points for PERCENT,
+ * so the form sends rupees or a percentage and this converts.
+ */
+export const markupRuleSchema = z
+  .object({
+    productType: z.enum(PRODUCT_TYPE, { error: "Unknown product" }),
+    tier: z.enum(AGENT_TIER, { error: "Unknown tier" }),
+    kind: z.enum(MARKUP_KIND, { error: "Choose flat or percentage" }),
+    amount: z
+      .string()
+      .trim()
+      .min(1, "Enter a markup")
+      .refine((v) => /^\d+(\.\d{1,2})?$/.test(v), "Markup must be a number like 100 or 7.5"),
+  })
+  .transform((v) => ({
+    productType: v.productType,
+    tier: v.tier,
+    kind: v.kind,
+    // FLAT rupees -> paise; PERCENT -> basis points. Both integers.
+    value: Math.round(Number(v.amount) * 100),
+  }))
+  .superRefine((v, ctx) => {
+    if (v.kind === "PERCENT" && v.value > 100_00) {
+      ctx.addIssue({ code: "custom", path: ["amount"], message: "That is over 100% — check the figure" });
+    }
+  });
 
 // ---------------------------------------------------------------------------
 // Quote inputs
