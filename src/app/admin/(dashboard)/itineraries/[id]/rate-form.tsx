@@ -16,7 +16,8 @@ export type ItineraryRateValues = {
   seasonLabel: string;
   validFrom: Date;
   validTo: Date;
-  priceMinor: number;
+  priceKeralaMinor: number;
+  priceOutsideKeralaMinor: number;
   singleSupplementMinor: number | null;
   maxPax: number | null;
   active: boolean;
@@ -106,12 +107,20 @@ export function ItineraryRateForm({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <MoneyField
-              label={perPerson ? "Price per person" : "Package price"}
-              name="priceMinor"
+              label={perPerson ? "Kerala — per person" : "Kerala — package price"}
+              name="priceKeralaMinor"
               required
-              defaultValue={rate ? toMajor(rate.priceMinor) : ""}
+              defaultValue={rate ? toMajor(rate.priceKeralaMinor) : ""}
               hint={perPerson ? "On twin sharing." : "Flat, whatever the headcount."}
-              error={err.priceMinor}
+              error={err.priceKeralaMinor}
+            />
+            <MoneyField
+              label={perPerson ? "Outside Kerala — per person" : "Outside Kerala — package price"}
+              name="priceOutsideKeralaMinor"
+              required
+              defaultValue={rate ? toMajor(rate.priceOutsideKeralaMinor) : ""}
+              hint="Both tiers are required."
+              error={err.priceOutsideKeralaMinor}
             />
 
             {perPerson ? (

@@ -89,7 +89,8 @@ async function seedDemoCatalogue() {
             mealPlan: "CP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            ratePerNightMinor: 450_000, // ₹4,500
+            ratePerNightKeralaMinor: 450_000, // ₹4,500 Kerala
+            ratePerNightOutsideKeralaMinor: 504_000, // ₹5,040 outside Kerala
             extraBedRateMinor: 120_000, // ₹1,200
           },
           {
@@ -97,7 +98,8 @@ async function seedDemoCatalogue() {
             mealPlan: "MAP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            ratePerNightMinor: 820_000, // ₹8,200
+            ratePerNightKeralaMinor: 820_000, // ₹8,200 Kerala
+            ratePerNightOutsideKeralaMinor: 918_400, // ₹9,184 outside Kerala
           },
         ],
       },
@@ -123,7 +125,8 @@ async function seedDemoCatalogue() {
             mealPlan: "AP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateMinor: 1_450_000, // ₹14,500
+            rateKeralaMinor: 1450_000, // ₹14,500 Kerala
+            rateOutsideKeralaMinor: 1624_000, // ₹16,240 outside Kerala
             includedPax: 4,
             extraPaxRateMinor: 250_000, // ₹2,500
             maxPax: 6,
@@ -136,7 +139,8 @@ async function seedDemoCatalogue() {
             mealPlan: "AP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateMinor: 380_000, // ₹3,800
+            rateKeralaMinor: 380_000, // ₹3,800 Kerala
+            rateOutsideKeralaMinor: 425_600, // ₹4,256 outside Kerala
             minPax: 4,
             maxPax: 6,
           },
@@ -146,7 +150,8 @@ async function seedDemoCatalogue() {
             mealPlan: "MAP",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateMinor: 700_000, // ₹7,000
+            rateKeralaMinor: 700_000, // ₹7,000 Kerala
+            rateOutsideKeralaMinor: 784_000, // ₹7,840 outside Kerala
             includedPax: 4,
             extraPaxRateMinor: 90_000, // ₹900
             maxPax: 8,
@@ -168,7 +173,8 @@ async function seedDemoCatalogue() {
             rateType: "PER_DAY",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateMinor: 380_000, // ₹3,800
+            rateKeralaMinor: 380_000, // ₹3,800 Kerala
+            rateOutsideKeralaMinor: 425_600, // ₹4,256 outside Kerala
             includedKmPerDay: 250,
             extraKmRateMinor: 1_800, // ₹18
             driverAllowanceMinor: 50_000, // ₹500
@@ -177,7 +183,8 @@ async function seedDemoCatalogue() {
             rateType: "TRANSFER",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            rateMinor: 320_000, // ₹3,200
+            rateKeralaMinor: 320_000, // ₹3,200 Kerala
+            rateOutsideKeralaMinor: 358_400, // ₹3,584 outside Kerala
           },
         ],
       },
@@ -200,7 +207,8 @@ async function seedDemoCatalogue() {
             pricingMode: "PER_PERSON_TWIN_SHARING",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            priceMinor: 2_450_000, // ₹24,500
+            priceKeralaMinor: 2450_000, // ₹24,500 Kerala
+            priceOutsideKeralaMinor: 2744_000, // ₹27,440 outside Kerala
             singleSupplementMinor: 750_000, // ₹7,500
           },
           // Same package sold as a flat family rate.
@@ -208,7 +216,8 @@ async function seedDemoCatalogue() {
             pricingMode: "PER_PACKAGE",
             seasonLabel: "Standard 2026",
             ...ALL_2026,
-            priceMinor: 9_600_000, // ₹96,000
+            priceKeralaMinor: 9600_000, // ₹96,000 Kerala
+            priceOutsideKeralaMinor: 10752_000, // ₹107,520 outside Kerala
             maxPax: 4,
           },
         ],
@@ -227,6 +236,7 @@ async function seedDemoCatalogue() {
       email: "demo.agent@example.com",
       address: "2nd Floor, Marine Drive, Ernakulam, Kochi 682031, Kerala",
       altPhone: "+91 90000 00010",
+      derivedTier: "KERALA",
       status: "approved",
       approvedAt: new Date(),
       passwordHash: await hashPassword("DemoAgent!123"),
@@ -271,7 +281,8 @@ async function seedDemoCatalogue() {
       contactName: "Pending Person",
       phone: "+91 90000 00001",
       email: "pending.agent@example.com",
-      address: "14 MG Road, Thrissur 680001, Kerala",
+      address: "221 Linking Road, Bandra West, Mumbai 400050",
+      derivedTier: "OUTSIDE_KERALA",
       status: "pending",
       passwordHash: await hashPassword("PendingAgent!123"),
       adminNotes: "SAMPLE DATA — delete before go-live",

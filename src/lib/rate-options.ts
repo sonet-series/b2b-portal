@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "./db";
 import { formatDateOnly } from "./dates";
+import type { AgentTier } from "./enums";
 import {
   CRUISE_PACKAGE_LABEL,
   VEHICLE_RATE_TYPE_LABEL,
@@ -17,6 +18,7 @@ export type RateOption = {
   productType: ProductType;
   referenceId: string;
   label: string;
+  /** The catalogue default for the tier this list was built for. */
   defaultMinor: number;
 };
 
@@ -27,7 +29,10 @@ export type RateOption = {
  * this is where that difference is collapsed. Labels carry enough context —
  * property, variant, season — that Sonet can tell two rates apart in a dropdown.
  */
-export async function listRateOptions(): Promise<RateOption[]> {
+export async function listRateOptions(tier: AgentTier): Promise<RateOption[]> {
+  const forTier = (kerala: number, outsideKerala: number) =>
+    tier === "KERALA" ? kerala : outsideKerala;
+
   const [hotelRates, houseboatRates, vehicleRates, itineraryRates] = await Promise.all([
     prisma.hotelRate.findMany({
       where: { active: true, hotel: { active: true } },
@@ -59,25 +64,25 @@ export async function listRateOptions(): Promise<RateOption[]> {
       productType: "hotel" as const,
       referenceId: r.id,
       label: `${r.hotel.name} (${r.hotel.location}) · ${r.roomType} ${r.mealPlan} · ${season(r.validFrom, r.validTo, r.seasonLabel)}`,
-      defaultMinor: r.ratePerNightMinor,
+      defaultMinor: forTier(r.ratePerNightKeralaMinor, r.ratePerNightOutsideKeralaMinor),
     })),
     ...houseboatRates.map((r) => ({
       productType: "houseboat" as const,
       referenceId: r.id,
       label: `${r.houseboat.name} (${r.houseboat.location}) · ${CRUISE_PACKAGE_LABEL[r.cruisePackage as CruisePackage] ?? r.cruisePackage} · ${HOUSEBOAT_PRICING_MODE_LABEL[r.pricingMode as HouseboatPricingMode] ?? r.pricingMode} · ${season(r.validFrom, r.validTo, r.seasonLabel)}`,
-      defaultMinor: r.rateMinor,
+      defaultMinor: forTier(r.rateKeralaMinor, r.rateOutsideKeralaMinor),
     })),
     ...vehicleRates.map((r) => ({
       productType: "vehicle" as const,
       referenceId: r.id,
       label: `${r.vehicle.type} · ${VEHICLE_RATE_TYPE_LABEL[r.rateType as VehicleRateType] ?? r.rateType} · ${season(r.validFrom, r.validTo, r.seasonLabel)}`,
-      defaultMinor: r.rateMinor,
+      defaultMinor: forTier(r.rateKeralaMinor, r.rateOutsideKeralaMinor),
     })),
     ...itineraryRates.map((r) => ({
       productType: "itinerary" as const,
       referenceId: r.id,
       label: `${r.itinerary.name} · ${ITINERARY_PRICING_MODE_LABEL[r.pricingMode as ItineraryPricingMode] ?? r.pricingMode} · ${season(r.validFrom, r.validTo, r.seasonLabel)}`,
-      defaultMinor: r.priceMinor,
+      defaultMinor: forTier(r.priceKeralaMinor, r.priceOutsideKeralaMinor),
     })),
   ];
 }

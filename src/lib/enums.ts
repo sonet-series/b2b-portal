@@ -66,6 +66,18 @@ export const VEHICLE_RATE_TYPE_LABEL: Record<VehicleRateType, string> = {
   TRANSFER: "Point-to-point transfer (flat)",
 };
 
+/**
+ * What an agency is charged as. Kerala agencies and agencies outside Kerala get
+ * different default rates on every catalogue row.
+ */
+export const AGENT_TIER = ["KERALA", "OUTSIDE_KERALA"] as const;
+export type AgentTier = (typeof AGENT_TIER)[number];
+
+export const AGENT_TIER_LABEL: Record<AgentTier, string> = {
+  KERALA: "Kerala",
+  OUTSIDE_KERALA: "Outside Kerala",
+};
+
 /** The three documents every agent uploads at registration. */
 export const DOCUMENT_KIND = ["PAN_CARD", "BUSINESS_PROOF", "VISITING_CARD"] as const;
 export type DocumentKind = (typeof DOCUMENT_KIND)[number];
@@ -82,5 +94,6 @@ export const isHouseboatCategory = makeGuard(HOUSEBOAT_CATEGORY);
 export const isCruisePackage = makeGuard(CRUISE_PACKAGE);
 export const isVehicleRateType = makeGuard(VEHICLE_RATE_TYPE);
 export const isDocumentKind = makeGuard(DOCUMENT_KIND);
+export const isAgentTier = makeGuard(AGENT_TIER);
 export const isHouseboatPricingMode = makeGuard(HOUSEBOAT_PRICING_MODE);
 export const isItineraryPricingMode = makeGuard(ITINERARY_PRICING_MODE);

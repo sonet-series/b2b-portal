@@ -25,6 +25,7 @@ import {
 } from "./enums";
 import { sumMinor } from "./money";
 import type {
+  QuotingAgent,
   QuoteLineDraft,
   QuoteOption,
   QuoteResult,
@@ -40,10 +41,15 @@ import type {
  *
  * Two rules run through everything here:
  *
- *  1. **Price resolution always goes through the agent's rate card, falling
- *     back to the catalogue default.** A missing override never blocks a quote
- *     (confirmed with Sonet — see CLAUDE.md). Every line records which source
- *     supplied its price, so "why is this price what it is" stays answerable.
+ *  1. **Price resolution runs in three steps**, highest priority first:
+ *       a. the agent's own rate-card override, if one exists;
+ *       b. otherwise the catalogue default FOR THAT AGENT'S TIER — Kerala or
+ *          outside-Kerala;
+ *       c. there is no step c. Both tier prices are required columns, so a
+ *          rate row that cannot price somebody does not exist.
+ *     A missing override never blocks a quote. Every line records whether an
+ *     override supplied its price, so "why is this price what it is" stays
+ *     answerable.
  *
  *  2. **Seasons are resolved per night / per day, not once for the trip.** A
  *     stay that crosses from off-season into peak must reprice at the boundary.
@@ -81,6 +87,17 @@ function segmentByRate<T extends { id: string }>(
   return { segments, uncovered };
 }
 
+/**
+ * The catalogue default for this agent's tier. Every rate table stores both, so
+ * this is a straight pick, never a fallback — see the header note.
+ */
+function tierDefault(
+  tier: QuotingAgent["tier"],
+  rate: { kerala: number; outsideKerala: number }
+): number {
+  return tier === "KERALA" ? rate.kerala : rate.outsideKerala;
+}
+
 function seasonSpan(from: Date, to: Date): string {
   return from.getTime() === to.getTime()
     ? formatDateOnly(from)
@@ -92,7 +109,7 @@ function seasonSpan(from: Date, to: Date): string {
 // ---------------------------------------------------------------------------
 
 export async function quoteHotel(
-  agentId: string,
+  agent: QuotingAgent,
   input: HotelQuoteInput
 ): Promise<QuoteResult> {
   const checkIn = parseDateOnly(input.checkIn);
@@ -106,7 +123,7 @@ export async function quoteHotel(
   });
   if (!hotel) throw new PricingError("That hotel is not available.");
 
-  const overrides = await resolvePrices(agentId, "hotel", hotel.rates.map((r) => r.id));
+  const overrides = await resolvePrices(agent.id, "hotel", hotel.rates.map((r) => r.id));
   const stayNights = eachNight(checkIn, checkOut);
 
   // An "option" is a room type + meal plan. Its price may still change night to
@@ -141,7 +158,12 @@ export async function quoteHotel(
 
     for (const seg of segments) {
       const override = overrides.get(seg.rate.id);
-      const unitMinor = override ?? seg.rate.ratePerNightMinor;
+      const unitMinor =
+        override ??
+        tierDefault(agent.tier, {
+          kerala: seg.rate.ratePerNightKeralaMinor,
+          outsideKerala: seg.rate.ratePerNightOutsideKeralaMinor,
+        });
       if (override !== undefined) usedOverride = true;
 
       const quantity = seg.units * input.rooms;
@@ -198,7 +220,7 @@ export async function quoteHotel(
 // ---------------------------------------------------------------------------
 
 export async function quoteHouseboat(
-  agentId: string,
+  agent: QuotingAgent,
   input: HouseboatQuoteInput
 ): Promise<QuoteResult> {
   const date = parseDateOnly(input.travelDate);
@@ -209,7 +231,7 @@ export async function quoteHouseboat(
   });
   if (!boat) throw new PricingError("That houseboat is not available.");
 
-  const overrides = await resolvePrices(agentId, "houseboat", boat.rates.map((r) => r.id));
+  const overrides = await resolvePrices(agent.id, "houseboat", boat.rates.map((r) => r.id));
 
   const options: QuoteOption[] = [];
   const unavailable: QuoteUnavailable[] = [];
@@ -224,7 +246,12 @@ export async function quoteHouseboat(
     if (!isWithin(date, rate.validFrom, rate.validTo)) continue;
 
     const override = overrides.get(rate.id);
-    const unitMinor = override ?? rate.rateMinor;
+    const unitMinor =
+      override ??
+      tierDefault(agent.tier, {
+        kerala: rate.rateKeralaMinor,
+        outsideKerala: rate.rateOutsideKeralaMinor,
+      });
 
     try {
       const breakdown = priceHouseboat(
@@ -299,7 +326,7 @@ export async function quoteHouseboat(
 // ---------------------------------------------------------------------------
 
 export async function quoteVehicle(
-  agentId: string,
+  agent: QuotingAgent,
   input: VehicleQuoteInput
 ): Promise<QuoteResult> {
   const start = parseDateOnly(input.startDate);
@@ -314,7 +341,7 @@ export async function quoteVehicle(
   });
   if (!vehicle) throw new PricingError("That vehicle is not available.");
 
-  const overrides = await resolvePrices(agentId, "vehicle", vehicle.rates.map((r) => r.id));
+  const overrides = await resolvePrices(agent.id, "vehicle", vehicle.rates.map((r) => r.id));
 
   const options: QuoteOption[] = [];
   const unavailable: QuoteUnavailable[] = [];
@@ -346,7 +373,12 @@ export async function quoteVehicle(
 
       for (const seg of segments) {
         const override = overrides.get(seg.rate.id);
-        const unitMinor = override ?? seg.rate.rateMinor;
+        const unitMinor =
+          override ??
+          tierDefault(agent.tier, {
+            kerala: seg.rate.rateKeralaMinor,
+            outsideKerala: seg.rate.rateOutsideKeralaMinor,
+          });
         if (override !== undefined) usedOverride = true;
 
         includedKm += (seg.rate.includedKmPerDay ?? 0) * seg.units;
@@ -413,7 +445,12 @@ export async function quoteVehicle(
     if (!isWithin(start, rate.validFrom, rate.validTo)) continue;
 
     const override = overrides.get(rate.id);
-    const unitMinor = override ?? rate.rateMinor;
+    const unitMinor =
+      override ??
+      tierDefault(agent.tier, {
+        kerala: rate.rateKeralaMinor,
+        outsideKerala: rate.rateOutsideKeralaMinor,
+      });
 
     if (rate.rateType === "PER_KM") {
       if (input.km == null || input.km < 1) {
@@ -467,7 +504,7 @@ export async function quoteVehicle(
 // ---------------------------------------------------------------------------
 
 export async function quoteItinerary(
-  agentId: string,
+  agent: QuotingAgent,
   input: ItineraryQuoteInput
 ): Promise<QuoteResult> {
   const start = parseDateOnly(input.startDate);
@@ -478,7 +515,7 @@ export async function quoteItinerary(
   });
   if (!itinerary) throw new PricingError("That package is not available.");
 
-  const overrides = await resolvePrices(agentId, "itinerary", itinerary.rates.map((r) => r.id));
+  const overrides = await resolvePrices(agent.id, "itinerary", itinerary.rates.map((r) => r.id));
 
   const options: QuoteOption[] = [];
   const unavailable: QuoteUnavailable[] = [];
@@ -491,7 +528,12 @@ export async function quoteItinerary(
     if (!isWithin(start, rate.validFrom, rate.validTo)) continue;
 
     const override = overrides.get(rate.id);
-    const unitMinor = override ?? rate.priceMinor;
+    const unitMinor =
+      override ??
+      tierDefault(agent.tier, {
+        kerala: rate.priceKeralaMinor,
+        outsideKerala: rate.priceOutsideKeralaMinor,
+      });
 
     try {
       const breakdown = priceItinerary(

@@ -106,13 +106,47 @@ These are load-bearing. Breaking one produces wrong prices, not a crash.
 6. **Quotes are snapshotted.** `Quote.snapshotJson` freezes inputs and resolved
    pricing. Catalogue rates change; a quote already sent must not change with them.
 
-### Pricing fallback — confirmed with Sonet, 25 Aug 2026
-> If an agent has **no** rate-card override for an item, they are quoted the
-> **default rate** from the catalogue row. A missing override never blocks a
-> quote and never hides a product.
+### Price resolution — three steps, in order (26 Aug 2026)
+1. **The agent's own rate-card override**, if one exists. Wins over everything.
+2. **Otherwise the catalogue default for that agent's TIER** — Kerala or
+   outside-Kerala. Every rate row stores both.
+3. **There is no step 3.** Both tier columns are `NOT NULL`, so a rate row that
+   cannot price somebody cannot exist. If you find yourself writing a fallback
+   below step 2, something upstream is wrong.
 
-Implemented in `src/lib/rate-card.ts`. `QuoteLine.usedOverride` records which
-source supplied each price, so "why is this price what it is" stays answerable.
+A missing override never blocks a quote and never hides a product (confirmed
+with Sonet, 25 Aug 2026). `QuoteLine.usedOverride` records whether an override
+supplied each price, so "why is this price what it is" stays answerable.
+
+Implemented in `src/lib/rate-card.ts` (step 1) and the `tierDefault` helper in
+`src/lib/quote.ts` (step 2).
+
+### Agency tiers (26 Aug 2026)
+Every agency is `KERALA` or `OUTSIDE_KERALA`, and that decides which of the two
+catalogue defaults it is quoted.
+
+**Two columns on `Agent`, not one.** `derivedTier` is a best-effort guess parsed
+from the address at registration; `tierOverride` is Sonet's explicit choice and
+**wins whenever set**. Keeping them apart is what lets the admin show "we
+guessed Kerala from the PIN code, you set outside-Kerala" — collapsing them
+would make a deliberate decision indistinguishable from a lucky guess.
+
+**Always read the tier through `effectiveTier()` in `src/lib/tier.ts`.** Reading
+either column directly is exactly how the override silently stops mattering.
+`getAgent()` already resolves it and returns `tier`.
+
+Derivation checks the PIN code first (Kerala is 67xxxx–69xxxx, the strongest
+signal in an Indian address), then a list of districts and town names. A
+non-Kerala PIN is treated as conclusive the other way. It is best-effort by
+design — Sonet reviews every registration before it can quote anything.
+
+**Both tier prices are required columns on all four rate tables**, following the
+same reasoning as the pricing-mode columns: not two nullable columns, because a
+rate row must not be able to exist that cannot price somebody.
+
+**Ancillary charges are NOT tiered** — extra bed, extra pax, driver allowance,
+extra km, single supplement are single values. Only the main rate varies by
+tier. If Sonet wants those tiered too, it is the same change repeated.
 
 ### Pricing modes (confirmed with Sonet, 25 Aug 2026)
 Houseboats and packages each sell two ways, and both modes must coexist.

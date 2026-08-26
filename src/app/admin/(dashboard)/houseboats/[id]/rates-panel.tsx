@@ -86,7 +86,7 @@ export function RatesPanel({
           hint="Agents cannot quote this houseboat until it has at least one rate."
         />
       ) : (
-        <Table head={["Cruise", "Pricing", "Season", "Rate", "Pax", ""]}>
+        <Table head={["Cruise", "Pricing", "Season", "Kerala", "Outside Kerala", "Pax", ""]}>
           {rates.map((r) => {
             const wholeBoat = r.pricingMode === "WHOLE_BOAT";
             return (
@@ -114,10 +114,13 @@ export function RatesPanel({
                   </div>
                 </Td>
                 <Td className="font-medium whitespace-nowrap">
-                  {formatMinor(r.rateMinor)}
+                  {formatMinor(r.rateKeralaMinor)}
                   <span className="ml-1 text-xs font-normal text-slate-500">
                     {wholeBoat ? "/ cruise" : "/ person"}
                   </span>
+                </Td>
+                <Td className="font-medium whitespace-nowrap">
+                  {formatMinor(r.rateOutsideKeralaMinor)}
                 </Td>
                 <Td className="whitespace-nowrap text-xs">
                   {wholeBoat ? (

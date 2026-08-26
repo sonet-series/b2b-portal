@@ -36,7 +36,7 @@ export default async function VehicleQuotePage({
     for (const issue of parsed.error.issues) fieldErrors[issue.path.join(".")] ??= issue.message;
   } else if (parsed.success) {
     try {
-      result = await quoteVehicle(agent.id, parsed.data);
+      result = await quoteVehicle({ id: agent.id, tier: agent.tier }, parsed.data);
     } catch (e) {
       error = e instanceof PricingError ? e.message : "Could not price that hire.";
     }

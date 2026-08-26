@@ -8,8 +8,18 @@ import { ReviewPanel } from "./review-panel";
 import { TempPasswordPanel } from "./handover-panel";
 import { RateCardPanel } from "./rate-card-panel";
 import { DocumentsPanel } from "./documents-panel";
+import { TierPanel } from "./tier-panel";
+import { effectiveTier, deriveTier } from "@/lib/tier";
+import { AGENT_TIER_LABEL, type AgentTier } from "@/lib/enums";
 import { CopyBlock } from "@/components/copy-block";
-import { approveAgent, rejectAgent, issueTempPassword, addRateCardEntry, removeRateCardEntry } from "../actions";
+import {
+  approveAgent,
+  rejectAgent,
+  issueTempPassword,
+  addRateCardEntry,
+  removeRateCardEntry,
+  setAgentTier,
+} from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -22,22 +32,27 @@ const STATUS_TONE: Record<AgentStatus, "amber" | "green" | "red"> = {
 export default async function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const [agent, options, otherAgents] = await Promise.all([
-    prisma.agent.findUnique({
-      where: { id },
-      include: {
-        rateCardEntries: { orderBy: { productType: "asc" } },
-        documents: true,
-      },
-    }),
-    listRateOptions(),
+  const agent = await prisma.agent.findUnique({
+    where: { id },
+    include: {
+      rateCardEntries: { orderBy: { productType: "asc" } },
+      documents: true,
+    },
+  });
+  if (!agent) notFound();
+
+  const tier = effectiveTier(agent);
+
+  const [options, otherAgents] = await Promise.all([
+    // Priced for THIS agent's tier, so the "default" column shows the number
+    // they would actually be charged without an override.
+    listRateOptions(tier),
     prisma.agent.findMany({
       where: { status: "approved", NOT: { id } },
       select: { id: true, agencyName: true, _count: { select: { rateCardEntries: true } } },
       orderBy: { agencyName: "asc" },
     }),
   ]);
-  if (!agent) notFound();
 
   const byReference = new Map(options.map((o) => [o.referenceId, o]));
   const overrides = agent.rateCardEntries.map((e) => {
@@ -69,6 +84,8 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
             <p>
               <span className="text-slate-500">Status: </span>
               <Badge tone={STATUS_TONE[status] ?? "slate"}>{STATUS_LABEL[status] ?? status}</Badge>
+              <span className="ml-2 text-slate-500">Tier: </span>
+              <Badge tone={tier === "KERALA" ? "green" : "blue"}>{AGENT_TIER_LABEL[tier]}</Badge>
             </p>
             <p className="max-w-md">
               <span className="text-slate-500">Address: </span>
@@ -103,6 +120,14 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
           )}
         </div>
       </Card>
+
+      <TierPanel
+        action={setAgentTier.bind(null, agent.id)}
+        derivedTier={agent.derivedTier as AgentTier}
+        derivedReason={deriveTier(agent.address).reason}
+        tierOverride={agent.tierOverride}
+        effective={tier}
+      />
 
       <DocumentsPanel agentId={agent.id} documents={agent.documents} />
 

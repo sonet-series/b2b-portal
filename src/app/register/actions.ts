@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/password";
 import { storeUpload, discardUploads, UploadError } from "@/lib/uploads";
+import { deriveTier } from "@/lib/tier";
 import { DOCUMENT_KIND, type DocumentKind } from "@/lib/enums";
 import { DOCUMENT_LABEL } from "@/lib/uploads";
 import {
@@ -74,6 +75,10 @@ export async function registerAgent(_prev: FormState, formData: FormData): Promi
     await prisma.agent.create({
       data: {
         ...agent,
+        // Best-effort guess from the address. It is only a suggestion — Sonet
+        // sees it, with the reason, and can override it when reviewing.
+        // tierOverride stays null until he actually chooses.
+        derivedTier: deriveTier(agent.address).tier,
         passwordHash: await hashPassword(password),
         status: "pending", // Nothing auto-approves. Sonet reviews every signup.
         documents: { create: stored },

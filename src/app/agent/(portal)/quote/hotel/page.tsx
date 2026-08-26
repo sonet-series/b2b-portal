@@ -38,7 +38,7 @@ export default async function HotelQuotePage({
     }
   } else if (parsed.success) {
     try {
-      result = await quoteHotel(agent.id, parsed.data);
+      result = await quoteHotel({ id: agent.id, tier: agent.tier }, parsed.data);
     } catch (e) {
       error = e instanceof PricingError ? e.message : "Could not price that stay.";
     }

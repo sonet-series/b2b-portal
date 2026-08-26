@@ -43,7 +43,7 @@ export default async function PackageQuotePage({
     for (const issue of parsed.error.issues) fieldErrors[issue.path.join(".")] ??= issue.message;
   } else if (parsed.success) {
     try {
-      result = await quoteItinerary(agent.id, parsed.data);
+      result = await quoteItinerary({ id: agent.id, tier: agent.tier }, parsed.data);
     } catch (e) {
       error = e instanceof PricingError ? e.message : "Could not price that package.";
     }

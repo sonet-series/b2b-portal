@@ -22,7 +22,8 @@ export type HotelRateValues = {
   seasonLabel: string;
   validFrom: Date;
   validTo: Date;
-  ratePerNightMinor: number;
+  ratePerNightKeralaMinor: number;
+  ratePerNightOutsideKeralaMinor: number;
   extraBedRateMinor: number | null;
   active: boolean;
 };
@@ -104,21 +105,33 @@ export function HotelRateForm({
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <MoneyField
-            label="Rate per night"
-            name="ratePerNightMinor"
-            required
-            defaultValue={rate ? toMajor(rate.ratePerNightMinor) : ""}
-            error={err.ratePerNightMinor}
-          />
-          <MoneyField
-            label="Extra bed rate"
-            name="extraBedRateMinor"
-            defaultValue={rate?.extraBedRateMinor ? toMajor(rate.extraBedRateMinor) : ""}
-            hint="Optional, per night."
-            error={err.extraBedRateMinor}
-          />
+        <div className="rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Rate per night — both tiers required
+          </p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <MoneyField
+              label="Kerala agencies"
+              name="ratePerNightKeralaMinor"
+              required
+              defaultValue={rate ? toMajor(rate.ratePerNightKeralaMinor) : ""}
+              error={err.ratePerNightKeralaMinor}
+            />
+            <MoneyField
+              label="Outside-Kerala agencies"
+              name="ratePerNightOutsideKeralaMinor"
+              required
+              defaultValue={rate ? toMajor(rate.ratePerNightOutsideKeralaMinor) : ""}
+              error={err.ratePerNightOutsideKeralaMinor}
+            />
+            <MoneyField
+              label="Extra bed rate"
+              name="extraBedRateMinor"
+              defaultValue={rate?.extraBedRateMinor ? toMajor(rate.extraBedRateMinor) : ""}
+              hint="Optional, per night. Not tiered."
+              error={err.extraBedRateMinor}
+            />
+          </div>
         </div>
 
         <Checkbox label="Active" name="active" defaultChecked={rate?.active ?? true} />

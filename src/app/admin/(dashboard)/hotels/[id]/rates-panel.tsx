@@ -90,7 +90,7 @@ export function RatesPanel({
           hint="Agents cannot quote this hotel until it has at least one rate."
         />
       ) : (
-        <Table head={["Room type", "Meal plan", "Season", "Per night", "Extra bed", ""]}>
+        <Table head={["Room type", "Meal plan", "Season", "Kerala", "Outside Kerala", "Extra bed", ""]}>
           {rates.map((r) => (
             <tr key={r.id} className={r.active ? undefined : "bg-slate-50 text-slate-400"}>
               <Td>
@@ -108,7 +108,8 @@ export function RatesPanel({
                   {formatDateOnly(r.validFrom)} → {formatDateOnly(r.validTo)}
                 </div>
               </Td>
-              <Td className="font-medium">{formatMinor(r.ratePerNightMinor)}</Td>
+              <Td className="font-medium whitespace-nowrap">{formatMinor(r.ratePerNightKeralaMinor)}</Td>
+              <Td className="font-medium whitespace-nowrap">{formatMinor(r.ratePerNightOutsideKeralaMinor)}</Td>
               <Td>{r.extraBedRateMinor ? formatMinor(r.extraBedRateMinor) : "—"}</Td>
               <Td className="text-right whitespace-nowrap">
                 <button

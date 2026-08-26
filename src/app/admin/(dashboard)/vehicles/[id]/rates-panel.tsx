@@ -69,7 +69,7 @@ export function RatesPanel({
       {rates.length === 0 ? (
         <EmptyState title="No rates yet" hint="Agents cannot quote this vehicle until it has at least one rate." />
       ) : (
-        <Table head={["Rate type", "Season", "Rate", "Per-day extras", ""]}>
+        <Table head={["Rate type", "Season", "Kerala", "Outside Kerala", "Per-day extras", ""]}>
           {rates.map((r) => (
             <tr key={r.id} className={r.active ? undefined : "bg-slate-50 text-slate-400"}>
               <Td>
@@ -88,7 +88,8 @@ export function RatesPanel({
                   {formatDateOnly(r.validFrom)} → {formatDateOnly(r.validTo)}
                 </div>
               </Td>
-              <Td className="font-medium whitespace-nowrap">{formatMinor(r.rateMinor)}</Td>
+              <Td className="font-medium whitespace-nowrap">{formatMinor(r.rateKeralaMinor)}</Td>
+              <Td className="font-medium whitespace-nowrap">{formatMinor(r.rateOutsideKeralaMinor)}</Td>
               <Td className="text-xs">
                 {r.rateType === "PER_DAY" ? (
                   <>

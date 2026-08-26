@@ -1,4 +1,13 @@
-import type { ProductType } from "./enums";
+import type { AgentTier, ProductType } from "./enums";
+
+/**
+ * Who is being quoted. Carries the tier alongside the id so the engine never
+ * has to re-derive it — and so a caller cannot accidentally price without one.
+ */
+export type QuotingAgent = {
+  id: string;
+  tier: AgentTier;
+};
 
 /**
  * Shared shapes for the quote engine. Kept in their own module (no "server-only"

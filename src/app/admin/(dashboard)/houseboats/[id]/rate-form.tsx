@@ -22,7 +22,8 @@ export type HouseboatRateValues = {
   seasonLabel: string;
   validFrom: Date;
   validTo: Date;
-  rateMinor: number;
+  rateKeralaMinor: number;
+  rateOutsideKeralaMinor: number;
   includedPax: number | null;
   extraPaxRateMinor: number | null;
   minPax: number | null;
@@ -135,16 +136,20 @@ export function HouseboatRateForm({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <MoneyField
-              label={mode === "WHOLE_BOAT" ? "Rate per cruise" : "Rate per person"}
-              name="rateMinor"
+              label={`Kerala — ${mode === "WHOLE_BOAT" ? "per cruise" : "per person"}`}
+              name="rateKeralaMinor"
               required
-              defaultValue={rate ? toMajor(rate.rateMinor) : ""}
-              hint={
-                mode === "WHOLE_BOAT"
-                  ? "Whole boat, one cruise."
-                  : "One person, one cruise."
-              }
-              error={err.rateMinor}
+              defaultValue={rate ? toMajor(rate.rateKeralaMinor) : ""}
+              hint={mode === "WHOLE_BOAT" ? "Whole boat, one cruise." : "One person, one cruise."}
+              error={err.rateKeralaMinor}
+            />
+            <MoneyField
+              label={`Outside Kerala — ${mode === "WHOLE_BOAT" ? "per cruise" : "per person"}`}
+              name="rateOutsideKeralaMinor"
+              required
+              defaultValue={rate ? toMajor(rate.rateOutsideKeralaMinor) : ""}
+              hint="Both tiers are required."
+              error={err.rateOutsideKeralaMinor}
             />
 
             {mode === "WHOLE_BOAT" ? (

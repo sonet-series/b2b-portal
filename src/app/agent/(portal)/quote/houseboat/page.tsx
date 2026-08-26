@@ -36,7 +36,7 @@ export default async function HouseboatQuotePage({
     for (const issue of parsed.error.issues) fieldErrors[issue.path.join(".")] ??= issue.message;
   } else if (parsed.success) {
     try {
-      result = await quoteHouseboat(agent.id, parsed.data);
+      result = await quoteHouseboat({ id: agent.id, tier: agent.tier }, parsed.data);
     } catch (e) {
       error = e instanceof PricingError ? e.message : "Could not price that cruise.";
     }

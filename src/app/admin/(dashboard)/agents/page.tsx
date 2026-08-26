@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/db";
 import { PageHeader, Table, Td, Badge, EmptyState, Card } from "@/components/ui";
 import { STATUS_LABEL } from "@/lib/handover";
-import type { AgentStatus } from "@/lib/enums";
+import type { AgentStatus, AgentTier } from "@/lib/enums";
+import { AGENT_TIER_LABEL } from "@/lib/enums";
+import { effectiveTier } from "@/lib/tier";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,8 @@ function AgentTable({
     address: string;
     altPhone: string | null;
     altEmail: string | null;
+    derivedTier: string;
+    tierOverride: string | null;
     status: string;
     createdAt: Date;
     mustChangePassword: boolean;
@@ -30,7 +34,7 @@ function AgentTable({
   }[];
 }) {
   return (
-    <Table head={["Agency", "Contact", "Documents", "Status", "Rate card", "Registered", ""]}>
+    <Table head={["Agency", "Contact", "Tier", "Documents", "Status", "Rate card", "Registered", ""]}>
       {agents.map((a) => (
         <tr key={a.id}>
           <Td>
@@ -41,6 +45,12 @@ function AgentTable({
             <div className="text-xs text-slate-500">
               {a.email} · {a.phone}
             </div>
+          </Td>
+          <Td>
+            <Badge tone={effectiveTier(a) === "KERALA" ? "green" : "blue"}>
+              {AGENT_TIER_LABEL[effectiveTier(a) as AgentTier]}
+            </Badge>
+            {a.tierOverride && <div className="mt-1 text-xs text-slate-500">set manually</div>}
           </Td>
           <Td className="text-xs">
             {a._count.documents === 3 ? (
@@ -88,6 +98,8 @@ export default async function AgentsPage() {
     address: true,
     altPhone: true,
     altEmail: true,
+    derivedTier: true,
+    tierOverride: true,
     status: true,
     createdAt: true,
     mustChangePassword: true,

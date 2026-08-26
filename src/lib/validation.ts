@@ -2,6 +2,7 @@ import { z } from "zod";
 import { toMinor } from "./money";
 import { parseDateOnly } from "./dates";
 import {
+  AGENT_TIER,
   PRODUCT_TYPE,
   MEAL_PLAN,
   HOUSEBOAT_CATEGORY,
@@ -131,7 +132,8 @@ export const hotelRateSchema = z
     roomType: text("Room type", 80),
     mealPlan: z.enum(MEAL_PLAN, { error: "Choose a meal plan" }),
     ...seasonFields,
-    ratePerNightMinor: money("Rate per night"),
+    ratePerNightKeralaMinor: money("Kerala rate per night"),
+    ratePerNightOutsideKeralaMinor: money("Outside-Kerala rate per night"),
     extraBedRateMinor: optionalMoney("Extra bed rate"),
     active: checkbox,
   })
@@ -158,7 +160,8 @@ export const houseboatRateSchema = z
     pricingMode: z.enum(HOUSEBOAT_PRICING_MODE, { error: "Choose a pricing mode" }),
     mealPlan: z.enum(MEAL_PLAN, { error: "Choose a meal plan" }),
     ...seasonFields,
-    rateMinor: money("Rate"),
+    rateKeralaMinor: money("Kerala rate"),
+    rateOutsideKeralaMinor: money("Outside-Kerala rate"),
     includedPax: optionalPosInt("Included pax"),
     extraPaxRateMinor: optionalMoney("Extra pax rate"),
     minPax: optionalPosInt("Minimum pax"),
@@ -231,7 +234,8 @@ export const vehicleRateSchema = z
   .object({
     rateType: z.enum(VEHICLE_RATE_TYPE, { error: "Choose a rate type" }),
     ...seasonFields,
-    rateMinor: money("Rate"),
+    rateKeralaMinor: money("Kerala rate"),
+    rateOutsideKeralaMinor: money("Outside-Kerala rate"),
     includedKmPerDay: optionalPosInt("Included km per day"),
     extraKmRateMinor: optionalMoney("Extra km rate"),
     driverAllowanceMinor: optionalMoney("Driver allowance"),
@@ -272,7 +276,8 @@ export const itineraryRateSchema = z
   .object({
     pricingMode: z.enum(ITINERARY_PRICING_MODE, { error: "Choose a pricing mode" }),
     ...seasonFields,
-    priceMinor: money("Price"),
+    priceKeralaMinor: money("Kerala price"),
+    priceOutsideKeralaMinor: money("Outside-Kerala price"),
     singleSupplementMinor: optionalMoney("Single supplement"),
     maxPax: optionalPosInt("Maximum pax"),
     active: checkbox,
@@ -441,6 +446,15 @@ export const agentApprovalSchema = z.object({
     .optional()
     .transform((v) => (v === undefined || v === "" || v === "none" ? null : v)),
   adminNotes: optionalText(2000),
+});
+
+/** Sonet's manual tier choice. "auto" clears the override back to the guess. */
+export const agentTierSchema = z.object({
+  tierOverride: z
+    .string()
+    .trim()
+    .refine((v) => v === "auto" || (AGENT_TIER as readonly string[]).includes(v), "Choose a tier")
+    .transform((v) => (v === "auto" ? null : v)),
 });
 
 export const agentRejectionSchema = z.object({

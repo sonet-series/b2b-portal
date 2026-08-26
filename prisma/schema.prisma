@@ -76,9 +76,17 @@ model HotelRate {
   /// Inclusive.
   validTo     DateTime
 
-  /// DEFAULT rate per room per night, in paise. An agent rate card may
-  /// override this; if it does not, this is the price the agent is quoted.
-  ratePerNightMinor Int
+  /// DEFAULT rate per room per night, in paise — one per agency tier.
+  ///
+  /// BOTH are required. Two NOT NULL columns rather than a nullable pair, for
+  /// the same reason the pricing-mode columns are shaped that way: a rate row
+  /// must not be able to exist that cannot price somebody. There is no
+  /// fallback below these — if a tier price is missing the quote is wrong, so
+  /// the schema makes missing impossible.
+  ///
+  /// An agent rate-card override still beats both.
+  ratePerNightKeralaMinor        Int
+  ratePerNightOutsideKeralaMinor Int
 
   /// Extra bed / extra adult sharing, per night, in paise. Optional.
   extraBedRateMinor Int?
@@ -146,12 +154,13 @@ model HouseboatRate {
   validFrom   DateTime
   validTo     DateTime
 
-  /// DEFAULT rate in paise. Its UNIT depends on pricingMode:
+  /// DEFAULT rate in paise, one per agency tier. Its UNIT depends on
+  /// pricingMode:
   ///   WHOLE_BOAT -> the whole boat, one cruise
   ///   PER_PERSON -> one person, one cruise
-  /// Deliberately one required column rather than two nullable ones: a mode
-  /// can never point at a null price. Same pattern as VehicleRate.rateMinor.
-  rateMinor Int
+  /// Both required — see the note on HotelRate.
+  rateKeralaMinor        Int
+  rateOutsideKeralaMinor Int
 
   /// WHOLE_BOAT only: pax covered by rateMinor before extra-pax billing.
   includedPax Int?
@@ -207,9 +216,10 @@ model VehicleRate {
   validFrom   DateTime
   validTo     DateTime
 
-  /// DEFAULT rate in paise. Unit depends on rateType: per km, per day, or
-  /// flat for the transfer.
-  rateMinor Int
+  /// DEFAULT rate in paise, one per agency tier. Unit depends on rateType:
+  /// per km, per day, or flat for the transfer. Both required.
+  rateKeralaMinor        Int
+  rateOutsideKeralaMinor Int
 
   /// PER_DAY only: km included before extra-km billing kicks in.
   includedKmPerDay Int?
@@ -269,12 +279,13 @@ model ItineraryRate {
   validFrom   DateTime
   validTo     DateTime
 
-  /// DEFAULT price in paise. Its UNIT depends on pricingMode:
+  /// DEFAULT price in paise, one per agency tier. Its UNIT depends on
+  /// pricingMode:
   ///   PER_PERSON_TWIN_SHARING -> one person, sharing a twin room
   ///   PER_PACKAGE             -> the whole package, flat, regardless of pax
-  /// One required column rather than two nullable ones, same reasoning as
-  /// HouseboatRate.rateMinor.
-  priceMinor Int
+  /// Both required — see the note on HotelRate.
+  priceKeralaMinor        Int
+  priceOutsideKeralaMinor Int
 
   /// PER_PERSON_TWIN_SHARING only: supplement for a solo traveller, per person.
   singleSupplementMinor Int?
@@ -314,6 +325,20 @@ model Agent {
   /// registration since populates it, and validation.ts requires a real value,
   /// so an empty one means a row older than this migration.
   address String @default("")
+
+  /// AgentTier enum: KERALA | OUTSIDE_KERALA
+  ///
+  /// Two columns, not one, so the guess and the decision stay distinguishable.
+  /// `derivedTier` is best-effort parsing of `address` at registration.
+  /// `tierOverride` is Sonet's explicit choice and WINS whenever it is set —
+  /// collapsing them into one column would lose the ability to show "we
+  /// guessed X, you set Y", and would make a manual choice silently
+  /// indistinguishable from a lucky guess.
+  ///
+  /// Always read through effectiveTier() in src/lib/tier.ts; never read either
+  /// column directly for pricing.
+  derivedTier  String  @default("KERALA")
+  tierOverride String?
 
   /// AgentStatus enum: pending | approved | rejected
   /// Registration always lands on `pending`. Nothing auto-approves.

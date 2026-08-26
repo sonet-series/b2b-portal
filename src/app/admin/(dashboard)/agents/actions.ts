@@ -9,6 +9,7 @@ import { tempPasswordMessage } from "@/lib/handover";
 import {
   agentApprovalSchema,
   agentRejectionSchema,
+  agentTierSchema,
   rateCardEntrySchema,
   formObject,
   toFormState,
@@ -89,6 +90,36 @@ export async function approveAgent(
   // Sonet would lose the one thing he needs. It is server-rendered on the
   // approved agent's page instead, where he can come back to it any time.
   return { ok: true, message: "Agent approved." };
+}
+
+/**
+ * Sonet's manual tier choice. Setting it wins over the derived guess from then
+ * on; choosing "auto" clears it back to the guess. The derived value is never
+ * overwritten, so the two stay distinguishable.
+ */
+export async function setAgentTier(
+  agentId: string,
+  _prev: FormState,
+  formData: FormData
+): Promise<FormState> {
+  await requireAdmin();
+
+  const parsed = agentTierSchema.safeParse(formObject(formData));
+  if (!parsed.success) return toFormState(parsed.error);
+
+  await prisma.agent.update({
+    where: { id: agentId },
+    data: { tierOverride: parsed.data.tierOverride },
+  });
+
+  revalidatePath("/admin/agents");
+  revalidatePath(`/admin/agents/${agentId}`);
+  return {
+    ok: true,
+    message: parsed.data.tierOverride
+      ? "Tier set. This overrides the address-derived guess."
+      : "Override cleared — back to the address-derived tier.",
+  };
 }
 
 export async function rejectAgent(

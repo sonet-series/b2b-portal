@@ -70,7 +70,7 @@ export function RatesPanel({
       {rates.length === 0 ? (
         <EmptyState title="No pricing yet" hint="Agents cannot quote this package until it has at least one rate." />
       ) : (
-        <Table head={["Pricing mode", "Season", "Price", "Details", ""]}>
+        <Table head={["Pricing mode", "Season", "Kerala", "Outside Kerala", "Details", ""]}>
           {rates.map((r) => {
             const perPerson = r.pricingMode === "PER_PERSON_TWIN_SHARING";
             return (
@@ -92,10 +92,13 @@ export function RatesPanel({
                   </div>
                 </Td>
                 <Td className="font-medium whitespace-nowrap">
-                  {formatMinor(r.priceMinor)}
+                  {formatMinor(r.priceKeralaMinor)}
                   <span className="ml-1 text-xs font-normal text-slate-500">
                     {perPerson ? "/ person" : "flat"}
                   </span>
+                </Td>
+                <Td className="font-medium whitespace-nowrap">
+                  {formatMinor(r.priceOutsideKeralaMinor)}
                 </Td>
                 <Td className="text-xs">
                   {perPerson ? (

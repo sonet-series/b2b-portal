@@ -24,7 +24,7 @@ export async function saveQuoteAction(
 
   let reference: string;
   try {
-    reference = await saveQuote(agent.id, input, optionKey);
+    reference = await saveQuote({ id: agent.id, tier: agent.tier }, input, optionKey);
   } catch (e) {
     return {
       ok: false,

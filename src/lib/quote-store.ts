@@ -3,7 +3,7 @@ import { prisma } from "./db";
 import { parseDateOnly, formatDateOnly, MS_PER_DAY, startOfUtcDay } from "./dates";
 import { quoteHotel, quoteHouseboat, quoteVehicle, quoteItinerary } from "./quote";
 import { PricingError } from "./pricing";
-import type { AnyQuoteInput, QuoteOption } from "./quote-types";
+import type { AnyQuoteInput, QuoteOption, QuotingAgent } from "./quote-types";
 
 /**
  * Persisting a quote.
@@ -55,16 +55,16 @@ function travelWindow(input: AnyQuoteInput): { start: Date; end: Date; pax: numb
   }
 }
 
-async function recompute(agentId: string, input: AnyQuoteInput) {
+async function recompute(agent: QuotingAgent, input: AnyQuoteInput) {
   switch (input.productType) {
     case "hotel":
-      return quoteHotel(agentId, input);
+      return quoteHotel(agent, input);
     case "houseboat":
-      return quoteHouseboat(agentId, input);
+      return quoteHouseboat(agent, input);
     case "vehicle":
-      return quoteVehicle(agentId, input);
+      return quoteVehicle(agent, input);
     case "itinerary":
-      return quoteItinerary(agentId, input);
+      return quoteItinerary(agent, input);
   }
 }
 
@@ -76,11 +76,13 @@ async function recompute(agentId: string, input: AnyQuoteInput) {
  * an agent could edit.
  */
 export async function saveQuote(
-  agentId: string,
+  agent: QuotingAgent,
   input: AnyQuoteInput,
   optionKey: string
 ): Promise<string> {
-  const { options } = await recompute(agentId, input);
+  // Re-priced from the inputs and the agent's CURRENT tier — the browser's
+  // total is never trusted, and neither is a tier the client might send.
+  const { options } = await recompute(agent, input);
   const option = options.find((o) => o.key === optionKey);
   if (!option) {
     throw new PricingError("That option is no longer available at this price. Please requote.");
@@ -104,6 +106,9 @@ export async function saveQuote(
 
   const snapshot = {
     input,
+    // Recorded so a saved quote explains itself later, after a tier override
+    // or a rate change would otherwise make the number look arbitrary.
+    tier: agent.tier,
     option,
     quotedAt: new Date().toISOString(),
     // Rates change. A quote already sent to an agent must not change with them.
@@ -117,7 +122,7 @@ export async function saveQuote(
       const quote = await prisma.quote.create({
         data: {
           reference: await nextReference(),
-          agentId,
+          agentId: agent.id,
           productType: input.productType,
           travelStart: window.start,
           travelEnd: window.end,

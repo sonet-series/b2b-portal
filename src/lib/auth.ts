@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "./db";
 import { verifyPassword, hashPassword } from "./password";
+import { effectiveTier } from "./tier";
 
 /**
  * Session handling for the two audiences this portal has: the single admin
@@ -152,12 +153,18 @@ export async function getAgent() {
       contactName: true,
       status: true,
       mustChangePassword: true,
+      derivedTier: true,
+      tierOverride: true,
     },
   });
 
   // Re-check status on every request: Sonet may have revoked an agent after
   // their cookie was issued, and a 12h session should not outlive that.
-  return agent?.status === "approved" ? agent : null;
+  if (agent?.status !== "approved") return null;
+
+  // Resolved here so no caller has to remember that the override beats the
+  // guess. `tier` is what everything downstream prices on.
+  return { ...agent, tier: effectiveTier(agent) };
 }
 
 /**

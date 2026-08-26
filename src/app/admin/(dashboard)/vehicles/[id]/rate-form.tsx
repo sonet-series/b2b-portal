@@ -12,7 +12,8 @@ export type VehicleRateValues = {
   seasonLabel: string;
   validFrom: Date;
   validTo: Date;
-  rateMinor: number;
+  rateKeralaMinor: number;
+  rateOutsideKeralaMinor: number;
   includedKmPerDay: number | null;
   extraKmRateMinor: number | null;
   driverAllowanceMinor: number | null;
@@ -105,12 +106,20 @@ export function VehicleRateForm({
 
           <div className="grid gap-4 sm:grid-cols-4">
             <MoneyField
-              label="Rate"
-              name="rateMinor"
+              label="Kerala rate"
+              name="rateKeralaMinor"
               required
-              defaultValue={rate ? toMajor(rate.rateMinor) : ""}
+              defaultValue={rate ? toMajor(rate.rateKeralaMinor) : ""}
               hint={RATE_UNIT[rateType]}
-              error={err.rateMinor}
+              error={err.rateKeralaMinor}
+            />
+            <MoneyField
+              label="Outside-Kerala rate"
+              name="rateOutsideKeralaMinor"
+              required
+              defaultValue={rate ? toMajor(rate.rateOutsideKeralaMinor) : ""}
+              hint="Both tiers are required."
+              error={err.rateOutsideKeralaMinor}
             />
 
             {rateType === "PER_DAY" && (
