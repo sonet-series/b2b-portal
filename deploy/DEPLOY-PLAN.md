@@ -186,6 +186,20 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 
 ## Admin password
 
+**Redeploys never touch it.** The seed sets the password only when it creates
+the account. If the password is ever lost, set `ADMIN_PASSWORD_RESET=1`
+alongside a fresh `ADMIN_PASSWORD` in `.env.production`, restart once, sign in,
+change it, then remove the variable:
+
+```bash
+cd /opt/b2b-portal
+printf 'ADMIN_PASSWORD_RESET=1\n' >> .env.production
+# set ADMIN_PASSWORD to a new value in that file too, then:
+docker compose up -d --force-recreate web
+# sign in, change the password, then remove both lines and restart again
+```
+
+
 `ADMIN_PASSWORD` reaches the server in an env file, so it is known to anyone
 who can read that file. The seed marks the account `mustChangePassword` on
 every run and the admin layout blocks the dashboard until a new password is

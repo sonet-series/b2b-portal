@@ -286,6 +286,26 @@ src/app/
 
 ---
 
+### The admin seed is idempotent — do not make it an upsert again
+`RUN_SEED_ON_START=1` means `prisma/seed.ts` runs on **every container start**,
+so anything it writes unconditionally is rewritten on every redeploy.
+
+It originally upserted `passwordHash` and `mustChangePassword` on both create
+and update, reasoning that the env-file password must be one-time. The effect
+was the opposite of intended: each redeploy silently reverted an
+already-changed admin password back to `ADMIN_PASSWORD` and re-armed the forced
+change. Credentials belong to the account once it exists, not to the env file.
+
+Now:
+- **first boot only** — create the account, set the one-time password, force a change
+- **`ADMIN_PASSWORD_RESET=1`** — explicit opt-in recovery, since there is no
+  email provider and so no self-service reset. A separate variable precisely so
+  it cannot fire by accident on an ordinary deploy. Unset it afterwards.
+- **every other boot** — confirm the account exists, touch nothing else
+
+Changing `ADMIN_EMAIL` creates a *second* account rather than renaming the
+first; the seed warns when it notices, since v1 is deliberately single-admin.
+
 ## Commands
 
 ```bash

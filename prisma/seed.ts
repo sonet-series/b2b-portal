@@ -59,18 +59,70 @@ async function seedAdmin() {
     throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD must be set in .env");
   }
 
-  const passwordHash = await hashPassword(password);
-
-  // mustChangePassword is set on BOTH create and update. ADMIN_PASSWORD lives
-  // in an env file on the server, so it is known to anyone who can read that
-  // file — it must be a one-time credential, never the standing one.
-  const admin = await prisma.adminUser.upsert({
+  const existing = await prisma.adminUser.findUnique({
     where: { email },
-    update: { passwordHash, mustChangePassword: true },
-    create: { email, passwordHash, name: "Sonet", mustChangePassword: true },
+    select: { id: true, mustChangePassword: true },
   });
-  console.log(`✔ admin user ready: ${admin.email}`);
-  console.log("  → you will be asked to set a new password at first sign-in.");
+
+  // ---------------------------------------------------------------------
+  // First boot: create the account with the one-time password from the env
+  // file, and force a change at first sign-in. ADMIN_PASSWORD is readable by
+  // anyone who can read that file, so it must never be the standing password.
+  // ---------------------------------------------------------------------
+  if (!existing) {
+    await prisma.adminUser.create({
+      data: {
+        email,
+        passwordHash: await hashPassword(password),
+        name: "Sonet",
+        mustChangePassword: true,
+      },
+    });
+    console.log(`✔ admin user created: ${email}`);
+    console.log("  → you will be asked to set a new password at first sign-in.");
+
+    const others = await prisma.adminUser.count({ where: { NOT: { email } } });
+    if (others > 0) {
+      // v1 is deliberately single-admin. Changing ADMIN_EMAIL creates a second
+      // account rather than renaming the first, which is worth saying out loud.
+      console.warn(
+        `  ! ${others} other admin account(s) already exist. ADMIN_EMAIL may have changed; ` +
+          "the previous account still works and was not removed."
+      );
+    }
+    return;
+  }
+
+  // ---------------------------------------------------------------------
+  // Explicit, opt-in recovery. Without this there is no way back in if the
+  // admin password is lost — there is no email provider and so no self-service
+  // reset. It is a separate env var precisely so it cannot happen by accident
+  // on an ordinary redeploy.
+  // ---------------------------------------------------------------------
+  if (process.env.ADMIN_PASSWORD_RESET === "1") {
+    await prisma.adminUser.update({
+      where: { email },
+      data: { passwordHash: await hashPassword(password), mustChangePassword: true },
+    });
+    console.log(`✔ admin password RESET from ADMIN_PASSWORD: ${email}`);
+    console.log("  → change it at next sign-in, then unset ADMIN_PASSWORD_RESET.");
+    return;
+  }
+
+  // ---------------------------------------------------------------------
+  // Every other boot: make sure the account is present and its non-credential
+  // fields are right, and touch NOTHING else.
+  //
+  // This ran as an upsert that rewrote passwordHash and mustChangePassword on
+  // every start, so each redeploy silently reverted an already-changed admin
+  // password back to the one in .env.production. Credentials belong to the
+  // account once it exists, not to the env file.
+  // ---------------------------------------------------------------------
+  await prisma.adminUser.update({ where: { email }, data: { name: "Sonet" } });
+  console.log(`✔ admin user present: ${email} (password left unchanged)`);
+  if (existing.mustChangePassword) {
+    console.log("  → still on its setup password; you will be asked to change it at sign-in.");
+  }
 }
 
 async function seedDemoCatalogue() {
