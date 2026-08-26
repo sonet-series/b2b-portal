@@ -47,6 +47,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+# REQUIRED AT RUNTIME, not just at build time. `next start` re-reads
+# next.config.ts from disk; without it the server silently falls back to
+# framework defaults — which capped Server Action bodies at 1MB and broke
+# document uploads in production, even though the built output carried the
+# 16mb value. A missing config here fails quietly, so the entrypoint asserts it.
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh

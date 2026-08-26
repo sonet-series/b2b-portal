@@ -386,9 +386,19 @@ never used as a path.
 
 **`next.config.ts` raises `serverActions.bodySizeLimit` to 16mb.** Next's
 default is 1MB *for the whole request body*, which is below a single phone
-photo — uploads failed with an opaque server error before the app's own 5MB
-check could produce a useful message. The per-file 5MB limit is still the real
-guard.
+photo — uploads fail with an opaque 413 before the app's own 5MB check can
+produce a useful message. The per-file 5MB limit is still the real guard.
+
+**`next.config.ts` MUST be copied into the runtime image.** `next start`
+re-reads it from disk at boot; the value baked into
+`.next/required-server-files.json` is not what the running server uses. Leaving
+it out reverts every setting to framework defaults with no warning at all —
+that is exactly how the 1MB limit came back in production while the config sat
+correct on `main`. `docker-entrypoint.sh` now aborts if the file is absent.
+
+**Test config-dependent behaviour against a production build, not `next dev`.**
+Dev runs from the project directory where the config is always present, so it
+cannot reproduce this class of bug.
 
 ### Approval notification — manual, by design (confirmed 25 Aug 2026)
 **No email provider, and none is to be built for v1.** Approving an agent does
