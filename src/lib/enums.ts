@@ -78,6 +78,40 @@ export const AGENT_TIER_LABEL: Record<AgentTier, string> = {
   OUTSIDE_KERALA: "Outside Kerala",
 };
 
+/**
+ * Which charge on a rate row a price applies to.
+ *
+ * MAIN is the headline rate; the rest are the ancillary charges. An agent
+ * rate-card override targets exactly one of these, so an agency can have a
+ * special room rate without also inheriting a special extra-bed rate.
+ */
+export const RATE_CHARGE = [
+  "MAIN",
+  "EXTRA_BED",
+  "EXTRA_PAX",
+  "EXTRA_KM",
+  "DRIVER_ALLOWANCE",
+  "SINGLE_SUPPLEMENT",
+] as const;
+export type RateCharge = (typeof RATE_CHARGE)[number];
+
+export const RATE_CHARGE_LABEL: Record<RateCharge, string> = {
+  MAIN: "Main rate",
+  EXTRA_BED: "Extra bed",
+  EXTRA_PAX: "Extra pax",
+  EXTRA_KM: "Extra km",
+  DRIVER_ALLOWANCE: "Driver allowance",
+  SINGLE_SUPPLEMENT: "Single supplement",
+};
+
+/** Which charges each product type can carry at all. */
+export const CHARGES_BY_PRODUCT: Record<ProductType, readonly RateCharge[]> = {
+  hotel: ["MAIN", "EXTRA_BED"],
+  houseboat: ["MAIN", "EXTRA_PAX"],
+  vehicle: ["MAIN", "EXTRA_KM", "DRIVER_ALLOWANCE"],
+  itinerary: ["MAIN", "SINGLE_SUPPLEMENT"],
+};
+
 /** The three documents every agent uploads at registration. */
 export const DOCUMENT_KIND = ["PAN_CARD", "BUSINESS_PROOF", "VISITING_CARD"] as const;
 export type DocumentKind = (typeof DOCUMENT_KIND)[number];
@@ -95,5 +129,6 @@ export const isCruisePackage = makeGuard(CRUISE_PACKAGE);
 export const isVehicleRateType = makeGuard(VEHICLE_RATE_TYPE);
 export const isDocumentKind = makeGuard(DOCUMENT_KIND);
 export const isAgentTier = makeGuard(AGENT_TIER);
+export const isRateCharge = makeGuard(RATE_CHARGE);
 export const isHouseboatPricingMode = makeGuard(HOUSEBOAT_PRICING_MODE);
 export const isItineraryPricingMode = makeGuard(ITINERARY_PRICING_MODE);

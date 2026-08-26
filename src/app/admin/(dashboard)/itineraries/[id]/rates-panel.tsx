@@ -102,8 +102,11 @@ export function RatesPanel({
                 </Td>
                 <Td className="text-xs">
                   {perPerson ? (
-                    r.singleSupplementMinor ? (
-                      <div>single +{formatMinor(r.singleSupplementMinor)}</div>
+                    r.singleSupplementKeralaMinor ? (
+                      <div>
+                        single +{formatMinor(r.singleSupplementKeralaMinor)} /{" "}
+                        {formatMinor(r.singleSupplementOutsideKeralaMinor ?? 0)}
+                      </div>
                     ) : (
                       <span className="text-amber-700">no single supplement</span>
                     )

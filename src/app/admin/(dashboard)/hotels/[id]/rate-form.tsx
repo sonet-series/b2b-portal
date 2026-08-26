@@ -24,7 +24,8 @@ export type HotelRateValues = {
   validTo: Date;
   ratePerNightKeralaMinor: number;
   ratePerNightOutsideKeralaMinor: number;
-  extraBedRateMinor: number | null;
+  extraBedKeralaMinor: number | null;
+  extraBedOutsideKeralaMinor: number | null;
   active: boolean;
 };
 
@@ -109,7 +110,7 @@ export function HotelRateForm({
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Rate per night — both tiers required
           </p>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <MoneyField
               label="Kerala agencies"
               name="ratePerNightKeralaMinor"
@@ -124,12 +125,28 @@ export function HotelRateForm({
               defaultValue={rate ? toMajor(rate.ratePerNightOutsideKeralaMinor) : ""}
               error={err.ratePerNightOutsideKeralaMinor}
             />
+          </div>
+        </div>
+
+        <div className="rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Extra bed, per night — optional, but set both tiers or neither
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
             <MoneyField
-              label="Extra bed rate"
-              name="extraBedRateMinor"
-              defaultValue={rate?.extraBedRateMinor ? toMajor(rate.extraBedRateMinor) : ""}
-              hint="Optional, per night. Not tiered."
-              error={err.extraBedRateMinor}
+              label="Kerala agencies"
+              name="extraBedKeralaMinor"
+              defaultValue={rate?.extraBedKeralaMinor ? toMajor(rate.extraBedKeralaMinor) : ""}
+              error={err.extraBedKeralaMinor}
+            />
+            <MoneyField
+              label="Outside-Kerala agencies"
+              name="extraBedOutsideKeralaMinor"
+              defaultValue={
+                rate?.extraBedOutsideKeralaMinor ? toMajor(rate.extraBedOutsideKeralaMinor) : ""
+              }
+              hint="Leave both blank if no extra bed is offered."
+              error={err.extraBedOutsideKeralaMinor}
             />
           </div>
         </div>

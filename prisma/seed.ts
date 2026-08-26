@@ -91,7 +91,8 @@ async function seedDemoCatalogue() {
             ...ALL_2026,
             ratePerNightKeralaMinor: 450_000, // ₹4,500 Kerala
             ratePerNightOutsideKeralaMinor: 504_000, // ₹5,040 outside Kerala
-            extraBedRateMinor: 120_000, // ₹1,200
+            extraBedKeralaMinor: 120_000, // ₹1,200 Kerala
+            extraBedOutsideKeralaMinor: 134_400, // ₹1,344 outside Kerala
           },
           {
             roomType: "Suite",
@@ -128,7 +129,8 @@ async function seedDemoCatalogue() {
             rateKeralaMinor: 1450_000, // ₹14,500 Kerala
             rateOutsideKeralaMinor: 1624_000, // ₹16,240 outside Kerala
             includedPax: 4,
-            extraPaxRateMinor: 250_000, // ₹2,500
+            extraPaxKeralaMinor: 250_000, // ₹2,500 Kerala
+            extraPaxOutsideKeralaMinor: 280_000, // ₹2,800 outside Kerala
             maxPax: 6,
           },
           // Same boat, same duration, sold per head as well. Two rows, so the
@@ -153,7 +155,8 @@ async function seedDemoCatalogue() {
             rateKeralaMinor: 700_000, // ₹7,000 Kerala
             rateOutsideKeralaMinor: 784_000, // ₹7,840 outside Kerala
             includedPax: 4,
-            extraPaxRateMinor: 90_000, // ₹900
+            extraPaxKeralaMinor: 90_000, // ₹900 Kerala
+            extraPaxOutsideKeralaMinor: 100_800, // ₹1,008 outside Kerala
             maxPax: 8,
           },
         ],
@@ -176,8 +179,10 @@ async function seedDemoCatalogue() {
             rateKeralaMinor: 380_000, // ₹3,800 Kerala
             rateOutsideKeralaMinor: 425_600, // ₹4,256 outside Kerala
             includedKmPerDay: 250,
-            extraKmRateMinor: 1_800, // ₹18
-            driverAllowanceMinor: 50_000, // ₹500
+            extraKmKeralaMinor: 1_800, // ₹18 Kerala
+            extraKmOutsideKeralaMinor: 2_000, // ₹20 outside Kerala
+            driverAllowanceKeralaMinor: 50_000, // ₹500 Kerala
+            driverAllowanceOutsideKeralaMinor: 56_000, // ₹560 outside Kerala
           },
           {
             rateType: "TRANSFER",
@@ -209,7 +214,8 @@ async function seedDemoCatalogue() {
             ...ALL_2026,
             priceKeralaMinor: 2450_000, // ₹24,500 Kerala
             priceOutsideKeralaMinor: 2744_000, // ₹27,440 outside Kerala
-            singleSupplementMinor: 750_000, // ₹7,500
+            singleSupplementKeralaMinor: 750_000, // ₹7,500 Kerala
+            singleSupplementOutsideKeralaMinor: 840_000, // ₹8,400 outside Kerala
           },
           // Same package sold as a flat family rate.
           {
@@ -252,6 +258,16 @@ async function seedDemoCatalogue() {
         referenceId: hotel.rates[0].id,
         overridePriceMinor: 410_000, // ₹4,100
         notes: "Demo override on the Deluxe/CP rate",
+      },
+      {
+        // An ancillary override, so the per-charge path is exercisable: this
+        // agency gets a special extra-bed rate WITHOUT it touching the room rate.
+        agentId: agent.id,
+        productType: "hotel",
+        referenceId: hotel.rates[0].id,
+        charge: "EXTRA_BED",
+        overridePriceMinor: 900_00, // ₹900
+        notes: "Demo override on the extra bed charge only",
       },
       {
         agentId: agent.id,

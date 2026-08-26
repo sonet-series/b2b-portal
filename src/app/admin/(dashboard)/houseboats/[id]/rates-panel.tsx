@@ -126,9 +126,10 @@ export function RatesPanel({
                   {wholeBoat ? (
                     <>
                       <div>{r.includedPax} included</div>
-                      {r.extraPaxRateMinor && (
+                      {r.extraPaxKeralaMinor && (
                         <div className="text-slate-500">
-                          +{formatMinor(r.extraPaxRateMinor)} extra
+                          +{formatMinor(r.extraPaxKeralaMinor)} /{" "}
+                          {formatMinor(r.extraPaxOutsideKeralaMinor ?? 0)} extra
                         </div>
                       )}
                     </>

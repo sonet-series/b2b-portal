@@ -3,6 +3,7 @@ import { toMinor } from "./money";
 import { parseDateOnly } from "./dates";
 import {
   AGENT_TIER,
+  RATE_CHARGE,
   PRODUCT_TYPE,
   MEAL_PLAN,
   HOUSEBOAT_CATEGORY,
@@ -97,6 +98,39 @@ const seasonFields = {
   validTo: dateOnly("Valid to"),
 };
 
+/**
+ * An ancillary charge is optional, but it is optional as a PAIR. One tier
+ * priced and the other blank is the "cannot price somebody" failure that the
+ * required main-rate columns exist to prevent — it just cannot be expressed as
+ * NOT NULL, because the charge itself may legitimately not exist.
+ *
+ * So it is enforced here, and this is the only write path.
+ */
+function checkTierPair(
+  ctx: z.RefinementCtx,
+  label: string,
+  keralaField: string,
+  outsideField: string,
+  kerala: number | null,
+  outside: number | null
+) {
+  if (kerala === null && outside === null) return; // not offered — fine
+  if (kerala === null) {
+    ctx.addIssue({
+      code: "custom",
+      path: [keralaField],
+      message: `Set the Kerala ${label} too, or clear both`,
+    });
+  }
+  if (outside === null) {
+    ctx.addIssue({
+      code: "custom",
+      path: [outsideField],
+      message: `Set the outside-Kerala ${label} too, or clear both`,
+    });
+  }
+}
+
 function checkSeasonOrder(
   v: { validFrom: Date; validTo: Date },
   ctx: z.RefinementCtx
@@ -134,10 +168,18 @@ export const hotelRateSchema = z
     ...seasonFields,
     ratePerNightKeralaMinor: money("Kerala rate per night"),
     ratePerNightOutsideKeralaMinor: money("Outside-Kerala rate per night"),
-    extraBedRateMinor: optionalMoney("Extra bed rate"),
+    extraBedKeralaMinor: optionalMoney("Kerala extra bed rate"),
+    extraBedOutsideKeralaMinor: optionalMoney("Outside-Kerala extra bed rate"),
     active: checkbox,
   })
-  .superRefine(checkSeasonOrder);
+  .superRefine((v, ctx) => {
+    checkSeasonOrder(v, ctx);
+    checkTierPair(
+      ctx, "extra bed rate",
+      "extraBedKeralaMinor", "extraBedOutsideKeralaMinor",
+      v.extraBedKeralaMinor, v.extraBedOutsideKeralaMinor
+    );
+  });
 
 // ---------------------------------------------------------------------------
 // Houseboats
@@ -163,7 +205,8 @@ export const houseboatRateSchema = z
     rateKeralaMinor: money("Kerala rate"),
     rateOutsideKeralaMinor: money("Outside-Kerala rate"),
     includedPax: optionalPosInt("Included pax"),
-    extraPaxRateMinor: optionalMoney("Extra pax rate"),
+    extraPaxKeralaMinor: optionalMoney("Kerala extra pax rate"),
+    extraPaxOutsideKeralaMinor: optionalMoney("Outside-Kerala extra pax rate"),
     minPax: optionalPosInt("Minimum pax"),
     maxPax: posInt("Maximum pax"),
     active: checkbox,
@@ -209,13 +252,23 @@ export const houseboatRateSchema = z
           message: "Included pax applies to whole-boat pricing only",
         });
       }
-      if (v.extraPaxRateMinor !== null) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["extraPaxRateMinor"],
-          message: "Extra pax rate applies to whole-boat pricing only",
-        });
+      for (const field of ["extraPaxKeralaMinor", "extraPaxOutsideKeralaMinor"] as const) {
+        if (v[field] !== null) {
+          ctx.addIssue({
+            code: "custom",
+            path: [field],
+            message: "Extra pax rate applies to whole-boat pricing only",
+          });
+        }
       }
+    }
+
+    if (v.pricingMode === "WHOLE_BOAT") {
+      checkTierPair(
+        ctx, "extra pax rate",
+        "extraPaxKeralaMinor", "extraPaxOutsideKeralaMinor",
+        v.extraPaxKeralaMinor, v.extraPaxOutsideKeralaMinor
+      );
     }
   });
 
@@ -237,8 +290,10 @@ export const vehicleRateSchema = z
     rateKeralaMinor: money("Kerala rate"),
     rateOutsideKeralaMinor: money("Outside-Kerala rate"),
     includedKmPerDay: optionalPosInt("Included km per day"),
-    extraKmRateMinor: optionalMoney("Extra km rate"),
-    driverAllowanceMinor: optionalMoney("Driver allowance"),
+    extraKmKeralaMinor: optionalMoney("Kerala extra km rate"),
+    extraKmOutsideKeralaMinor: optionalMoney("Outside-Kerala extra km rate"),
+    driverAllowanceKeralaMinor: optionalMoney("Kerala driver allowance"),
+    driverAllowanceOutsideKeralaMinor: optionalMoney("Outside-Kerala driver allowance"),
     active: checkbox,
   })
   .superRefine((v, ctx) => {
@@ -247,7 +302,14 @@ export const vehicleRateSchema = z
     // The per-day extras only mean anything on a per-day rate. Allowing them
     // elsewhere would put numbers in the DB that the quote engine ignores.
     if (v.rateType !== "PER_DAY") {
-      for (const field of ["includedKmPerDay", "extraKmRateMinor", "driverAllowanceMinor"] as const) {
+      const perDayOnly = [
+        "includedKmPerDay",
+        "extraKmKeralaMinor",
+        "extraKmOutsideKeralaMinor",
+        "driverAllowanceKeralaMinor",
+        "driverAllowanceOutsideKeralaMinor",
+      ] as const;
+      for (const field of perDayOnly) {
         if (v[field] !== null) {
           ctx.addIssue({
             code: "custom",
@@ -256,6 +318,17 @@ export const vehicleRateSchema = z
           });
         }
       }
+    } else {
+      checkTierPair(
+        ctx, "extra km rate",
+        "extraKmKeralaMinor", "extraKmOutsideKeralaMinor",
+        v.extraKmKeralaMinor, v.extraKmOutsideKeralaMinor
+      );
+      checkTierPair(
+        ctx, "driver allowance",
+        "driverAllowanceKeralaMinor", "driverAllowanceOutsideKeralaMinor",
+        v.driverAllowanceKeralaMinor, v.driverAllowanceOutsideKeralaMinor
+      );
     }
   });
 
@@ -278,19 +351,30 @@ export const itineraryRateSchema = z
     ...seasonFields,
     priceKeralaMinor: money("Kerala price"),
     priceOutsideKeralaMinor: money("Outside-Kerala price"),
-    singleSupplementMinor: optionalMoney("Single supplement"),
+    singleSupplementKeralaMinor: optionalMoney("Kerala single supplement"),
+    singleSupplementOutsideKeralaMinor: optionalMoney("Outside-Kerala single supplement"),
     maxPax: optionalPosInt("Maximum pax"),
     active: checkbox,
   })
   .superRefine((v, ctx) => {
     checkSeasonOrder(v, ctx);
 
-    if (v.pricingMode === "PER_PACKAGE" && v.singleSupplementMinor !== null) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["singleSupplementMinor"],
-        message: "Single supplement applies to per-person pricing only",
-      });
+    if (v.pricingMode === "PER_PACKAGE") {
+      for (const field of ["singleSupplementKeralaMinor", "singleSupplementOutsideKeralaMinor"] as const) {
+        if (v[field] !== null) {
+          ctx.addIssue({
+            code: "custom",
+            path: [field],
+            message: "Single supplement applies to per-person pricing only",
+          });
+        }
+      }
+    } else {
+      checkTierPair(
+        ctx, "single supplement",
+        "singleSupplementKeralaMinor", "singleSupplementOutsideKeralaMinor",
+        v.singleSupplementKeralaMinor, v.singleSupplementOutsideKeralaMinor
+      );
     }
   });
 
@@ -465,6 +549,7 @@ export const agentRejectionSchema = z.object({
 export const rateCardEntrySchema = z.object({
   productType: z.enum(PRODUCT_TYPE, { error: "Choose a product type" }),
   referenceId: text("Rate", 60),
+  charge: z.enum(RATE_CHARGE, { error: "Choose which charge to override" }),
   overridePriceMinor: money("Override price"),
   notes: optionalText(500),
 });

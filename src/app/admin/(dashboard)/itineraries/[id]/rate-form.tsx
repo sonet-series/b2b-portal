@@ -18,7 +18,8 @@ export type ItineraryRateValues = {
   validTo: Date;
   priceKeralaMinor: number;
   priceOutsideKeralaMinor: number;
-  singleSupplementMinor: number | null;
+  singleSupplementKeralaMinor: number | null;
+  singleSupplementOutsideKeralaMinor: number | null;
   maxPax: number | null;
   active: boolean;
 };
@@ -124,13 +125,30 @@ export function ItineraryRateForm({
             />
 
             {perPerson ? (
-              <MoneyField
-                label="Single supplement"
-                name="singleSupplementMinor"
-                defaultValue={rate?.singleSupplementMinor ? toMajor(rate.singleSupplementMinor) : ""}
-                hint="Solo travellers. Without it, solo cannot be quoted."
-                error={err.singleSupplementMinor}
-              />
+              <>
+                <MoneyField
+                  label="Kerala — single supplement"
+                  name="singleSupplementKeralaMinor"
+                  defaultValue={
+                    rate?.singleSupplementKeralaMinor
+                      ? toMajor(rate.singleSupplementKeralaMinor)
+                      : ""
+                  }
+                  hint="Without it, solo cannot be quoted."
+                  error={err.singleSupplementKeralaMinor}
+                />
+                <MoneyField
+                  label="Outside Kerala — single supplement"
+                  name="singleSupplementOutsideKeralaMinor"
+                  defaultValue={
+                    rate?.singleSupplementOutsideKeralaMinor
+                      ? toMajor(rate.singleSupplementOutsideKeralaMinor)
+                      : ""
+                  }
+                  hint="Set both or neither."
+                  error={err.singleSupplementOutsideKeralaMinor}
+                />
+              </>
             ) : (
               <Field
                 label="Maximum pax"

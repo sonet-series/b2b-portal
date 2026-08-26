@@ -110,7 +110,18 @@ export function RatesPanel({
               </Td>
               <Td className="font-medium whitespace-nowrap">{formatMinor(r.ratePerNightKeralaMinor)}</Td>
               <Td className="font-medium whitespace-nowrap">{formatMinor(r.ratePerNightOutsideKeralaMinor)}</Td>
-              <Td>{r.extraBedRateMinor ? formatMinor(r.extraBedRateMinor) : "—"}</Td>
+              <Td className="text-xs whitespace-nowrap">
+                {r.extraBedKeralaMinor ? (
+                  <>
+                    <div>{formatMinor(r.extraBedKeralaMinor)}</div>
+                    <div className="text-slate-500">
+                      {formatMinor(r.extraBedOutsideKeralaMinor ?? 0)} outside
+                    </div>
+                  </>
+                ) : (
+                  "—"
+                )}
+              </Td>
               <Td className="text-right whitespace-nowrap">
                 <button
                   type="button"

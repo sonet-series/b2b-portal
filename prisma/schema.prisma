@@ -88,8 +88,19 @@ model HotelRate {
   ratePerNightKeralaMinor        Int
   ratePerNightOutsideKeralaMinor Int
 
-  /// Extra bed / extra adult sharing, per night, in paise. Optional.
-  extraBedRateMinor Int?
+  /// Extra bed / extra adult sharing, per night, in paise — one per tier.
+  ///
+  /// Nullable as a PAIR, not individually. These charges are genuinely
+  /// optional (a room type may not offer an extra bed at all), so NOT NULL
+  /// would force a price for something that does not exist — and for three of
+  /// the five ancillary charges the pricing-mode rules actively FORBID a value.
+  /// What must never happen is one tier set and the other missing: that is the
+  /// "cannot price somebody" failure the required main-rate columns prevent.
+  ///
+  /// Both-or-neither is enforced in src/lib/validation.ts, which is the only
+  /// write path.
+  extraBedKeralaMinor        Int?
+  extraBedOutsideKeralaMinor Int?
 
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -164,8 +175,10 @@ model HouseboatRate {
 
   /// WHOLE_BOAT only: pax covered by rateMinor before extra-pax billing.
   includedPax Int?
-  /// WHOLE_BOAT only: per extra person beyond includedPax, per cruise, in paise.
-  extraPaxRateMinor Int?
+  /// WHOLE_BOAT only: per extra person beyond includedPax, per cruise, in
+  /// paise — one per tier, both-or-neither. See HotelRate.extraBed*.
+  extraPaxKeralaMinor        Int?
+  extraPaxOutsideKeralaMinor Int?
 
   /// PER_PERSON only: the boat will not run below this headcount, so a 2-pax
   /// enquiry on a 4-pax-minimum boat is quoted at 4, not unrealistically low.
@@ -223,10 +236,14 @@ model VehicleRate {
 
   /// PER_DAY only: km included before extra-km billing kicks in.
   includedKmPerDay Int?
-  /// PER_DAY only: charge per km beyond includedKmPerDay, in paise.
-  extraKmRateMinor Int?
-  /// PER_DAY only: driver bata / night halt allowance per day, in paise.
-  driverAllowanceMinor Int?
+  /// PER_DAY only: charge per km beyond includedKmPerDay, in paise — one per
+  /// tier, both-or-neither. See HotelRate.extraBed*.
+  extraKmKeralaMinor        Int?
+  extraKmOutsideKeralaMinor Int?
+  /// PER_DAY only: driver bata / night halt allowance per day, in paise —
+  /// one per tier, both-or-neither. See HotelRate.extraBed*.
+  driverAllowanceKeralaMinor        Int?
+  driverAllowanceOutsideKeralaMinor Int?
 
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -287,8 +304,10 @@ model ItineraryRate {
   priceKeralaMinor        Int
   priceOutsideKeralaMinor Int
 
-  /// PER_PERSON_TWIN_SHARING only: supplement for a solo traveller, per person.
-  singleSupplementMinor Int?
+  /// PER_PERSON_TWIN_SHARING only: supplement for a solo traveller, per
+  /// person — one per tier, both-or-neither. See HotelRate.extraBed*.
+  singleSupplementKeralaMinor        Int?
+  singleSupplementOutsideKeralaMinor Int?
 
   /// PER_PACKAGE only: headcount guardrail. The rate is flat regardless of pax,
   /// but a family package still has a ceiling on how many people it can seat.
@@ -426,14 +445,24 @@ model AgentRateCard {
   /// see src/lib/rate-card.ts.
   referenceId String
 
-  /// The agent-specific price, in paise, replacing the default on that row.
+  /// RateCharge enum: MAIN | EXTRA_BED | EXTRA_PAX | EXTRA_KM |
+  /// DRIVER_ALLOWANCE | SINGLE_SUPPLEMENT
+  ///
+  /// Which charge on the referenced row this overrides. MAIN is the headline
+  /// rate; the rest are ancillary. One row per charge rather than one wide
+  /// row, so an agency can get a special room rate without also inheriting a
+  /// special extra-bed rate.
+  charge String @default("MAIN")
+
+  /// The agent-specific price, in paise, replacing the tier default for that
+  /// charge. Beats BOTH tier defaults.
   overridePriceMinor Int
 
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([agentId, productType, referenceId])
+  @@unique([agentId, productType, referenceId, charge])
   @@index([agentId, productType])
 }
 

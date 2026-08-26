@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
-import { resolvePrices } from "./rate-card";
+import { resolvePrices, overrideKey } from "./rate-card";
 import { priceHouseboat, priceItinerary, PricingError } from "./pricing";
 import {
   parseDateOnly,
@@ -18,6 +18,7 @@ import {
   MEAL_PLAN_LABEL,
   ITINERARY_PRICING_MODE_LABEL,
   type CruisePackage,
+  type RateCharge,
   type VehicleRateType,
   type MealPlan,
   type HouseboatPricingMode,
@@ -98,6 +99,29 @@ function tierDefault(
   return tier === "KERALA" ? rate.kerala : rate.outsideKerala;
 }
 
+/**
+ * Resolves ONE charge on a rate row: the agent's override for that charge if
+ * there is one, otherwise the catalogue default for their tier.
+ *
+ * Ancillary charges may legitimately not be offered at all, in which case both
+ * tier columns are null and this returns null — validation guarantees they are
+ * null together, so a half-priced charge cannot reach here.
+ */
+function resolveCharge(
+  agent: QuotingAgent,
+  overrides: Map<string, number>,
+  referenceId: string,
+  charge: RateCharge,
+  kerala: number | null,
+  outsideKerala: number | null
+): { minor: number; usedOverride: boolean } | null {
+  const override = overrides.get(overrideKey(referenceId, charge));
+  if (override !== undefined) return { minor: override, usedOverride: true };
+
+  const fallback = agent.tier === "KERALA" ? kerala : outsideKerala;
+  return fallback === null ? null : { minor: fallback, usedOverride: false };
+}
+
 function seasonSpan(from: Date, to: Date): string {
   return from.getTime() === to.getTime()
     ? formatDateOnly(from)
@@ -157,7 +181,7 @@ export async function quoteHotel(
     let usedOverride = false;
 
     for (const seg of segments) {
-      const override = overrides.get(seg.rate.id);
+      const override = overrides.get(overrideKey(seg.rate.id, "MAIN"));
       const unitMinor =
         override ??
         tierDefault(agent.tier, {
@@ -183,20 +207,25 @@ export async function quoteHotel(
       // per-night add-on, and splitting them across seasons would add a line
       // per season for what is usually a single small charge.
       const first = segments[0];
-      if (first.rate.extraBedRateMinor == null) {
+      const extraBed = resolveCharge(
+        agent, overrides, first.rate.id, "EXTRA_BED",
+        first.rate.extraBedKeralaMinor, first.rate.extraBedOutsideKeralaMinor
+      );
+      if (!extraBed) {
         unavailable.push({
           title,
           reason: "No extra bed rate is loaded for this room type.",
         });
         continue;
       }
+      if (extraBed.usedOverride) usedOverride = true;
       const quantity = nights * input.extraBeds;
       lines.push({
         description: `Extra bed × ${input.extraBeds}`,
         quantity,
-        unitMinor: first.rate.extraBedRateMinor,
-        totalMinor: first.rate.extraBedRateMinor * quantity,
-        usedOverride: false,
+        unitMinor: extraBed.minor,
+        totalMinor: extraBed.minor * quantity,
+        usedOverride: extraBed.usedOverride,
       });
     }
 
@@ -245,7 +274,7 @@ export async function quoteHouseboat(
 
     if (!isWithin(date, rate.validFrom, rate.validTo)) continue;
 
-    const override = overrides.get(rate.id);
+    const override = overrides.get(overrideKey(rate.id, "MAIN"));
     const unitMinor =
       override ??
       tierDefault(agent.tier, {
@@ -253,13 +282,18 @@ export async function quoteHouseboat(
         outsideKerala: rate.rateOutsideKeralaMinor,
       });
 
+    const extraPax = resolveCharge(
+      agent, overrides, rate.id, "EXTRA_PAX",
+      rate.extraPaxKeralaMinor, rate.extraPaxOutsideKeralaMinor
+    );
+
     try {
       const breakdown = priceHouseboat(
         {
           pricingMode: rate.pricingMode as HouseboatPricingMode,
           rateMinor: unitMinor,
           includedPax: rate.includedPax,
-          extraPaxRateMinor: rate.extraPaxRateMinor,
+          extraPaxRateMinor: extraPax?.minor ?? null,
           minPax: rate.minPax,
           maxPax: rate.maxPax,
         },
@@ -290,9 +324,9 @@ export async function quoteHouseboat(
                     {
                       description: `Extra pax × ${input.pax - (rate.includedPax ?? 0)}`,
                       quantity: input.pax - (rate.includedPax ?? 0),
-                      unitMinor: rate.extraPaxRateMinor ?? 0,
+                      unitMinor: extraPax?.minor ?? 0,
                       totalMinor: breakdown.totalMinor - unitMinor,
-                      usedOverride: false,
+                      usedOverride: extraPax?.usedOverride ?? false,
                     },
                   ]
                 : []),
@@ -305,7 +339,7 @@ export async function quoteHouseboat(
         detail: `${formatDateOnly(date)} · ${input.pax} pax · ${MEAL_PLAN_LABEL[rate.mealPlan as MealPlan] ?? rate.mealPlan}`,
         lines,
         totalMinor: breakdown.totalMinor,
-        usedOverride: override !== undefined,
+        usedOverride: override !== undefined || (extraPax?.usedOverride ?? false),
       });
     } catch (e) {
       // A capacity or minimum-pax failure is information the agent needs, not
@@ -372,7 +406,7 @@ export async function quoteVehicle(
       let includedKm = 0;
 
       for (const seg of segments) {
-        const override = overrides.get(seg.rate.id);
+        const override = overrides.get(overrideKey(seg.rate.id, "MAIN"));
         const unitMinor =
           override ??
           tierDefault(agent.tier, {
@@ -391,13 +425,18 @@ export async function quoteVehicle(
           usedOverride: override !== undefined,
         });
 
-        if (seg.rate.driverAllowanceMinor) {
+        const bata = resolveCharge(
+          agent, overrides, seg.rate.id, "DRIVER_ALLOWANCE",
+          seg.rate.driverAllowanceKeralaMinor, seg.rate.driverAllowanceOutsideKeralaMinor
+        );
+        if (bata) {
+          if (bata.usedOverride) usedOverride = true;
           lines.push({
             description: `Driver allowance · ${seasonSpan(seg.from, seg.to)}`,
             quantity: seg.units,
-            unitMinor: seg.rate.driverAllowanceMinor,
-            totalMinor: seg.rate.driverAllowanceMinor * seg.units,
-            usedOverride: false,
+            unitMinor: bata.minor,
+            totalMinor: bata.minor * seg.units,
+            usedOverride: bata.usedOverride,
           });
         }
       }
@@ -406,19 +445,23 @@ export async function quoteVehicle(
       // not per segment — the allowance is a trip-level pool.
       if (input.km != null && input.km > includedKm) {
         const extraKm = input.km - includedKm;
-        const extraRate = segments[0].rate.extraKmRateMinor;
-        if (extraRate == null) {
+        const extraRate = resolveCharge(
+          agent, overrides, segments[0].rate.id, "EXTRA_KM",
+          segments[0].rate.extraKmKeralaMinor, segments[0].rate.extraKmOutsideKeralaMinor
+        );
+        if (!extraRate) {
           unavailable.push({
             title,
             reason: `This hire includes ${includedKm} km and no extra-km rate is loaded, so ${input.km} km cannot be quoted.`,
           });
         } else {
+          if (extraRate.usedOverride) usedOverride = true;
           lines.push({
             description: `Extra km (${input.km} km travelled, ${includedKm} km included)`,
             quantity: extraKm,
-            unitMinor: extraRate,
-            totalMinor: extraRate * extraKm,
-            usedOverride: false,
+            unitMinor: extraRate.minor,
+            totalMinor: extraRate.minor * extraKm,
+            usedOverride: extraRate.usedOverride,
           });
         }
       }
@@ -444,7 +487,7 @@ export async function quoteVehicle(
     const title = VEHICLE_RATE_TYPE_LABEL[rate.rateType as VehicleRateType] ?? rate.rateType;
     if (!isWithin(start, rate.validFrom, rate.validTo)) continue;
 
-    const override = overrides.get(rate.id);
+    const override = overrides.get(overrideKey(rate.id, "MAIN"));
     const unitMinor =
       override ??
       tierDefault(agent.tier, {
@@ -527,7 +570,7 @@ export async function quoteItinerary(
       ITINERARY_PRICING_MODE_LABEL[rate.pricingMode as ItineraryPricingMode] ?? rate.pricingMode;
     if (!isWithin(start, rate.validFrom, rate.validTo)) continue;
 
-    const override = overrides.get(rate.id);
+    const override = overrides.get(overrideKey(rate.id, "MAIN"));
     const unitMinor =
       override ??
       tierDefault(agent.tier, {
@@ -535,12 +578,17 @@ export async function quoteItinerary(
         outsideKerala: rate.priceOutsideKeralaMinor,
       });
 
+    const supplement = resolveCharge(
+      agent, overrides, rate.id, "SINGLE_SUPPLEMENT",
+      rate.singleSupplementKeralaMinor, rate.singleSupplementOutsideKeralaMinor
+    );
+
     try {
       const breakdown = priceItinerary(
         {
           pricingMode: rate.pricingMode as ItineraryPricingMode,
           priceMinor: unitMinor,
-          singleSupplementMinor: rate.singleSupplementMinor,
+          singleSupplementMinor: supplement?.minor ?? null,
           maxPax: rate.maxPax,
         },
         input.pax
@@ -565,7 +613,7 @@ export async function quoteItinerary(
           quantity: 1,
           unitMinor: breakdown.totalMinor - baseTotal,
           totalMinor: breakdown.totalMinor - baseTotal,
-          usedOverride: false,
+          usedOverride: supplement?.usedOverride ?? false,
         });
       }
 
@@ -576,7 +624,7 @@ export async function quoteItinerary(
         detail: `${itinerary.durationNights} night${itinerary.durationNights === 1 ? "" : "s"} from ${formatDateOnly(start)} · ${input.pax} pax`,
         lines,
         totalMinor: breakdown.totalMinor,
-        usedOverride: override !== undefined,
+        usedOverride: override !== undefined || (supplement?.usedOverride ?? false),
       });
     } catch (e) {
       unavailable.push({

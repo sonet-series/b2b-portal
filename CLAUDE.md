@@ -144,9 +144,37 @@ design — Sonet reviews every registration before it can quote anything.
 same reasoning as the pricing-mode columns: not two nullable columns, because a
 rate row must not be able to exist that cannot price somebody.
 
-**Ancillary charges are NOT tiered** — extra bed, extra pax, driver allowance,
-extra km, single supplement are single values. Only the main rate varies by
-tier. If Sonet wants those tiered too, it is the same change repeated.
+**Ancillary charges are tiered too** (26 Aug 2026) — extra bed, extra pax,
+driver allowance, extra km, single supplement each carry a Kerala and an
+outside-Kerala column.
+
+They are **nullable as a PAIR**, not NOT NULL like the main rates, and that
+difference is deliberate. These charges are genuinely optional — a room type may
+not offer an extra bed — and for three of the five the pricing-mode rules
+actively FORBID a value (extra pax on `PER_PERSON`, extra km and driver
+allowance on non-per-day, single supplement on `PER_PACKAGE`). NOT NULL would
+contradict rules already in the schema.
+
+What must never happen is one tier priced and the other blank — that is the
+"cannot price somebody" failure the required main-rate columns prevent. So the
+invariant is enforced as **both-or-neither in `src/lib/validation.ts`**, which
+is the only write path. If a DB-level guarantee is ever wanted, SQLite CHECK
+constraints would do it, but Prisma does not model them and would silently drop
+them on the next table rebuild — hence validation instead.
+
+### Rate-card overrides are per CHARGE (26 Aug 2026)
+`AgentRateCard.charge` says which charge on the referenced row an override
+replaces — `MAIN`, `EXTRA_BED`, `EXTRA_PAX`, `EXTRA_KM`, `DRIVER_ALLOWANCE`,
+`SINGLE_SUPPLEMENT`. Unique on `(agentId, productType, referenceId, charge)`.
+
+One row per charge rather than one wide row, so an agency can get a special room
+rate **without** also inheriting a special extra-bed rate. Every lookup goes
+through `overrideKey()` in `src/lib/rate-card.ts` — never build the key by hand,
+or the lookup silently misses and the tier default applies.
+
+The resolution order above holds for ancillary charges exactly as for main
+rates: override for that charge, else the tier default, else the charge is not
+offered and the product says so rather than guessing.
 
 ### Pricing modes (confirmed with Sonet, 25 Aug 2026)
 Houseboats and packages each sell two ways, and both modes must coexist.

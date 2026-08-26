@@ -25,7 +25,8 @@ export type HouseboatRateValues = {
   rateKeralaMinor: number;
   rateOutsideKeralaMinor: number;
   includedPax: number | null;
-  extraPaxRateMinor: number | null;
+  extraPaxKeralaMinor: number | null;
+  extraPaxOutsideKeralaMinor: number | null;
   minPax: number | null;
   maxPax: number;
   active: boolean;
@@ -165,11 +166,20 @@ export function HouseboatRateForm({
                   error={err.includedPax}
                 />
                 <MoneyField
-                  label="Extra pax rate"
-                  name="extraPaxRateMinor"
-                  defaultValue={rate?.extraPaxRateMinor ? toMajor(rate.extraPaxRateMinor) : ""}
+                  label="Kerala — extra pax"
+                  name="extraPaxKeralaMinor"
+                  defaultValue={rate?.extraPaxKeralaMinor ? toMajor(rate.extraPaxKeralaMinor) : ""}
                   hint="Per person beyond included."
-                  error={err.extraPaxRateMinor}
+                  error={err.extraPaxKeralaMinor}
+                />
+                <MoneyField
+                  label="Outside Kerala — extra pax"
+                  name="extraPaxOutsideKeralaMinor"
+                  defaultValue={
+                    rate?.extraPaxOutsideKeralaMinor ? toMajor(rate.extraPaxOutsideKeralaMinor) : ""
+                  }
+                  hint="Set both or neither."
+                  error={err.extraPaxOutsideKeralaMinor}
                 />
               </>
             ) : (

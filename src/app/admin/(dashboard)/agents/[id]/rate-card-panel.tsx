@@ -2,9 +2,15 @@
 
 import { useActionState, useState } from "react";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/validation";
-import { PRODUCT_TYPE, type ProductType } from "@/lib/enums";
+import { PRODUCT_TYPE, RATE_CHARGE_LABEL, type ProductType, type RateCharge } from "@/lib/enums";
 import { formatMinor } from "@/lib/money";
 import { Badge, Button, Card, EmptyState, FormError, FormSuccess, MoneyField, Select, Table, Td, TextArea } from "@/components/ui";
+
+export type ChargeOption = {
+  charge: RateCharge;
+  label: string;
+  defaultMinor: number | null;
+};
 
 /** One selectable priced row, pre-flattened on the server. */
 export type RateOption = {
@@ -12,12 +18,14 @@ export type RateOption = {
   referenceId: string;
   label: string;
   defaultMinor: number;
+  charges: ChargeOption[];
 };
 
 export type OverrideRow = {
   id: string;
   productType: string;
   referenceId: string;
+  charge: string;
   overridePriceMinor: number;
   notes: string | null;
   /** Null when the underlying rate has since been deleted. */
@@ -45,10 +53,12 @@ export function RateCardPanel({
 }) {
   const [adding, setAdding] = useState(false);
   const [productType, setProductType] = useState<ProductType>("hotel");
+  const [referenceId, setReferenceId] = useState<string>("");
   const [state, formAction, pending] = useActionState(addAction, EMPTY_FORM_STATE);
   const err = state.errors ?? {};
 
   const visible = options.filter((o) => o.productType === productType);
+  const selected = visible.find((o) => o.referenceId === referenceId) ?? visible[0];
 
   return (
     <section className="mt-8">
@@ -80,19 +90,21 @@ export function RateCardPanel({
                 required
                 options={PRODUCT_TYPE.map((p) => ({ value: p, label: PRODUCT_LABEL[p] }))}
                 value={productType}
-                onChange={(e) => setProductType(e.target.value as ProductType)}
+                onChange={(e) => {
+                  setProductType(e.target.value as ProductType);
+                  setReferenceId("");
+                }}
               />
               <div className="sm:col-span-2">
                 <Select
                   label="Rate"
                   name="referenceId"
                   required
+                  value={selected?.referenceId ?? ""}
+                  onChange={(e) => setReferenceId(e.target.value)}
                   options={
                     visible.length > 0
-                      ? visible.map((o) => ({
-                          value: o.referenceId,
-                          label: `${o.label} — default ${formatMinor(o.defaultMinor)}`,
-                        }))
+                      ? visible.map((o) => ({ value: o.referenceId, label: o.label }))
                       : [{ value: "", label: "No active rates for this product type" }]
                   }
                   error={err.referenceId}
@@ -100,13 +112,35 @@ export function RateCardPanel({
               </div>
             </div>
 
-            <MoneyField
-              label="Override price"
-              name="overridePriceMinor"
-              required
-              hint="Replaces the default for this agent only."
-              error={err.overridePriceMinor}
-            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              {/*
+                Overrides target ONE charge, so an agency can get a special room
+                rate without also inheriting a special extra-bed rate.
+              */}
+              <Select
+                label="Which charge"
+                name="charge"
+                required
+                options={(selected?.charges ?? [{ charge: "MAIN", label: "Main rate", defaultMinor: null }]).map(
+                  (c) => ({
+                    value: c.charge,
+                    label:
+                      c.defaultMinor === null
+                        ? `${c.label} — not offered on this rate`
+                        : `${c.label} — default ${formatMinor(c.defaultMinor)}`,
+                  })
+                )}
+                hint="Defaults shown are for this agency's tier."
+                error={err.charge}
+              />
+              <MoneyField
+                label="Override price"
+                name="overridePriceMinor"
+                required
+                hint="Replaces the tier default for that charge, for this agent only."
+                error={err.overridePriceMinor}
+              />
+            </div>
             <TextArea label="Notes" name="notes" hint="Internal only." error={err.notes} />
 
             <div className="flex items-center gap-3">
@@ -131,11 +165,16 @@ export function RateCardPanel({
           hint="This agent is quoted catalogue default rates on everything."
         />
       ) : (
-        <Table head={["Product", "Rate", "Default", "This agent", ""]}>
+        <Table head={["Product", "Charge", "Rate", "Default", "This agent", ""]}>
           {overrides.map((o) => (
             <tr key={o.id}>
               <Td>
                 <Badge tone="blue">{PRODUCT_LABEL[o.productType as ProductType] ?? o.productType}</Badge>
+              </Td>
+              <Td>
+                <span className="text-sm text-slate-700">
+                  {RATE_CHARGE_LABEL[o.charge as RateCharge] ?? o.charge}
+                </span>
               </Td>
               <Td>
                 {o.label ?? (

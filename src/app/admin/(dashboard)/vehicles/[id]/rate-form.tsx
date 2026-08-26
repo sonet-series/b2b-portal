@@ -15,8 +15,10 @@ export type VehicleRateValues = {
   rateKeralaMinor: number;
   rateOutsideKeralaMinor: number;
   includedKmPerDay: number | null;
-  extraKmRateMinor: number | null;
-  driverAllowanceMinor: number | null;
+  extraKmKeralaMinor: number | null;
+  extraKmOutsideKeralaMinor: number | null;
+  driverAllowanceKeralaMinor: number | null;
+  driverAllowanceOutsideKeralaMinor: number | null;
   active: boolean;
 };
 
@@ -134,18 +136,40 @@ export function VehicleRateForm({
                   error={err.includedKmPerDay}
                 />
                 <MoneyField
-                  label="Extra km rate"
-                  name="extraKmRateMinor"
-                  defaultValue={rate?.extraKmRateMinor ? toMajor(rate.extraKmRateMinor) : ""}
+                  label="Kerala — extra km"
+                  name="extraKmKeralaMinor"
+                  defaultValue={rate?.extraKmKeralaMinor ? toMajor(rate.extraKmKeralaMinor) : ""}
                   hint="Beyond the allowance."
-                  error={err.extraKmRateMinor}
+                  error={err.extraKmKeralaMinor}
                 />
                 <MoneyField
-                  label="Driver allowance"
-                  name="driverAllowanceMinor"
-                  defaultValue={rate?.driverAllowanceMinor ? toMajor(rate.driverAllowanceMinor) : ""}
+                  label="Outside Kerala — extra km"
+                  name="extraKmOutsideKeralaMinor"
+                  defaultValue={
+                    rate?.extraKmOutsideKeralaMinor ? toMajor(rate.extraKmOutsideKeralaMinor) : ""
+                  }
+                  hint="Set both or neither."
+                  error={err.extraKmOutsideKeralaMinor}
+                />
+                <MoneyField
+                  label="Kerala — driver allowance"
+                  name="driverAllowanceKeralaMinor"
+                  defaultValue={
+                    rate?.driverAllowanceKeralaMinor ? toMajor(rate.driverAllowanceKeralaMinor) : ""
+                  }
                   hint="Bata / night halt, per day."
-                  error={err.driverAllowanceMinor}
+                  error={err.driverAllowanceKeralaMinor}
+                />
+                <MoneyField
+                  label="Outside Kerala — driver allowance"
+                  name="driverAllowanceOutsideKeralaMinor"
+                  defaultValue={
+                    rate?.driverAllowanceOutsideKeralaMinor
+                      ? toMajor(rate.driverAllowanceOutsideKeralaMinor)
+                      : ""
+                  }
+                  hint="Set both or neither."
+                  error={err.driverAllowanceOutsideKeralaMinor}
                 />
               </>
             )}

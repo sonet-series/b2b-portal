@@ -94,9 +94,17 @@ export function RatesPanel({
                 {r.rateType === "PER_DAY" ? (
                   <>
                     <div>{r.includedKmPerDay ? `${r.includedKmPerDay} km/day` : "no km allowance"}</div>
-                    {r.extraKmRateMinor && <div className="text-slate-500">+{formatMinor(r.extraKmRateMinor)}/km</div>}
-                    {r.driverAllowanceMinor && (
-                      <div className="text-slate-500">bata {formatMinor(r.driverAllowanceMinor)}</div>
+                    {r.extraKmKeralaMinor && (
+                      <div className="text-slate-500">
+                        +{formatMinor(r.extraKmKeralaMinor)} /{" "}
+                        {formatMinor(r.extraKmOutsideKeralaMinor ?? 0)} per km
+                      </div>
+                    )}
+                    {r.driverAllowanceKeralaMinor && (
+                      <div className="text-slate-500">
+                        bata {formatMinor(r.driverAllowanceKeralaMinor)} /{" "}
+                        {formatMinor(r.driverAllowanceOutsideKeralaMinor ?? 0)}
+                      </div>
                     )}
                   </>
                 ) : (

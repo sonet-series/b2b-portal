@@ -57,14 +57,18 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
   const byReference = new Map(options.map((o) => [o.referenceId, o]));
   const overrides = agent.rateCardEntries.map((e) => {
     const option = byReference.get(e.referenceId);
+    // The default shown must be for the CHARGE being overridden, not the row's
+    // headline rate — otherwise an extra-bed override looks wildly discounted.
+    const chargeOption = option?.charges.find((c) => c.charge === e.charge);
     return {
       id: e.id,
       productType: e.productType,
       referenceId: e.referenceId,
+      charge: e.charge,
       overridePriceMinor: e.overridePriceMinor,
       notes: e.notes,
       label: option?.label ?? null,
-      defaultMinor: option?.defaultMinor ?? null,
+      defaultMinor: chargeOption?.defaultMinor ?? null,
     };
   });
 

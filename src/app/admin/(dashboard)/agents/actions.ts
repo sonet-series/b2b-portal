@@ -209,10 +209,11 @@ export async function addRateCardEntry(
 
   await prisma.agentRateCard.upsert({
     where: {
-      agentId_productType_referenceId: {
+      agentId_productType_referenceId_charge: {
         agentId,
         productType,
         referenceId: parsed.data.referenceId,
+        charge: parsed.data.charge,
       },
     },
     update: {
@@ -223,6 +224,7 @@ export async function addRateCardEntry(
       agentId,
       productType,
       referenceId: parsed.data.referenceId,
+      charge: parsed.data.charge,
       overridePriceMinor: parsed.data.overridePriceMinor,
       notes: parsed.data.notes,
     },
