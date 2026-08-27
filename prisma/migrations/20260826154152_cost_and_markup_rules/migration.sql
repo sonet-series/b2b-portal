@@ -1,3 +1,46 @@
+-- ---------------------------------------------------------------------------
+-- REPAIRED 27 Aug 2026, after this migration failed partway in production.
+--
+-- What went wrong: the four rate tables gain a NOT NULL cost column with no
+-- default, and the INSERT..SELECT that copies rows across cannot supply it.
+-- That succeeds only against EMPTY tables. It was generated and tested against
+-- a local database whose catalogue had been cleared, so nothing caught it; the
+-- production tables held rows and the rebuild died on the first INSERT,
+-- leaving MarkupRule created and new_HotelRate stranded.
+--
+-- Two changes below:
+--
+--   1. The partial objects are dropped and the creates made idempotent, so
+--      this can run from the half-finished state without hand-repair first.
+--      The container applies migrations on boot; a migration that cannot
+--      recover from its own failure needs a human at exactly the wrong moment.
+--
+--   2. The four rate tables are EMPTIED before the rebuild. Those rows held
+--      manually-entered SELL prices per tier; this migration replaces that
+--      with a single COST. There is no correct automatic conversion — the old
+--      Kerala price already included a margin that did not exist as data — so
+--      guessing one would bake a wrong number into every future quote.
+--      Confirmed with Sonet 27 Aug 2026: the four rows were that day's test
+--      entries and are re-entered by hand afterwards.
+--
+-- This is destructive by design and runs exactly once per database.
+-- Agent rate-card overrides are deliberately NOT deleted: the admin screen
+-- already shows an override whose rate is gone as "Rate deleted — this
+-- override does nothing", so they are visible rather than silent.
+-- ---------------------------------------------------------------------------
+
+-- Clear anything the failed attempt left behind.
+DROP TABLE IF EXISTS "new_HotelRate";
+DROP TABLE IF EXISTS "new_HouseboatRate";
+DROP TABLE IF EXISTS "new_VehicleRate";
+DROP TABLE IF EXISTS "new_ItineraryRate";
+
+-- Rows carrying tier sell-prices cannot be converted to a cost. See above.
+DELETE FROM "HotelRate";
+DELETE FROM "HouseboatRate";
+DELETE FROM "VehicleRate";
+DELETE FROM "ItineraryRate";
+
 /*
   Warnings:
 
@@ -26,7 +69,7 @@
 
 */
 -- CreateTable
-CREATE TABLE "MarkupRule" (
+CREATE TABLE IF NOT EXISTS "MarkupRule" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "productType" TEXT NOT NULL,
     "tier" TEXT NOT NULL,
@@ -127,4 +170,4 @@ PRAGMA foreign_keys=ON;
 PRAGMA defer_foreign_keys=OFF;
 
 -- CreateIndex
-CREATE UNIQUE INDEX "MarkupRule_productType_tier_key" ON "MarkupRule"("productType", "tier");
+CREATE UNIQUE INDEX IF NOT EXISTS "MarkupRule_productType_tier_key" ON "MarkupRule"("productType", "tier");

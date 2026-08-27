@@ -336,6 +336,24 @@ Now:
 Changing `ADMIN_EMAIL` creates a *second* account rather than renaming the
 first; the seed warns when it notices, since v1 is deliberately single-admin.
 
+### Migrations that add a NOT NULL column (learned the hard way, 27 Aug 2026)
+Prisma's SQLite table rebuild copies rows with `INSERT INTO new_X (...) SELECT
+... FROM X`, and it does **not** list a newly-added NOT NULL column. That
+succeeds against an empty table and fails against a populated one, leaving the
+migration half-applied and the container crash-looping on P3009.
+
+`20260826154152_cost_and_markup_rules` shipped exactly that bug because it was
+generated and tested against a local database whose catalogue had been cleared
+first. **Test any migration adding a NOT NULL column against a copy of the real
+production file**, reproducing its row counts — never an empty one.
+
+Two habits that came out of it, both now in that migration:
+- Make a destructive or rebuilding migration **idempotent** (`DROP TABLE IF
+  EXISTS new_*`, `CREATE TABLE IF NOT EXISTS`) so it can re-run from its own
+  half-finished state. Migrations run unattended on container start; one that
+  cannot recover from its own failure needs a human at the worst moment.
+- Say in the migration itself why data is being deleted, when it is.
+
 ## Commands
 
 ```bash

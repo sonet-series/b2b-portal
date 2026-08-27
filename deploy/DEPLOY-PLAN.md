@@ -276,6 +276,47 @@ Unlike seriestours-website's workflow it does **not** `docker compose down`
 before building, so downtime is a restart rather than a full image build, and
 it health-checks a real page rather than container status.
 
+## If a migration fails partway (P3009)
+
+`migrate deploy` refuses to continue and the container crash-loops. It happened
+once, on 27 Aug 2026: `20260826154152_cost_and_markup_rules` adds a NOT NULL
+cost column whose backfill only works on empty tables, and production's rate
+tables were not empty.
+
+Back up first, always:
+
+```bash
+cd /opt/b2b-portal
+docker compose stop web
+docker run --rm -v /opt/b2b-portal/data:/d alpine \
+  sh -c "apk add -q sqlite && sqlite3 /d/prod.db \".backup '/d/pre-repair.db'\""
+mv data/pre-repair.db "data/prod-pre-repair-$(date -u +%Y%m%dT%H%M%SZ).db"
+```
+
+Find out what state it left behind before choosing a resolution:
+
+```bash
+sqlite3 data/prod.db "
+SELECT migration_name, logs FROM _prisma_migrations WHERE finished_at IS NULL;
+SELECT 'stranded: '||name FROM sqlite_master WHERE name LIKE 'new\_%' ESCAPE '\';"
+```
+
+Then mark it rolled back and redeploy. **The resolve is required** — a repaired
+migration alone does not clear the failed marker, and the container keeps
+failing until it is cleared:
+
+```bash
+docker compose run --rm --entrypoint sh web -c \
+  "npx prisma migrate resolve --rolled-back <migration_name>"
+docker compose up -d
+docker compose logs --tail=40 web
+```
+
+**Migrations that add a NOT NULL column must be tested against a copy of the
+real production file, not an empty database.** Prisma generates the backfill
+from the local schema and cannot know the target has rows. That assumption is
+exactly what caused this.
+
 ## Rollback
 
 ```bash
