@@ -84,6 +84,17 @@ const STUB_PLACES: PlaceSuggestion[] = [
   { main: "Wayanad", secondary: "Kerala, India" },
 ];
 
+/** Google wraps the useful sentence in {error:{message}}; fall back to raw. */
+function extractGoogleMessage(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: string } };
+    if (parsed.error?.message) return parsed.error.message;
+  } catch {
+    // Not JSON — an HTML error page, or a truncated body.
+  }
+  return body.slice(0, 200) || "(no detail returned)";
+}
+
 export async function suggestPlaces(rawQuery: string): Promise<PlaceSuggestion[]> {
   const query = rawQuery.trim().replace(/\s+/g, " ");
   if (query.length < MIN_QUERY_LENGTH) return [];
@@ -115,10 +126,16 @@ export async function suggestPlaces(rawQuery: string): Promise<PlaceSuggestion[]
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    // Google's own message is included verbatim, because the two causes of a
+    // 403 need opposite fixes and only Google can tell them apart: "has not
+    // been used in project ... or it is disabled" means enable the API, while
+    // "not authorized to use this service" means the API is enabled but this
+    // KEY still restricts itself to the other one. A generic message sends
+    // whoever reads the log to the wrong screen.
     throw new PlacesError(
       res.status === 403 || res.status === 401
-        ? "Google rejected the key for Places. Enable the Places API (New) on it and allow it under the key's API restrictions."
-        : `Places lookup failed (HTTP ${res.status}). ${body.slice(0, 160)}`
+        ? `Google rejected the key for Places (HTTP ${res.status}). Either enable the Places API (New), or add it to the key's API restrictions — Google says: ${extractGoogleMessage(body)}`
+        : `Places lookup failed (HTTP ${res.status}). ${body.slice(0, 200)}`
     );
   }
 
