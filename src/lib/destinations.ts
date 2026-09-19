@@ -50,6 +50,9 @@ export function allStates(): string[] {
 const KL = (name: string): Destination => ({ name, state: "Kerala" });
 const TN = (name: string): Destination => ({ name, state: "Tamil Nadu" });
 const KA = (name: string): Destination => ({ name, state: "Karnataka" });
+const AP = (name: string): Destination => ({ name, state: "Andhra Pradesh" });
+/** Puducherry is a Union Territory, not part of Tamil Nadu, and permits it separately. */
+const PY = (name: string): Destination => ({ name, state: "Puducherry" });
 
 export const DESTINATION_GROUPS: DestinationGroup[] = [
   {
@@ -72,10 +75,28 @@ export const DESTINATION_GROUPS: DestinationGroup[] = [
     ].map(KL),
   },
   {
-    label: "Beyond Kerala",
+    label: "Tamil Nadu",
     places: [
-      TN("Madurai"), TN("Rameswaram"), TN("Kanyakumari"), TN("Ooty"),
-      TN("Kodaikanal"), KA("Coorg"), KA("Mysore"), KA("Bangalore"),
+      TN("Madurai"), TN("Coimbatore"), TN("Rameswaram"), TN("Kanyakumari"),
+      TN("Ooty"), TN("Kodaikanal"), TN("Salem"), TN("Trichy"),
+      TN("Thanjavur"), TN("Chennai"), TN("Valparai"),
+      TN("Yercaud"), TN("Velankanni"),
+    ],
+  },
+  {
+    label: "Elsewhere",
+    places: [
+      // Tirupati is Andhra Pradesh and Puducherry is a Union Territory —
+      // both permit separately from Tamil Nadu, whatever a route map suggests.
+      AP("Tirupati"),
+      PY("Pondicherry"),
+    ],
+  },
+  {
+    label: "Karnataka",
+    places: [
+      KA("Bangalore"), KA("Mysore"), KA("Coorg"), KA("Chikmagalur"),
+      KA("Mangalore"), KA("Udupi"), KA("Hampi"), KA("Bandipur"), KA("Kabini"),
     ],
   },
 ];
