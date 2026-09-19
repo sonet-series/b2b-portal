@@ -761,6 +761,20 @@ model RoadDistance {
   /// They are kept apart so a typed number is never mistaken for a routed one.
   source String
 
+  /// Every state this hop's road actually passes through, comma separated.
+  ///
+  /// Derived by sampling the route polyline and reverse-geocoding the samples,
+  /// because a permit is due for a state you DRIVE THROUGH, not only one you
+  /// stop in. Kochi to Bangalore names no Tamil Nadu stop and crosses Tamil
+  /// Nadu for most of its length.
+  ///
+  /// Cached with the distance for the same reason: the road between two places
+  /// does not change, so this is computed once per hop, ever.
+  ///
+  /// NULL on rows cached before this existed, and on any hop whose geocoding
+  /// failed. Null means UNKNOWN, never "no states" — see src/lib/geocode.ts.
+  statesCsv String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

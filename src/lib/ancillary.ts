@@ -26,6 +26,12 @@ export type AncillaryResult = {
   /** States entered that have no permit set for this vehicle. */
   missingPermits: string[];
   /**
+   * True when the route states could not be fully determined, so a transit
+   * state may have been missed. Distinct from missingPermits: that is a state
+   * we KNOW about and cannot price; this is one we may never have seen.
+   */
+  statesIncomplete: boolean;
+  /**
    * Places not on the destination list, so their state is unknown.
    *
    * Surfaced rather than assumed local: assuming would silently drop a permit
@@ -48,6 +54,16 @@ export async function priceAncillaries(
   vehicleId: string,
   /** The depot's state — home for this hire, so no permit is due there. */
   homeState: string,
+  /**
+   * States the ROADS pass through, measured from the route polylines.
+   *
+   * The decisive input, not the place names. An agent outside South India has
+   * no way of knowing the road to Bangalore crosses Tamil Nadu, which is why
+   * this cannot be something they tick.
+   */
+  routeStates: readonly string[],
+  /** True when at least one hop's states could not be determined. */
+  routeStatesIncomplete: boolean,
   tier: AgentTier,
   markup: MarkupTable
 ): Promise<AncillaryResult> {
@@ -75,8 +91,21 @@ export async function priceAncillaries(
   }
 
   // --- interstate permits ----------------------------------------------
+  /*
+   * Two sources, unioned.
+   *
+   * The ROUTE is authoritative — it is the actual road. The named places are
+   * kept as a backstop for the cases the route cannot cover: a hand-entered
+   * day, an old cached hop, or a geocoding failure. Either one finding a state
+   * is enough to charge for it; neither finding one is not proof of absence,
+   * which is what `routeStatesIncomplete` records.
+   */
   const places = itineraryDays.flatMap((d) => [d.from, d.to, ...d.via]);
-  const { states, unknown } = statesEntered(places, homeState);
+  const named = statesEntered(places, homeState);
+  const fromRoute = routeStates.filter((st) => st !== homeState);
+
+  const states = [...new Set([...named.states, ...fromRoute])].sort();
+  const unknown = named.unknown;
   let missingPermits: string[] = [];
 
   if (states.length > 0) {
@@ -107,6 +136,7 @@ export async function priceAncillaries(
     totalMinor: lines.reduce((sum, l) => sum + l.totalMinor, 0),
     states,
     missingPermits,
+    statesIncomplete: routeStatesIncomplete,
     unknownPlaces: unknown,
   };
 }

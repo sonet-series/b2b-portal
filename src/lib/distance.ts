@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "./db";
 import type { DistanceSource } from "./enums";
+import { statesAlongRoute, GeocodeError } from "./geocode";
 
 /**
  * Road distances between the places on an agent's itinerary.
@@ -92,6 +93,12 @@ export type HopResult = Hop & {
   meters: number;
   seconds: number;
   source: HopSource;
+  /**
+   * States this hop's road passes through, or null when it could not be
+   * determined. Null means UNKNOWN, never "crosses nowhere" — the difference
+   * is a permit charged or silently missed.
+   */
+  states: string[] | null;
 };
 
 export type HopFailure = Hop & { error: string };
@@ -140,14 +147,14 @@ async function fetchFromGoogle(
   origin: string,
   destination: string,
   apiKey: string
-): Promise<{ meters: number; seconds: number }> {
+): Promise<{ meters: number; seconds: number; polyline?: string }> {
   const res = await fetch(ROUTES_ENDPOINT, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": apiKey,
       // Routes API bills by the fields requested, so ask for only these two.
-      "X-Goog-FieldMask": "routes.distanceMeters,routes.duration",
+      "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline",
     },
     body: JSON.stringify({
       origin: { address: routableAddress(origin) },
@@ -168,7 +175,11 @@ async function fetchFromGoogle(
   }
 
   const data = (await res.json()) as {
-    routes?: { distanceMeters?: number; duration?: string }[];
+    routes?: {
+      distanceMeters?: number;
+      duration?: string;
+      polyline?: { encodedPolyline?: string };
+    }[];
   };
   const route = data.routes?.[0];
 
@@ -202,6 +213,7 @@ async function fetchFromGoogle(
   return {
     meters,
     seconds: Number.isFinite(seconds) ? seconds : 0,
+    polyline: route.polyline?.encodedPolyline,
   };
 }
 
@@ -222,15 +234,26 @@ export async function routeOne(origin: string, destination: string): Promise<Hop
 
   // Same place, no distance. Worth short-circuiting: a day spent entirely at
   // one stop is normal, and it should cost nothing to quote.
+  // Same place, no distance and no road, so no state is crossed. An empty
+  // list, not null: this genuinely crosses nowhere rather than being unknown.
   if (o === d) {
-    return { label: "", origin, destination, meters: 0, seconds: 0, source: "GOOGLE" };
+    return { label: "", origin, destination, meters: 0, seconds: 0, source: "GOOGLE", states: [] };
   }
 
   // Checked before the cache, not after. The stub writes nothing and reads
   // nothing, so making it depend on a table existing would only mean local
   // development breaks for a reason that has nothing to do with the stub.
   if (usingDistanceStub()) {
-    return { label: "", origin, destination, ...stubDistance(origin, destination), source: "STUB" };
+    // null, not []: the stub has no idea what a fabricated road crosses, and
+    // claiming it crosses nothing would hide every permit in development.
+    return {
+      label: "",
+      origin,
+      destination,
+      ...stubDistance(origin, destination),
+      source: "STUB",
+      states: null,
+    };
   }
 
   const cached = await prisma.roadDistance.findUnique({
@@ -244,27 +267,55 @@ export async function routeOne(origin: string, destination: string): Promise<Hop
       meters: cached.meters,
       seconds: cached.seconds,
       source: cached.source as DistanceSource,
+      // Rows cached before route states existed have none. Null keeps them
+      // honest — unknown, rather than a confident "crosses nothing".
+      states: cached.statesCsv === null ? null : cached.statesCsv.split(",").filter(Boolean),
     };
   }
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-  let measured: { meters: number; seconds: number };
-
-  if (apiKey) {
-    measured = await fetchFromGoogle(origin, destination, apiKey);
-  } else {
+  if (!apiKey) {
     throw new DistanceError(
       "GOOGLE_MAPS_API_KEY is not set on this server, so distances cannot be calculated. Add it to .env.production and restart."
     );
   }
 
+  const measured = await fetchFromGoogle(origin, destination, apiKey);
+
+  /*
+   * Which states this road crosses, from the route's own polyline.
+   *
+   * A geocoding failure leaves this null rather than empty, and does NOT fail
+   * the hop: the distance is good and the quote should still price, with the
+   * permit check reporting that it could not be made. Charging nothing and
+   * saying nothing is the one outcome worth ruling out.
+   */
+  let states: string[] | null = null;
+  if (measured.polyline) {
+    try {
+      states = await statesAlongRoute(measured.polyline);
+    } catch (e) {
+      console.error(
+        `[geocode] ${origin} → ${destination}:`,
+        e instanceof GeocodeError ? e.message : e
+      );
+    }
+  }
+
+  const row = {
+    meters: measured.meters,
+    seconds: measured.seconds,
+    source: "GOOGLE" as const,
+    statesCsv: states === null ? null : states.join(","),
+  };
+
   await prisma.roadDistance.upsert({
     where: { origin_destination: { origin: o, destination: d } },
-    create: { origin: o, destination: d, ...measured, source: "GOOGLE" },
-    update: { ...measured, source: "GOOGLE" },
+    create: { origin: o, destination: d, ...row },
+    update: row,
   });
 
-  return { label: "", origin, destination, ...measured, source: "GOOGLE" };
+  return { label: "", origin, destination, ...row, states };
 }
 
 /**

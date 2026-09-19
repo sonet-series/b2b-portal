@@ -185,6 +185,22 @@ export type MeasuredItinerary = {
   failures: { label: string; origin: string; destination: string; error: string }[];
   /** True when any distance was typed by a person rather than measured. */
   anyManual: boolean;
+  /**
+   * Every state the roads on this trip actually pass through.
+   *
+   * From the routes themselves, not from the place names — a permit is due
+   * for a state you drive through, and Kochi to Bangalore names no Tamil Nadu
+   * stop while crossing it for most of its length.
+   */
+  routeStates: string[];
+  /**
+   * True when at least one hop's states could not be determined — a
+   * hand-entered day, an old cached row, or a geocoding failure.
+   *
+   * Kept separate from an empty `routeStates`, because "we checked and it
+   * crosses nothing" and "we could not check" must not look the same.
+   */
+  routeStatesIncomplete: boolean;
 };
 
 /**
@@ -219,6 +235,16 @@ export async function measureItinerary(
     const list = byDay.get(r.dayIndex) ?? [];
     list.push(r);
     byDay.set(r.dayIndex, list);
+  }
+
+  const routeStates = new Set<string>();
+  // A day the agent typed by hand has no route to inspect, so its states are
+  // unknown from the start.
+  let routeStatesIncomplete = manualDays.size > 0;
+
+  for (const r of results) {
+    if (r.states === null) routeStatesIncomplete = true;
+    else for (const st of r.states) routeStates.add(st);
   }
 
   const push = (label: string, km: number, buffer: number, manual: boolean, dayIndex: number) => {
@@ -287,6 +313,8 @@ export async function measureItinerary(
     localKm: localAllowance,
     stops,
     bufferKm,
+    routeStates: [...routeStates].sort(),
+    routeStatesIncomplete,
     totalKm: routedKm + localAllowance + bufferKm,
     failures: failures.map((f) => ({
       label: f.label,

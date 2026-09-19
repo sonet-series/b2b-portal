@@ -403,6 +403,10 @@ export async function quoteVehicle(
    */
   let legs = input.legs;
   let itinerary: ItinerarySummary | undefined;
+  // Defaults say "nothing was checked", which is the truth until a route is
+  // actually measured — not "crosses nothing".
+  let routeStates: string[] = [];
+  let routeStatesIncomplete = true;
 
   if (input.garageId && input.days && input.days.length > 0) {
     const garage = depot
@@ -439,6 +443,8 @@ export async function quoteVehicle(
     }
 
     legs = measured.legs;
+    routeStates = measured.routeStates;
+    routeStatesIncomplete = measured.routeStatesIncomplete;
     itinerary = {
       legs: measured.legs,
       routedKm: measured.routedKm,
@@ -468,7 +474,16 @@ export async function quoteVehicle(
    */
   const ancillary =
     input.days?.length && depot
-      ? await priceAncillaries(input.days, days, vehicle.id, depot.state, agent.tier, markup)
+      ? await priceAncillaries(
+          input.days,
+          days,
+          vehicle.id,
+          depot.state,
+          routeStates,
+          routeStatesIncomplete,
+          agent.tier,
+          markup
+        )
       : null;
 
   const engagedDays: Date[] = [];
@@ -658,6 +673,16 @@ export async function quoteVehicle(
 
   // A place we could not place is a permit we may have failed to charge, and
   // an unpaid permit is money handed over at a border with no way back.
+  if (ancillary?.statesIncomplete) {
+    unavailable.push({
+      title: "Transit states not fully checked",
+      reason:
+        "Part of this route could not be checked for the states it passes through, so an " +
+        "interstate permit may be missing from this price. This happens on days with a " +
+        "hand-entered distance, and on routes measured before this check existed — requote to refresh it.",
+    });
+  }
+
   if (ancillary && ancillary.missingPermits.length > 0) {
     unavailable.push({
       title: "Interstate permit not set",

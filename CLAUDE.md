@@ -733,9 +733,32 @@ Both are marked up by the VEHICLE rule, like driver allowance and extra km.
 They are appended to every option **after** the options are built, not inside
 each `options.push`, so a pricing mode added later cannot quietly omit them.
 
-**Which states a trip enters** comes from `src/lib/destinations.ts`, which
-carries a state per place. A place NOT on that list is reported as unknown —
-never assumed local, because assuming would silently drop a permit.
+**Which states a trip enters is measured from the ROAD, not the stops**
+(20 Sept 2026). Sonet rejected a "tick the states you enter" control for the
+right reason: many agents are nowhere near South India and have no idea the
+road to Bangalore crosses Tamil Nadu. It has to be automatic.
+
+`src/lib/geocode.ts` takes the route's own polyline from the Routes API,
+samples it every 20 km, and reverse-geocodes each sample to a state. Kochi to
+Bangalore names no Tamil Nadu stop and crosses Tamil Nadu for most of its
+length; this finds it, and charges the permit.
+
+- **Cached on `RoadDistance.statesCsv`**, alongside the distance, because the
+  road between two places does not change. A 545 km route costs about 21
+  geocoding lookups ONCE, then none ever again.
+- **NULL means UNKNOWN, never "crosses nothing".** Old cached rows, the dev
+  stub, hand-entered days and geocoding failures all leave it null, and the
+  quote then says the check was incomplete. A confident zero is the one
+  outcome worth ruling out — silently charging no permit is money handed over
+  at a border.
+- **The named-place list is kept as a backstop**, unioned with the route. The
+  route is authoritative; the names cover what it cannot reach.
+- **Production needs the Geocoding API enabled** on the key, alongside Routes
+  and Places. Without it, distances still work and the quote reports that
+  transit states could not be checked.
+
+A place NOT on the destination list is still reported as unknown — never
+assumed local.
 
 **Home is a property of the DEPOT, not a constant** (Sonet, 19 Sept 2026, and
 he was right to push on it). `Garage.state` decides which states need a permit
