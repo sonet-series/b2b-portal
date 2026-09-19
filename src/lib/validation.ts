@@ -576,6 +576,8 @@ export const itineraryDaySchema = z.object({
   to: z.string().trim().max(160, "Place name is too long"),
   via: z.array(z.string().trim().max(160, "Place name is too long")).max(8, "Too many stops on one day"),
   bufferKm: legKm("Sightseeing buffer"),
+  /** Free text describing the day, shown to the customer on the printed quote. */
+  notes: z.string().trim().max(600, "That day's description is too long").optional(),
   /** Present only when routing failed and the agent typed the distance. */
   manualKm: legKm("Distance").optional(),
 });
@@ -676,6 +678,7 @@ export function parseItineraryDays(params: Record<string, string | string[] | un
   const buffers = asArray(params.dayBufferKm);
   const manuals = asArray(params.dayManualKm);
   const dates = asArray(params.dayDate);
+  const notes = asArray(params.dayNotes);
 
   const count = Math.max(froms.length, tos.length, dates.length);
   const rows: {
@@ -684,6 +687,7 @@ export function parseItineraryDays(params: Record<string, string | string[] | un
     to: string;
     via: string[];
     bufferKm: string;
+    notes: string;
     manualKm?: string;
   }[] = [];
 
@@ -698,6 +702,7 @@ export function parseItineraryDays(params: Record<string, string | string[] | un
         .map((v) => v.trim())
         .filter((v) => v !== ""),
       bufferKm: (buffers[i] ?? "").trim() === "" ? "0" : (buffers[i] ?? "").trim(),
+      notes: (notes[i] ?? "").trim(),
       // Absent rather than empty: an empty string would coerce to 0 km and
       // silently turn "not measured yet" into "this day has no distance".
       ...(manual === "" ? {} : { manualKm: manual }),

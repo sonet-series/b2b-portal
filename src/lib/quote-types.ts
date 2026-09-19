@@ -161,6 +161,16 @@ export type ItineraryDay = {
   /** Local sightseeing km added on top of the routed distance. */
   bufferKm: number;
   /**
+   * What the day actually contains — the sightseeing, the stops, anything the
+   * customer should read. "Mattupetty Dam, Echo Point, tea museum, evening
+   * at leisure."
+   *
+   * Free text and never parsed. It exists because "Munnar to Thekkady" tells
+   * a customer nothing about their day, and an itinerary they cannot picture
+   * is not one they will book.
+   */
+  notes?: string;
+  /**
    * Set only when routing could not measure this day and the agent typed the
    * distance instead. Its presence is what makes the quote able to say the
    * number was not measured.

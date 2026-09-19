@@ -677,6 +677,35 @@ quietly inventing room rates would be worse than no feature.
 
 Houseboats and packages can follow the same pattern once hotels are proven.
 
+### The customer document is a real PDF, not browser print (19 Sept 2026)
+Browser printing could never produce a document an agent hands over unedited.
+Browsers stamp the page TITLE and the page URL into the header and footer, no
+CSS reaches either, and the only control is a tick box in the print dialogue.
+Sonet's objection settled it: he can untick it, his agents will not know to,
+and he cannot brief every agency. **The HTML print page was deleted** rather
+than left beside the PDF, because leaving it invites agents down the path that
+does not work.
+
+`/agent/quotes/[reference]/pdf` renders server-side with
+`@react-pdf/renderer`. Not a headless browser: the box has 4GB, no swap, and
+runs the ERP too. `?view=1` serves it inline for a preview instead of
+downloading.
+
+**The bundled Noto Sans in `src/assets/fonts` is not decoration.** The built-in
+PDF fonts are WinAnsi and have no rupee sign — and they do not fail on one.
+"₹" came out as "¹" and "→" as a quote mark, silently, so the document would
+have looked subtly wrong rather than obviously broken. Verified by decoding the
+generated PDF's own ToUnicode table, not by eye.
+
+**Noto Sans has ₹ but NOT → (U+2192)** — checked against the font's cmap table
+directly. The PDF says "Madurai Airport to Rameswaram"; an arrow would be a
+blank box. Before adding any symbol to the PDF, check the font actually has it.
+
+**Known, minor:** ligature glyphs ("fi" in "confirmed") get a ToUnicode mapping
+that extracts wrongly, so copy-paste out of the PDF garbles those few words.
+Display appears unaffected. Not worth a workaround unless it turns out to
+render wrong too.
+
 ### Branded quote printing (19 Sept 2026)
 The agent prints a saved quote and hands it to THEIR customer, so the page
 carries the agency's branding and **nothing of ours**. Series Tours appears

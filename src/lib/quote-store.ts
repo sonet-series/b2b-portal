@@ -292,3 +292,20 @@ export async function getQuote(agentId: string, reference: string) {
 }
 
 export type QuoteOptionForDisplay = QuoteOption;
+
+/**
+ * Deletes one of the agent's own quotes.
+ *
+ * Scoped by `agentId` in the WHERE clause, not checked beforehand — another
+ * agency's reference must not be deletable even by someone who guesses it, and
+ * a single scoped statement cannot be raced into deleting the wrong row.
+ *
+ * A hard delete, unlike the catalogue's soft deletes. A quote is the agent's
+ * own working document, not a shared record others may have priced against:
+ * nothing references it, and an agent clearing out a mistaken quote means they
+ * want it gone rather than hidden. QuoteLine rows cascade with it.
+ */
+export async function deleteQuote(agentId: string, reference: string): Promise<boolean> {
+  const result = await prisma.quote.deleteMany({ where: { agentId, reference } });
+  return result.count > 0;
+}

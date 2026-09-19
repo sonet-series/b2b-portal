@@ -4,6 +4,8 @@ import { getQuote } from "@/lib/quote-store";
 import { formatMinor } from "@/lib/money";
 import { formatDateDisplay } from "@/lib/dates";
 import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
+import { DeleteQuote } from "./delete-quote";
+import { deleteQuoteAction } from "../actions";
 import type { VehicleLeg, ItineraryDay } from "@/lib/quote-types";
 
 export const dynamic = "force-dynamic";
@@ -59,11 +61,23 @@ export default async function QuoteDetailPage({
         title={`Quote ${quote.reference}`}
         description={`${PRODUCT_LABEL[quote.productType] ?? quote.productType} · quoted ${quote.createdAt.toISOString().slice(0, 10)}`}
         action={
-          <div className="flex gap-2">
-            <LinkButton href={`/agent/quotes/${quote.reference}/print`} tone="primary">
-              Print
+          <div className="flex flex-wrap items-center gap-3">
+            <LinkButton href={`/agent/quotes/${quote.reference}/pdf`} tone="primary">
+              Download PDF
             </LinkButton>
+            <a
+              href={`/agent/quotes/${quote.reference}/pdf?view=1`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-blue-700 hover:underline"
+            >
+              Preview
+            </a>
             <LinkButton href="/agent/quotes">All quotes</LinkButton>
+            <DeleteQuote
+              reference={quote.reference}
+              action={deleteQuoteAction.bind(null, quote.reference)}
+            />
           </div>
         }
       />
@@ -109,6 +123,9 @@ export default async function QuoteDetailPage({
                       )}
                       {d.bufferKm > 0 && (
                         <span className="text-slate-500"> · +{d.bufferKm} km sightseeing</span>
+                      )}
+                      {d.notes && (
+                        <span className="block text-slate-500">{d.notes}</span>
                       )}
                     </span>
                   </li>

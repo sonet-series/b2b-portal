@@ -43,6 +43,7 @@ export function PlaceInput({
   const [active, setActive] = useState(-1);
   const listId = useId();
   const boxRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   // Set when a suggestion is chosen, so the resulting value change does not
   // immediately fetch again and reopen the list the agent just dismissed.
   const justPicked = useRef(false);
@@ -67,7 +68,11 @@ export function PlaceInput({
         if (!res.ok) return;
         const data = (await res.json()) as { suggestions?: Suggestion[] };
         setItems(data.suggestions ?? []);
-        setOpen((data.suggestions ?? []).length > 0);
+        // Only open the list if this field is the one being typed in. Every
+        // field re-mounts with a value after the form submits, and without
+        // this check they ALL sprang open at once over the whole itinerary.
+        const focused = inputRef.current !== null && document.activeElement === inputRef.current;
+        setOpen(focused && (data.suggestions ?? []).length > 0);
         setActive(-1);
       } catch {
         // Offline, or the lookup failed. The field still works as plain text.
@@ -99,6 +104,7 @@ export function PlaceInput({
   return (
     <div ref={boxRef} className="relative">
       <input
+        ref={inputRef}
         name={name}
         value={value}
         onChange={(e) => onChange(e.target.value)}

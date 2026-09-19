@@ -30,6 +30,8 @@ type DayRow = {
   to: string;
   via: string;
   bufferKm: string;
+  /** What the day contains — sightseeing, stops, anything the customer reads. */
+  notes: string;
   /** Local-day flag. Drives `to`, and relabels `via` as the excursion. */
   local: boolean;
 };
@@ -49,7 +51,7 @@ function blankRows(start: string, end: string): DayRow[] {
   const n = dayCount(start, end);
   const rows: DayRow[] = [];
   for (let i = 0; i < n; i++) {
-    rows.push({ date: addDays(start, i), from: "", to: "", via: "", bufferKm: "", local: false });
+    rows.push({ date: addDays(start, i), from: "", to: "", via: "", bufferKm: "", notes: "", local: false });
   }
   return rows;
 }
@@ -74,7 +76,7 @@ export function TripForm({
     endDate: string;
     adults: string;
     childAges: string[];
-    days: { date: string; from: string; to: string; via: string[]; bufferKm: string }[];
+    days: { date: string; from: string; to: string; via: string[]; bufferKm: string; notes: string }[];
   };
   fieldErrors: Record<string, string>;
 }) {
@@ -92,6 +94,7 @@ export function TripForm({
         to: d.to,
         via: d.via.join(", "),
         bufferKm: d.bufferKm,
+        notes: d.notes ?? "",
         local: d.to !== "" && d.to === d.from,
       }));
     }
@@ -124,6 +127,7 @@ export function TripForm({
         to: prev[i]?.to ?? "",
         via: prev[i]?.via ?? "",
         bufferKm: prev[i]?.bufferKm ?? "",
+        notes: prev[i]?.notes ?? "",
         local: prev[i]?.local ?? false,
       }))
     );
@@ -368,6 +372,25 @@ export function TripForm({
                       className={`${control} tabular-nums`}
                     />
                   </div>
+                </div>
+
+                <div className="mt-2">
+                  <span className="mb-1 block text-xs text-slate-500">
+                    What happens this day{" "}
+                    <span className="text-slate-400">— appears on the printed quote</span>
+                  </span>
+                  <input
+                    name="dayNotes"
+                    value={d.notes}
+                    onChange={(e) => update(i, { notes: e.target.value })}
+                    placeholder={
+                      i === 0
+                        ? "Arrive, transfer to hotel, evening at leisure"
+                        : "Mattupetty Dam, Echo Point, tea museum"
+                    }
+                    aria-label={`Day ${i + 1} description`}
+                    className={control}
+                  />
                 </div>
               </div>
             ))}

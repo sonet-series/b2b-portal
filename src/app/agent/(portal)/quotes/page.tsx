@@ -1,7 +1,7 @@
 import { requireAgent } from "@/lib/auth";
 import { listQuotes } from "@/lib/quote-store";
 import { formatMinor } from "@/lib/money";
-import { Badge, EmptyState, PageHeader, Table, Td } from "@/components/ui";
+import { Badge, EmptyState, FormSuccess, PageHeader, Table, Td } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +14,18 @@ const PRODUCT_LABEL: Record<string, string> = {
   combined: "Combined trip",
 };
 
-export default async function QuotesPage() {
+export default async function QuotesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const agent = await requireAgent();
+  const sp = await searchParams;
   const quotes = await listQuotes(agent.id);
 
   return (
     <>
+      {sp.deleted === "1" && <FormSuccess message="Quote deleted." />}
       <PageHeader
         title="Saved quotes"
         description="Quotes you have saved. These are prices, not bookings — nothing is held or confirmed."
