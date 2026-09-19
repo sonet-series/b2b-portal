@@ -252,7 +252,7 @@ async function seedDemoCatalogue() {
 
   const vehicle = await prisma.vehicle.create({
     data: {
-      type: "Innova Crysta",
+      type: "Toyota Crysta",
       capacity: 6,
       notes: "SAMPLE DATA — delete before go-live",
       rates: {
@@ -278,6 +278,53 @@ async function seedDemoCatalogue() {
     include: { rates: true },
   });
 
+  // Named from the real fleet list, so demo data never teaches a vehicle
+  // type name the live catalogue does not use.
+  // More than one vehicle, on purpose. With a single type in the catalogue the
+  // garage fleet list has nothing to choose between, and neither the per-garage
+  // availability rule nor the seat-capacity warning can be seen working.
+  const sedan = await prisma.vehicle.create({
+    data: {
+      type: "Suzuki Dzire",
+      capacity: 4,
+      notes: "SAMPLE DATA — delete before go-live",
+      rates: {
+        create: [
+          {
+            rateType: "PER_DAY",
+            seasonLabel: "Standard 2026",
+            ...ALL_2026,
+            costMinor: 240_000, // ₹2,400 cost
+            includedKmPerDay: 250,
+            extraKmCostMinor: 1_400, // ₹14 cost
+            driverAllowanceCostMinor: 40_000, // ₹400 cost
+          },
+        ],
+      },
+    },
+  });
+
+  const tempo = await prisma.vehicle.create({
+    data: {
+      type: "09/12 Seater Tempo Traveller",
+      capacity: 12,
+      notes: "SAMPLE DATA — delete before go-live",
+      rates: {
+        create: [
+          {
+            rateType: "PER_DAY",
+            seasonLabel: "Standard 2026",
+            ...ALL_2026,
+            costMinor: 620_000, // ₹6,200 cost
+            includedKmPerDay: 250,
+            extraKmCostMinor: 2_600, // ₹26 cost
+            driverAllowanceCostMinor: 60_000, // ₹600 cost
+          },
+        ],
+      },
+    },
+  });
+
   // A garage, with that vehicle in it. Without one the vehicle quote screen
   // has nothing to offer at all: an agent picks the garage first, and the
   // distance is measured from it, so demo data that skipped this would leave
@@ -286,7 +333,11 @@ async function seedDemoCatalogue() {
     data: {
       name: "Cochin",
       address: "Series Tours, NH 66 Bypass, Edappally, Kochi, Kerala 682024",
-      vehicles: { create: [{ vehicleId: vehicle.id }] },
+      // The main garage holds the whole fleet. The per-garage list earns its
+      // keep at the smaller depots, not here.
+      vehicles: {
+        create: [vehicle.id, sedan.id, tempo.id].map((vehicleId) => ({ vehicleId })),
+      },
     },
   });
 
