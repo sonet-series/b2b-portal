@@ -154,6 +154,42 @@ generates or resets — so it is safe on every container start.
 `SEED_DEMO` is deliberately unset in production: the demo catalogue must never
 appear in a real database.
 
+## The GitHub Actions deploy has never worked — deploy with the script
+
+Discovered 19 Sept 2026: **every workflow run since #8 has failed**, each in
+6–11 seconds. That is the `appleboy/ssh-action` step failing to authenticate,
+long before it reaches a build. Every deploy this project has had was actually
+somebody typing the commands by hand.
+
+Until the secrets are fixed, deploy on the box with:
+
+```bash
+cd /opt/b2b-portal && sudo bash deploy/deploy.sh
+```
+
+That runs exactly what the workflow would: pull, **back up**, build, start,
+wait for health, and print which migrations applied. Use it rather than typing
+the steps — the backup is the step that gets skipped when it feels
+unnecessary, which is precisely when it is not.
+
+### Fixing the workflow
+
+The failure is almost certainly one of the three secrets under
+**Settings → Secrets and variables → Actions**:
+
+| Secret | Common mistake |
+|---|---|
+| `SERVER_SSH_KEY` | the **public** key pasted instead of the private one, or the `-----BEGIN/END-----` lines dropped |
+| `SERVER_HOST` | unset, or a hostname that does not resolve — it should be `77.42.81.0` |
+| `SERVER_USER` | unset — it should be `root` |
+
+The private key also has to be in the server's `~/.ssh/authorized_keys`. Test
+the pair locally with `ssh -i <key> root@77.42.81.0 hostname` before pasting it
+into a secret.
+
+A pipeline everybody believes in and that has never run is worse than no
+pipeline, because it is trusted at exactly the wrong moment.
+
 ## Vehicle quoting needs a Google Maps key AND at least one garage
 
 Two things gate the cab flow, and neither is optional.
