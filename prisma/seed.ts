@@ -253,7 +253,7 @@ async function seedDemoCatalogue() {
   const vehicle = await prisma.vehicle.create({
     data: {
       type: "Toyota Crysta",
-      capacity: 6,
+      capacity: 7, // max PASSENGERS, not seats
       notes: "SAMPLE DATA — delete before go-live",
       rates: {
         create: [
@@ -286,7 +286,7 @@ async function seedDemoCatalogue() {
   const sedan = await prisma.vehicle.create({
     data: {
       type: "Suzuki Dzire",
-      capacity: 4,
+      capacity: 3, // max PASSENGERS, not seats
       notes: "SAMPLE DATA — delete before go-live",
       rates: {
         create: [

@@ -84,7 +84,7 @@ export function FleetPanel({
                   />
                   <label htmlFor={`veh-${v.id}`} className="flex-1 text-sm text-slate-900">
                     {v.type}
-                    <span className="ml-2 text-slate-500">{v.capacity} seats</span>
+                    <span className="ml-2 text-slate-500">up to {v.capacity} pax</span>
                   </label>
                   {!v.hasRates && <Badge tone="amber">No rates</Badge>}
                 </li>

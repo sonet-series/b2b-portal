@@ -191,9 +191,14 @@ model HouseboatRate {
 
 model Vehicle {
   id       String  @id @default(uuid())
-  /// "Dzire", "Innova Crysta", "Tempo Traveller 12s"
+  /// "Suzuki Dzire", "Toyota Crysta", "17 Seater Tempo Traveller"
   type     String
-  capacity Int // seats, excluding driver
+
+  /// MAXIMUM PASSENGERS Series Tours will carry — deliberately NOT the seat
+  /// count, and often lower. A Fortuner has seven seats but takes four with
+  /// luggage aboard, and four is the number a quote must be checked against.
+  /// Confirmed with Sonet 19 Sept 2026.
+  capacity Int
   notes    String?
   active   Boolean @default(true)
 

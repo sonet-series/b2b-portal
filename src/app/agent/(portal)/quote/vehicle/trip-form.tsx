@@ -160,7 +160,7 @@ export function TripForm({
           onChange={(e) => setVehicleId(e.target.value)}
           options={[
             { value: "", label: vehicles.length === 0 ? "No vehicles at this garage" : "Choose a vehicle" },
-            ...vehicles.map((v) => ({ value: v.id, label: `${v.type} — ${v.capacity} seats` })),
+            ...vehicles.map((v) => ({ value: v.id, label: `${v.type} — up to ${v.capacity} passengers` })),
           ]}
           error={fieldErrors.vehicleId}
         />
@@ -249,8 +249,9 @@ export function TripForm({
 
         {overCapacity && (
           <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-inset ring-amber-200">
-            {pax} passengers in a {vehicle!.capacity}-seat {vehicle!.type}. You can still quote it —
-            a small child may not need a seat — but check before you send it.
+            {pax} passengers, but a {vehicle!.type} carries up to {vehicle!.capacity}. You can
+            still quote it — a small child may not need a seat of their own — but check before
+            you send it.
           </p>
         )}
       </div>

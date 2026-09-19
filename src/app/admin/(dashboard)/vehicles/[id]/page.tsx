@@ -41,7 +41,7 @@ export default async function VehicleDetailPage({
     <>
       <PageHeader
         title={vehicle.type}
-        description={`${vehicle.capacity} seats`}
+        description={`Carries up to ${vehicle.capacity} passengers`}
         action={<LinkButton href="/admin/vehicles">Back to vehicles</LinkButton>}
       />
 

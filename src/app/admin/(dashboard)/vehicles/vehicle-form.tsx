@@ -34,13 +34,13 @@ export function VehicleForm({
             error={err.type}
           />
           <Field
-            label="Capacity"
+            label="Maximum passengers"
             name="capacity"
             type="number"
             min={1}
             required
             defaultValue={vehicle?.capacity ?? ""}
-            hint="Seats, excluding driver."
+            hint="The most you will carry, not the seat count — a Fortuner seats seven but takes four with luggage."
             error={err.capacity}
           />
         </div>

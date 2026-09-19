@@ -31,7 +31,7 @@ export default async function VehiclesPage() {
                   </span>
                 )}
               </Td>
-              <Td>{v.capacity} seats</Td>
+              <Td>up to {v.capacity} pax</Td>
               <Td>{v._count.rates === 0 ? <Badge tone="amber">No rates</Badge> : v._count.rates}</Td>
               <Td className="text-right">
                 <a href={`/admin/vehicles/${v.id}`} className="text-sm text-blue-700 hover:underline">

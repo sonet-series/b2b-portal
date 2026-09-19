@@ -520,9 +520,24 @@ reason alone: older snapshots have no value for them and must keep rendering.
 **Children are listed by age, not counted.** An age is what actually decides
 anything downstream (a hotel's child policy, whether a seat is needed); a bare
 count throws that away. For a vehicle it only affects capacity, where everyone
-counts toward the seat total — erring toward suggesting a bigger vehicle rather
-than one the party cannot fit in. Over capacity warns, it does not block: a
-small child may genuinely not need a seat, and that is the agent's call.
+counts toward the total — erring toward suggesting a bigger vehicle rather than
+one the party cannot fit in. Over capacity warns, it does not block: a small
+child may genuinely not need a seat, and that is the agent's call.
+
+**`Vehicle.capacity` is MAXIMUM PASSENGERS, not the seat count** (confirmed
+with Sonet, 19 Sept 2026, who supplied the real figures). The two are often
+different: a Fortuner has seven seats and carries four with luggage aboard, a
+Hycross likewise. Four is the number a quote must be checked against, so four
+is what the column holds.
+
+This is why nothing in the UI says "seats" any more — "Toyota Fortuner, 4
+seats" reads as a data-entry error to anyone who has seen one. Every label says
+"up to N passengers", and the admin field is "Maximum passengers" with the
+Fortuner example in its hint. If a future change reintroduces the word "seats"
+against this column, it is wrong.
+
+Sonet's figures: Dzire 3, Ertiga 5, Carens 5, Crysta 7, Hycross 4, Fortuner 4.
+The Urbania and Tempo Traveller types take the number in their own name.
 
 ### Combined trip quoting (26 Aug 2026)
 An agent assembles a whole trip — one vehicle, several hotel stays, a houseboat
