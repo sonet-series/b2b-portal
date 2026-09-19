@@ -693,6 +693,22 @@ on `Agent` and is served by `/agent/branding/logo`, which takes the agent id
 Nullable as a pair: an agency with no logo prints an unbranded quote rather
 than being unable to print at all.
 
+**The page TITLE is the agency's, not ours** (19 Sept 2026). Browsers print
+the document title in the page header and the URL in the footer, so a title of
+"Series Tours B2B" put our name on every printed page however clean the HTML
+was — found by reading a PDF Sonet actually printed, not by looking at the
+markup. `generateMetadata` sets it to "<Agency> — Quotation <ref>".
+
+The URL in the print footer is browser chrome that CSS cannot reach at all.
+The only control is the print dialogue's "Headers and footers" tick box, so the
+page says so in a banner rather than pretending the problem does not exist.
+
+**Per-day distances come from `VehicleLeg.dayIndex`, never from parsing
+`label`.** The label is display text and has already been reworded once; a
+printed customer document must not break because somebody rewrites a string.
+Absent on quotes saved before 19 Sept 2026, which simply show no per-day
+column.
+
 **Printing is the browser's own**, via `@media print` rules and
 `window.print()`. No PDF library to keep current, and "Save as PDF" in the
 print dialogue produces the file anyway.

@@ -4,6 +4,7 @@ import { parseDateOnly, formatDateDisplay, MS_PER_DAY, startOfUtcDay } from "./d
 import { quoteHotel, quoteHouseboat, quoteVehicle, quoteItinerary } from "./quote";
 import { PricingError } from "./pricing";
 import { priceCart, itemLabel } from "./combined-quote";
+import { totalPax } from "./quote-types";
 import type { AnyQuoteInput, CombinedItem, QuoteOption, QuotingAgent } from "./quote-types";
 
 /**
@@ -47,7 +48,10 @@ function travelWindow(input: AnyQuoteInput): { start: Date; end: Date; pax: numb
       return {
         start: parseDateOnly(input.startDate),
         end: parseDateOnly(input.endDate),
-        pax: 0,
+        // Was hard-coded to 0 when the vehicle screen had no headcount at all.
+        // It asks now, and the number belongs on the customer's quote — a
+        // party size is the first thing anyone checks on one.
+        pax: totalPax(input.pax),
       };
     case "itinerary": {
       const d = parseDateOnly(input.startDate);

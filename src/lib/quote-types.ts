@@ -104,6 +104,16 @@ export type VehicleLeg = {
   km: number;
   /** Local sightseeing km added on top of the transfer, km. */
   bufferKm: number;
+  /**
+   * Which day of the itinerary this leg belongs to, 0-based; -1 for the two
+   * garage runs that bracket the trip.
+   *
+   * Carried explicitly so the printed quote can total each day WITHOUT parsing
+   * it back out of `label`. The label is display text — it has already changed
+   * once — and a printed customer document must not break because somebody
+   * reworded it. Absent on quotes saved before this existed.
+   */
+  dayIndex?: number;
 };
 
 /**

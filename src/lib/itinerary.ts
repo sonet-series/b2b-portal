@@ -188,11 +188,11 @@ export async function measureItinerary(
     byDay.set(r.dayIndex, list);
   }
 
-  const push = (label: string, km: number, buffer: number, manual: boolean) => {
+  const push = (label: string, km: number, buffer: number, manual: boolean, dayIndex: number) => {
     routedKm += km;
     bufferKm += buffer;
     if (manual) anyManual = true;
-    legs.push({ label, km, bufferKm: buffer });
+    legs.push({ label, km, bufferKm: buffer, dayIndex });
   };
 
   // The two garage runs bracket the trip: the outbound one before day 1, the
@@ -203,7 +203,7 @@ export async function measureItinerary(
   const inbound = garageRuns.length > 1 ? garageRuns[garageRuns.length - 1] : undefined;
 
   if (outbound) {
-    push(outbound.label, metersToKm(outbound.meters), outbound.bufferKm, outbound.source === "MANUAL");
+    push(outbound.label, metersToKm(outbound.meters), outbound.bufferKm, outbound.source === "MANUAL", -1);
   }
 
   for (let i = 0; i < chained.length; i++) {
@@ -214,18 +214,19 @@ export async function measureItinerary(
         `Day ${i + 1}: ${day.from} → ${day.to} (distance entered by hand)`,
         day.manualKm ?? 0,
         day.bufferKm,
-        true
+        true,
+        i
       );
       continue;
     }
 
     for (const r of byDay.get(i) ?? []) {
-      push(r.label, metersToKm(r.meters), r.bufferKm, r.source === "MANUAL");
+      push(r.label, metersToKm(r.meters), r.bufferKm, r.source === "MANUAL", i);
     }
   }
 
   if (inbound) {
-    push(inbound.label, metersToKm(inbound.meters), inbound.bufferKm, inbound.source === "MANUAL");
+    push(inbound.label, metersToKm(inbound.meters), inbound.bufferKm, inbound.source === "MANUAL", -1);
   }
 
   return {
