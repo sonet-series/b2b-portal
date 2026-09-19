@@ -709,23 +709,27 @@ into a line: a tax is not a price. `withGst` lives in `settings-shared.ts`,
 which has no server-only import, and the RATE is always passed in — a client
 component must not be able to render a defaulted tax rate.
 
-### Road margin vs sightseeing buffer — two different numbers (19 Sept 2026)
-Sonet asked why a buffer exists when Google's distances are "ok but need a few
-more km". They answer different problems and both are needed:
+### Local running is per STOP, not a percentage (19 Sept 2026)
+A percentage road margin was tried first and replaced the same day. Sonet's
+correction was right and worth recording: **a percentage scales with distance
+driven, which is backwards.** Local running happens where the party STOPS, not
+on the long transfers — a 400 km transfer day needs no slack, a night at
+Munnar needs a day around the tea estates.
 
-- **Road margin** (`Setting.roadMarginBps`, default 5%, editable at
-  `/admin/settings`) corrects Google *systematically*. A map route is the
-  shortest practical one; real driving is longer — diversions, one-ways, a
-  wrong turn, the stretch from the main road to a resort gate. Nobody enters
-  it per trip; it applies to every measured distance.
-- **Sightseeing buffer** is per day and entered by the agent, for a specific
-  detour they know about — an afternoon around Munnar, a temple off the route.
-  It is a fact about that itinerary, not a correction to the measurement.
+`Setting.perStopKm` (default 60) is added for each **distinct place they
+overnight at**. Per place, not per night: two nights at Munnar is still one
+place to drive around. The final day's drop point does not count — nobody
+drives around somewhere they are leaving from. `overnightStops()` in
+`src/lib/itinerary.ts`, tested against Sonet's real 8-day trip, which yields
+four stops: Munnar, Thekkady, Alleppey, Kovalam.
 
-**The margin rides as its own LEG, not spread across the real ones.** Every
-routed leg then still matches exactly what anyone gets from Google, so the
-distance stays checkable — and because pricing consumes legs, a margin that
-was not a leg would be measured and then quietly not charged.
+It rides as its own LEG, so every routed leg still matches exactly what anyone
+gets from Google — and because pricing consumes legs, an allowance that was
+not a leg would be measured and then quietly not charged.
+
+**Still distinct from the per-day sightseeing buffer**, which is a specific
+detour the agent knows about and enters themselves. This allowance is a
+standing assumption; the buffer is a fact about one itinerary.
 
 ### Editing a saved quote (19 Sept 2026)
 No new storage: the builder already reads its inputs from the query string and

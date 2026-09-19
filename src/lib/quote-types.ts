@@ -74,9 +74,9 @@ export type ItinerarySummary = {
   legs: VehicleLeg[];
   /** What Google measured, garage to garage. km. */
   routedKm: number;
-  /** Road margin added on top, and the rate it was applied at. */
-  marginKm: number;
-  marginBps: number;
+  /** Local running allowed at the overnight stops, and which stops they are. */
+  localKm: number;
+  stops: string[];
   /** Sightseeing buffer the agent added. km. */
   bufferKm: number;
   /** What the hire is priced on. km. */

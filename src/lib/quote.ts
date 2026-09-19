@@ -433,8 +433,8 @@ export async function quoteVehicle(
     itinerary = {
       legs: measured.legs,
       routedKm: measured.routedKm,
-      marginKm: measured.marginKm,
-      marginBps: measured.marginBps,
+      localKm: measured.localKm,
+      stops: measured.stops,
       bufferKm: measured.bufferKm,
       totalKm: measured.totalKm,
       anyManual: measured.anyManual,

@@ -1,7 +1,7 @@
 import "server-only";
 import { routeHops, metersToKm, type Hop } from "./distance";
 import { parseDateOnly, formatDateOnly, startOfUtcDay, daysBetween } from "./dates";
-import { roadMarginBps, marginKm } from "./settings";
+import { perStopKm } from "./settings";
 import type { VehicleLeg, ItineraryDay } from "./quote-types";
 
 /**
@@ -70,6 +70,30 @@ export function chainDays(days: readonly ItineraryDay[]): ItineraryDay[] {
 // ---------------------------------------------------------------------------
 // Days to hops
 // ---------------------------------------------------------------------------
+
+/**
+ * The distinct places the party sleeps at.
+ *
+ * Each day's `to` is where they end up, so days 1..n-1 are overnight stops.
+ * The LAST day's `to` is excluded — that is where they are dropped, and nobody
+ * drives around a place they are leaving from.
+ *
+ * Deduplicated across the whole trip, not just consecutively: two separate
+ * nights at Cochin either end of a trip is still one place to drive around,
+ * and this allowance is per place rather than per night.
+ */
+export function overnightStops(days: readonly ItineraryDay[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  days.slice(0, -1).forEach((d) => {
+    const place = (d.to || d.from).trim();
+    const key = place.toLowerCase();
+    if (place === "" || seen.has(key)) return;
+    seen.add(key);
+    out.push(place);
+  });
+  return out;
+}
 
 export type ItineraryHop = Hop & {
   /** Index into the day list, or -1 for the two garage runs. */
@@ -146,16 +170,16 @@ export type MeasuredItinerary = {
   /** What Google measured, garage to garage, before anything is added. km. */
   routedKm: number;
   /**
-   * The road margin added on top of `routedKm` — see ROAD_MARGIN_BPS.
-   * A separate number, not folded into the legs, so each leg still matches
-   * what anyone gets from Google.
+   * Local running allowed at the overnight stops — see PER_STOP_KM.
+   * A separate number, not folded into the legs, so each routed leg still
+   * matches exactly what anyone gets from Google.
    */
-  marginKm: number;
-  /** The margin in basis points, so screens can say "+5%" rather than a bare number. */
-  marginBps: number;
+  localKm: number;
+  /** The distinct places they overnight at, in order. */
+  stops: string[];
   /** Sightseeing buffer the agent added across the trip. km. */
   bufferKm: number;
-  /** routedKm + marginKm + bufferKm — the number the hire is priced on. */
+  /** routedKm + localKm + bufferKm — the number the hire is priced on. */
   totalKm: number;
   /** Legs that could not be measured. The agent fixes or overrides these. */
   failures: { label: string; origin: string; destination: string; error: string }[];
@@ -238,19 +262,20 @@ export async function measureItinerary(
     push(inbound.label, metersToKm(inbound.meters), inbound.bufferKm, inbound.source === "MANUAL", -1);
   }
 
-  const bps = await roadMarginBps();
-  const margin = marginKm(routedKm, bps);
+  const stops = overnightStops(chained);
+  const perStop = await perStopKm();
+  const localAllowance = stops.length * perStop;
 
   /*
-   * The margin rides as its own leg rather than being spread across the real
-   * ones. Two reasons: every routed leg stays exactly what Google says, so
-   * anyone can check it; and the pricing engine consumes legs, so a margin
-   * that is not a leg would be measured and then quietly not charged.
+   * Rides as its own leg rather than being spread across the real ones. Every
+   * routed leg then still matches exactly what anyone gets from Google, and
+   * because the pricing engine consumes legs, an allowance that was not a leg
+   * would be measured and then quietly not charged.
    */
-  if (margin > 0) {
+  if (localAllowance > 0) {
     legs.push({
-      label: `Road margin (+${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 1)}%)`,
-      km: margin,
+      label: `Local running at ${stops.length} stop${stops.length === 1 ? "" : "s"} (${perStop} km each)`,
+      km: localAllowance,
       bufferKm: 0,
       dayIndex: -1,
     });
@@ -259,10 +284,10 @@ export async function measureItinerary(
   return {
     legs,
     routedKm,
-    marginKm: margin,
-    marginBps: bps,
+    localKm: localAllowance,
+    stops,
     bufferKm,
-    totalKm: routedKm + margin + bufferKm,
+    totalKm: routedKm + localAllowance + bufferKm,
     failures: failures.map((f) => ({
       label: f.label,
       origin: f.origin,

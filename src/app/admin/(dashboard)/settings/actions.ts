@@ -34,25 +34,25 @@ export async function saveMarkupRule(_prev: FormState, formData: FormData): Prom
 
 
 /**
- * Sets the road margin.
+ * Sets the local-running allowance per overnight stop.
  *
- * Accepts a percentage because that is what a person thinks in, and stores
- * BASIS POINTS because that is what the arithmetic needs to be exact — the
- * same reason MarkupRule does it.
+ * Kilometres, whole numbers — this is a distance an operator states to a
+ * customer, not a derived quantity, so there is nothing to gain from
+ * fractions of a kilometre.
  */
-export async function saveRoadMargin(_prev: FormState, formData: FormData): Promise<FormState> {
+export async function savePerStopKm(_prev: FormState, formData: FormData): Promise<FormState> {
   if (!(await getAdminSession())) throw new Error("Not signed in.");
 
-  const raw = String(formData.get("percent") ?? "").trim();
-  if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
-    return { ok: false, message: "Enter a percentage like 5 or 7.5.", errors: { percent: "Not a percentage" } };
+  const raw = String(formData.get("km") ?? "").trim();
+  if (!/^\d{1,3}$/.test(raw)) {
+    return { ok: false, message: "Enter a whole number of kilometres.", errors: { km: "Not a number" } };
   }
-  const bps = Math.round(Number(raw) * 100);
-  if (bps > 5000) {
-    return { ok: false, message: "That is more than 50% — check the number.", errors: { percent: "Too large" } };
+  const km = Number(raw);
+  if (km > 500) {
+    return { ok: false, message: "That is a lot per stop — check the number.", errors: { km: "Too large" } };
   }
 
-  await setSetting(SETTING_KEYS.ROAD_MARGIN_BPS, bps);
+  await setSetting(SETTING_KEYS.PER_STOP_KM, km);
   revalidatePath("/admin/settings");
-  return { ok: true, message: `Road margin set to ${raw}%.` };
+  return { ok: true, message: `Local running set to ${km} km per overnight stop.` };
 }

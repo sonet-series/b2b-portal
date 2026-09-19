@@ -11,22 +11,18 @@ import { prisma } from "./db";
 
 export const SETTING_KEYS = {
   /**
-   * Road margin, in BASIS POINTS (500 = 5%).
+   * Local running allowed at each overnight stop, in KILOMETRES.
    *
-   * Google returns the shortest practical route. Real driving is longer:
-   * diversions, one-ways, a wrong turn, the stretch from the main road to a
-   * resort gate. Confirmed by Sonet on 19 Sept 2026 that measured distances
-   * are close but consistently a little short.
+   * Replaced a percentage road margin on 19 Sept 2026. A percentage scales
+   * with the distance driven, which is backwards: local running happens where
+   * the party STOPS, not on the long transfers. A 400 km transfer day does not
+   * need 20 km of slack; a night at Munnar needs a day around the tea estates.
    *
-   * Applied to the ROUTED distance only, and shown as its own line rather
-   * than folded into the legs — so "Cochin to Munnar 107 km" still matches
-   * what anyone gets from Google, and the uplift stays something a customer
-   * (and Sonet) can see and argue with.
-   *
-   * NOT the same thing as a day's sightseeing buffer, which is a specific
-   * detour an agent knows about and adds on purpose.
+   * Counted per DISTINCT place they overnight at, not per night and not per
+   * day — two nights at Munnar is one place to drive around. The final day's
+   * drop point does not count: they leave from there.
    */
-  ROAD_MARGIN_BPS: "roadMarginBps",
+  PER_STOP_KM: "perStopKm",
 
   /**
    * GST on the hire, in BASIS POINTS (500 = 5%).
@@ -43,7 +39,7 @@ export const SETTING_KEYS = {
 } as const;
 
 const DEFAULTS: Record<string, number> = {
-  [SETTING_KEYS.ROAD_MARGIN_BPS]: 500, // 5%
+  [SETTING_KEYS.PER_STOP_KM]: 60,
   [SETTING_KEYS.GST_BPS]: 500, // 5%
 };
 
@@ -60,20 +56,9 @@ export async function setSetting(key: string, value: number): Promise<void> {
   });
 }
 
-/** Basis points of margin currently applied to routed distance. */
-export async function roadMarginBps(): Promise<number> {
-  return getSetting(SETTING_KEYS.ROAD_MARGIN_BPS);
-}
-
-/**
- * The extra kilometres a margin adds to a routed distance.
- *
- * Rounded UP, like every other distance here: a hire is billed in whole
- * kilometres and the operator does not absorb the remainder.
- */
-export function marginKm(routedKm: number, bps: number): number {
-  if (bps <= 0 || routedKm <= 0) return 0;
-  return Math.ceil((routedKm * bps) / 10_000);
+/** Kilometres allowed for local running at each overnight stop. */
+export async function perStopKm(): Promise<number> {
+  return getSetting(SETTING_KEYS.PER_STOP_KM);
 }
 
 

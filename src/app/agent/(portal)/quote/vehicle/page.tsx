@@ -143,8 +143,8 @@ export default async function VehicleQuotePage({
                 <h2 className="text-base font-semibold text-slate-900">Distance</h2>
                 <p className="text-sm text-slate-600 tabular-nums">
                   {itin.routedKm.toLocaleString("en-IN")} km measured
-                  {itin.marginKm > 0 && (
-                    <> + {itin.marginKm.toLocaleString("en-IN")} km margin</>
+                  {itin.localKm > 0 && (
+                    <> + {itin.localKm.toLocaleString("en-IN")} km local running</>
                   )}
                   {itin.bufferKm > 0 && <> + {itin.bufferKm.toLocaleString("en-IN")} km sightseeing</>}
                   {" = "}
@@ -169,12 +169,12 @@ export default async function VehicleQuotePage({
               <p className="mt-3 text-xs text-slate-500">
                 Includes the run out from the depot and back to it after the drop — both are
                 chargeable distance the vehicle actually covers.
-                {itin.marginKm > 0 && (
+                {itin.localKm > 0 && (
                   <>
                     {" "}
-                    The {(itin.marginBps / 100).toFixed(itin.marginBps % 100 === 0 ? 0 : 1)}% road
-                    margin covers what a map route does not: diversions, one-ways, the stretch from
-                    the main road to the gate. Each leg above is exactly what Google measured.
+                    Local running covers driving around each place they stay —{" "}
+                    {itin.stops.join(", ")} — on top of the transfers. Each leg above is exactly
+                    what Google measured.
                   </>
                 )}
                 {itin.anyManual && " Some distances were entered by hand rather than measured."}
