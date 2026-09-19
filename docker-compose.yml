@@ -33,8 +33,9 @@ services:
       # Agent documents live beside prod.db on the SAME bind mount, so they
       # survive a container rebuild exactly like the database does.
       - UPLOAD_DIR=/app/data/uploads
-      # ANTHROPIC_API_KEY comes from .env.production — the AI rate-sheet
-      # import refuses to run without it rather than falling back to a stub.
+      # ANTHROPIC_API_KEY and GOOGLE_MAPS_API_KEY both come from
+      # .env.production. Each refuses to run without its key rather than
+      # falling back to the fabricated dev stub, which is gated on NODE_ENV.
       # Runs the admin upsert on boot; the seeded password is one-time and the
       # app forces a change at first sign-in.
       - RUN_SEED_ON_START=1

@@ -278,6 +278,18 @@ async function seedDemoCatalogue() {
     include: { rates: true },
   });
 
+  // A garage, with that vehicle in it. Without one the vehicle quote screen
+  // has nothing to offer at all: an agent picks the garage first, and the
+  // distance is measured from it, so demo data that skipped this would leave
+  // the whole cab flow untestable.
+  await prisma.garage.create({
+    data: {
+      name: "Cochin",
+      address: "Series Tours, NH 66 Bypass, Edappally, Kochi, Kerala 682024",
+      vehicles: { create: [{ vehicleId: vehicle.id }] },
+    },
+  });
+
   const itinerary = await prisma.itinerary.create({
     data: {
       name: "5N/6D Munnar – Thekkady – Alleppey",

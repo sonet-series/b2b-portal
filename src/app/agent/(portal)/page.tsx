@@ -6,11 +6,35 @@ import { Card, PageHeader, Badge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The first question the portal asks.
+ *
+ * Agents arrive knowing what kind of enquiry they are holding — a cab request,
+ * a room, a backwater night, a whole package — and each of those needs a
+ * different set of questions next. Asking once, up front, means nobody is
+ * shown a form full of fields that do not apply to them.
+ */
 const PRODUCTS = [
-  { href: "/agent/quote/vehicle", label: "Vehicles", description: "Per day, per km, and point-to-point transfers." },
-  { href: "/agent/quote/houseboat", label: "Houseboats", description: "Day and overnight cruises in the backwaters." },
-  { href: "/agent/quote/hotel", label: "Hotels", description: "Room rates across our property list." },
-  { href: "/agent/quote/package", label: "Packages", description: "Fixed itineraries, per person or per group." },
+  {
+    href: "/agent/quote/vehicle",
+    label: "Cab only",
+    description: "A vehicle for a trip. Build the route day by day and we work out the kilometres.",
+  },
+  {
+    href: "/agent/quote/hotel",
+    label: "Hotels only",
+    description: "Room rates on your agency's own contracted prices.",
+  },
+  {
+    href: "/agent/quote/houseboat",
+    label: "Houseboat only",
+    description: "Day cruises and overnight stays in the backwaters.",
+  },
+  {
+    href: "/agent/quote/package",
+    label: "Tour package",
+    description: "A ready-made itinerary, priced per person or per group.",
+  },
 ];
 
 export default async function AgentHomePage() {
@@ -21,7 +45,7 @@ export default async function AgentHomePage() {
     <>
       <PageHeader
         title={`Welcome, ${agent.contactName}`}
-        description="Instant quotes on your agency's rates. Pick a product to get started."
+        description="Instant quotes on your agency's own rates. What are you quoting for?"
       />
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -35,6 +59,14 @@ export default async function AgentHomePage() {
           </Link>
         ))}
       </div>
+
+      <p className="mt-4 text-sm text-slate-500">
+        Need more than one of these on the same trip?{" "}
+        <Link href="/agent/trip" className="text-blue-700 hover:underline">
+          Build a combined trip
+        </Link>{" "}
+        — quote each part, add it, and save the whole thing as one quote.
+      </p>
 
       {recent.length > 0 && (
         <section className="mt-8">

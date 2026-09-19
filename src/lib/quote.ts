@@ -4,6 +4,7 @@ import { resolvePrices, overrideKey } from "./rate-card";
 import { loadMarkupTable } from "./markup-store";
 import { sellPrice, sellPriceOptional, type MarkupTable } from "./markup";
 import { priceHouseboat, priceItinerary, PricingError } from "./pricing";
+import { measureItinerary } from "./itinerary";
 import {
   parseDateOnly,
   formatDateDisplay,
@@ -39,6 +40,7 @@ import type {
   HouseboatQuoteInput,
   VehicleQuoteInput,
   ItineraryQuoteInput,
+  ItinerarySummary,
 } from "./quote-types";
 
 /**
@@ -374,15 +376,72 @@ export async function quoteVehicle(
 
   const days = daysBetween(start, end);
 
-  // The itinerary is what the agent knows; the total is derived from it. The
-  // pricing below is unchanged — it still consumes one number.
-  const km = totalLegKm(input.legs);
-
   const vehicle = await prisma.vehicle.findFirst({
     where: { id: input.vehicleId, active: true },
     include: { rates: { where: { active: true } } },
   });
   if (!vehicle) throw new PricingError("That vehicle is not available.");
+
+  /*
+   * Measure the itinerary HERE rather than taking distances from the caller.
+   *
+   * The legs are derived data, and deriving them in the engine is what makes
+   * them trustworthy: the priced page and the save path both come through this
+   * function, so they cannot disagree, and a hand-edited query string cannot
+   * hand us its own kilometres. It is the same rule saving already follows by
+   * re-pricing instead of trusting a total from the browser.
+   *
+   * Quotes saved before the itinerary builder existed carry typed `legs` and
+   * no `days`, and those still price exactly as they always did.
+   */
+  let legs = input.legs;
+  let itinerary: ItinerarySummary | undefined;
+
+  if (input.garageId && input.days && input.days.length > 0) {
+    const garage = await prisma.garage.findFirst({
+      where: { id: input.garageId, active: true },
+      include: { vehicles: { where: { vehicleId: input.vehicleId, active: true } } },
+    });
+    if (!garage) throw new PricingError("That garage is not available.");
+
+    // Checked server-side, not just hidden in the dropdown. The garage list
+    // narrows what is offered; this is what makes it true.
+    if (garage.vehicles.length === 0) {
+      throw new PricingError(`The ${vehicle.type} is not available from the ${garage.name} garage.`);
+    }
+
+    const measured = await measureItinerary(garage.address, input.days);
+
+    /*
+     * A leg that could not be measured makes the whole trip unquotable.
+     *
+     * The tempting alternative — price what we could measure and mention the
+     * rest — produces a number that looks complete and is short by however far
+     * the missing leg runs. A quote that is confidently wrong is worse than
+     * one that refuses, because only one of them gets sent to a customer.
+     */
+    if (measured.failures.length > 0) {
+      const f = measured.failures[0];
+      throw new PricingError(
+        measured.failures.length === 1
+          ? `${f.label}: ${f.error}`
+          : `${measured.failures.length} legs could not be measured. First: ${f.label} — ${f.error}`
+      );
+    }
+
+    legs = measured.legs;
+    itinerary = {
+      legs: measured.legs,
+      routedKm: measured.routedKm,
+      bufferKm: measured.bufferKm,
+      totalKm: measured.totalKm,
+      anyManual: measured.anyManual,
+    };
+  }
+
+  // Whatever the source, the itinerary reduces to the one number the per-day
+  // and per-km logic below has always consumed. None of that maths changed.
+  const km = totalLegKm(legs);
 
   // Loaded per quote, never cached: the settings screen must take effect now.
   const markup = await loadMarkupTable();
@@ -464,9 +523,7 @@ export async function quoteVehicle(
         } else {
           if (extraRate.usedOverride) usedOverride = true;
           const legSummary =
-            input.legs.length > 0
-              ? ` across ${input.legs.length} leg${input.legs.length === 1 ? "" : "s"}`
-              : "";
+            legs.length > 0 ? ` across ${legs.length} leg${legs.length === 1 ? "" : "s"}` : "";
           lines.push({
             description: `Extra km (${km} km${legSummary}, ${includedKm} km included)`,
             quantity: extraKm,
@@ -548,7 +605,7 @@ export async function quoteVehicle(
   }
 
   options.sort((a, b) => a.totalMinor - b.totalMinor);
-  return { options, unavailable };
+  return { options, unavailable, itinerary };
 }
 
 // ---------------------------------------------------------------------------

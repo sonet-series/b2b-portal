@@ -235,6 +235,21 @@ export const vehicleSchema = z.object({
   active: checkbox,
 });
 
+export const garageSchema = z.object({
+  name: text("Garage name", 80),
+  /**
+   * Free text, but it is what Google routes from, so vagueness here is not
+   * cosmetic — every quote dispatched from this garage inherits whatever
+   * place a loose address happens to resolve to.
+   */
+  address: text("Garage address", 300),
+  active: checkbox,
+});
+
+export const garageVehiclesSchema = z.object({
+  vehicleIds: z.array(z.string().min(1)).max(200),
+});
+
 export const vehicleRateSchema = z
   .object({
     rateType: z.enum(VEHICLE_RATE_TYPE, { error: "Choose a rate type" }),
@@ -555,16 +570,61 @@ export const vehicleLegSchema = z.object({
   bufferKm: legKm("Sightseeing buffer"),
 });
 
+export const itineraryDaySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  from: z.string().trim().max(160, "Place name is too long"),
+  to: z.string().trim().max(160, "Place name is too long"),
+  via: z.array(z.string().trim().max(160, "Place name is too long")).max(8, "Too many stops on one day"),
+  bufferKm: legKm("Sightseeing buffer"),
+  /** Present only when routing failed and the agent typed the distance. */
+  manualKm: legKm("Distance").optional(),
+});
+
 export const vehicleQuoteSchema = z
   .object({
     vehicleId: z.string().min(1, "Choose a vehicle"),
+    garageId: z.string().min(1, "Choose a garage").optional(),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a start date"),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose an end date"),
-    legs: z.array(vehicleLegSchema).max(40, "That is a lot of legs — split the trip"),
+    adults: z.coerce
+      .number({ error: "Adults must be a number" })
+      .int("Adults must be a whole number")
+      .min(1, "At least one adult is travelling")
+      .max(60, "That is a large party — split it across vehicles")
+      .optional(),
+    childAges: z
+      .array(
+        z.coerce
+          .number({ error: "A child's age must be a number" })
+          .int("A child's age must be a whole number")
+          .min(0, "A child's age cannot be negative")
+          .max(17, "Anyone 18 or over counts as an adult")
+      )
+      .max(40, "That is a lot of children — split the party")
+      .optional(),
+    days: z.array(itineraryDaySchema).max(40, "That is a long trip — split it").optional(),
+    legs: z.array(vehicleLegSchema).max(60, "That is a lot of legs — split the trip"),
   })
   .superRefine((v, ctx) => {
     if (v.endDate < v.startDate) {
       ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date must not be before the start date" });
+    }
+
+    // A day-by-day itinerary is only meaningful once it knows where it starts.
+    // Without a first pickup point there is nothing to chain the rest onto and
+    // nothing to measure the garage run against.
+    if (v.days && v.days.length > 0 && v.days[0].from.trim() === "") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["days", 0, "from"],
+        message: "Where is the party picked up?",
+      });
+    }
+
+    // The garage is what makes the return run billable. An itinerary without
+    // one would quietly quote a one-way distance for a round trip.
+    if (v.days && v.days.length > 0 && !v.garageId) {
+      ctx.addIssue({ code: "custom", path: ["garageId"], message: "Choose a garage" });
     }
   });
 
@@ -595,6 +655,62 @@ export function parseVehicleLegs(params: Record<string, string | string[] | unde
     rows.push({ label, km: km === "" ? "0" : km, bufferKm: bufferKm === "" ? "0" : bufferKm });
   }
   return rows;
+}
+
+/**
+ * Itinerary days travel the same way legs always have: PARALLEL repeated query
+ * params, which a plain GET form produces with no client-side serialising, so
+ * a priced itinerary stays refreshable and shareable like every other quote.
+ *
+ * The one thing that does not fit that shape is `via`, which is a list inside
+ * each day. It is packed into one param per day with "|" between stops — a
+ * character no place name contains — and unpacked here.
+ */
+export function parseItineraryDays(params: Record<string, string | string[] | undefined>) {
+  const asArray = (v: string | string[] | undefined): string[] =>
+    v === undefined ? [] : Array.isArray(v) ? v : [v];
+
+  const froms = asArray(params.dayFrom);
+  const tos = asArray(params.dayTo);
+  const vias = asArray(params.dayVia);
+  const buffers = asArray(params.dayBufferKm);
+  const manuals = asArray(params.dayManualKm);
+  const dates = asArray(params.dayDate);
+
+  const count = Math.max(froms.length, tos.length, dates.length);
+  const rows: {
+    date: string;
+    from: string;
+    to: string;
+    via: string[];
+    bufferKm: string;
+    manualKm?: string;
+  }[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const manual = (manuals[i] ?? "").trim();
+    rows.push({
+      date: (dates[i] ?? "").trim(),
+      from: (froms[i] ?? "").trim(),
+      to: (tos[i] ?? "").trim(),
+      via: (vias[i] ?? "")
+        .split("|")
+        .map((v) => v.trim())
+        .filter((v) => v !== ""),
+      bufferKm: (buffers[i] ?? "").trim() === "" ? "0" : (buffers[i] ?? "").trim(),
+      // Absent rather than empty: an empty string would coerce to 0 km and
+      // silently turn "not measured yet" into "this day has no distance".
+      ...(manual === "" ? {} : { manualKm: manual }),
+    });
+  }
+  return rows;
+}
+
+/** Child ages arrive as one repeated param, one entry per child. */
+export function parseChildAges(params: Record<string, string | string[] | undefined>): string[] {
+  const raw = params.childAge;
+  const list = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
+  return list.map((v) => v.trim()).filter((v) => v !== "");
 }
 
 export const itineraryQuoteSchema = z.object({

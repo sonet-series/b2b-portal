@@ -83,7 +83,7 @@ export async function saveQuote(
 ): Promise<string> {
   // Re-priced from the inputs and the agent's CURRENT tier — the browser's
   // total is never trusted, and neither is a tier the client might send.
-  const { options } = await recompute(agent, input);
+  const { options, itinerary: measured } = await recompute(agent, input);
   const option = options.find((o) => o.key === optionKey);
   if (!option) {
     throw new PricingError("That option is no longer available at this price. Please requote.");
@@ -112,7 +112,20 @@ export async function saveQuote(
     // legs are inputs to one priced line, not charges of their own, so they
     // are recorded here rather than as zero-value QuoteLine rows that would
     // break "lines sum to the total".
-    legs: input.productType === "vehicle" ? input.legs : undefined,
+    // Taken from the RE-PRICED result, not from the input. A vehicle quote
+    // built from a day-by-day plan carries no legs on the way in — they are
+    // measured during pricing — so reading them off the input would freeze an
+    // empty itinerary onto the quote. Older quotes, whose legs really were
+    // typed, still fall back to the input.
+    legs:
+      input.productType === "vehicle" ? (measured?.legs ?? input.legs) : undefined,
+    /**
+     * The day plan and the distance behind it, frozen with everything else.
+     * Rates are not the only thing that drifts — Google's idea of the road
+     * between two places changes too, so a reference has to carry the
+     * kilometres it was actually priced on.
+     */
+    itinerary: input.productType === "vehicle" && measured ? measured : undefined,
     // Recorded so a saved quote explains itself later, after a tier override
     // or a rate change would otherwise make the number look arbitrary.
     tier: agent.tier,

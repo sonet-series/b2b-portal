@@ -38,7 +38,12 @@ makes explicitly. It is never a default, and never something to build on spec.
 - Sonet-only admin: catalogue CRUD + agent approval + rate-card assignment.
 
 **Out of scope — do not build**
-- Booking, payment, or any money movement.
+- Payment, or any money movement. Still true, and unaffected by the booking
+  work below.
+- ~~Booking~~ — Sonet reversed this on 19 Sept 2026. Agents will be able to
+  submit a booking request against a saved quote, which Sonet approves before
+  it is confirmed. **No money moves through the portal**; it is a request and
+  an approval, not a transaction. Not built yet — see Phase 7.
 - Multi-admin, roles, or admin invites. One admin user: Sonet.
 - B2C / consumer booking (that is cochincarrental.com, a separate system).
 - Anything touching the ERP.
@@ -376,7 +381,11 @@ Node lives at `~/.local/node/bin` and is on PATH via `~/.zshrc`.
 - [x] **Phase 2** — admin CRUD (hotels/houseboats/vehicles/itineraries/rates) + Sonet-only auth
 - [x] **Phase 3** — agent registration, pending queue, approve + assign rate card
 - [x] **Phase 4** — agent quote screens for the four product types, price resolution
-- [ ] **Phase 5** — polish, deploy to b2b.seriestours.com
+- [x] **Phase 5** — polish, deploy to b2b.seriestours.com
+- [x] **Phase 6** — cost + markup rules, AI rate-sheet import, combined quoting
+- [ ] **Phase 7** — garages, measured distances, day-by-day vehicle itineraries
+      (built 19 Sept 2026); then branded quote print, then online booking with
+      admin approval
 
 Each phase ends with a checkpoint for Sonet: what was built, what is left, what
 needs a decision. Do not push silently into the next phase.
@@ -425,6 +434,95 @@ The legs are recorded in `Quote.snapshotJson` and rendered as an itinerary
 block on the saved quote, so a reference explains where its distance came from.
 They are deliberately NOT `QuoteLine` rows: they are inputs to one priced line,
 not charges, and zero-value lines would break "lines sum to the total".
+
+### Garages, and garage-to-garage distance (19 Sept 2026)
+A Kerala vehicle hire is billed **garage to garage**, not pickup to drop. A car
+sent from Cochin to collect a party at Cochin airport has already driven that
+stretch, and after releasing them in Madurai it still drives home empty. Both
+runs are real diesel, and quoting only the distance the passengers were aboard
+for loses them on every single hire.
+
+So `Garage` is a catalogue entity, and `buildHops()` brackets every itinerary
+with a run out to the first pickup and a run back from the last drop.
+
+**`GarageVehicle` is a join, not a column.** Not every garage keeps every
+vehicle. The agent picks the garage first and is then offered only what can be
+dispatched from it. That narrowing is **also enforced in `quoteVehicle`** — the
+dropdown is a convenience, the server check is what makes it true.
+
+`Garage.address` is what Google routes from, so vagueness there is not
+cosmetic: every quote from that garage inherits whatever place a loose address
+resolves to. The admin form says so.
+
+### Distances are measured, not typed (19 Sept 2026)
+`src/lib/distance.ts` calls the Google **Routes API** (not legacy Distance
+Matrix). Four things about it are load-bearing:
+
+1. **Metres are stored as `Int`, km derived at the edge.** Same reasoning as
+   money in paise: rounding each hop to km and summing afterwards drifts by
+   several km across a ten-hop itinerary. `metersToKm` rounds UP, once, at the
+   end — a hire is billed in whole km and the operator does not absorb the
+   remainder.
+
+2. **`RoadDistance` caches every hop.** Not an optimisation bolted on after:
+   Cochin → Munnar is the same road for every agent who quotes it, and without
+   the cache a busy day is a Routes API bill. It also keeps a quote refreshable
+   when Google is briefly unreachable.
+
+3. **`TRAFFIC_UNAWARE` is deliberate.** A quote is for a trip weeks away, so
+   current traffic is noise — and noise that would make the same itinerary
+   quote differently depending on when the button was pressed.
+
+4. **The dev stub returns `source: "STUB"`, never `"MANUAL"`.** `MANUAL` means
+   a human typed the number. Labelling a fabricated distance as hand-entered
+   made the quote screen claim something untrue, which is why `HopSource` is
+   wider than the persisted `DistanceSource`. The stub is gated on
+   `NODE_ENV !== "production"` and is never cached.
+
+**A leg that cannot be measured makes the whole trip unquotable.** Pricing what
+we could measure and mentioning the rest produces a number that looks complete
+and is short by however far the missing leg runs. The escape hatch is
+`ItineraryDay.manualKm`, which skips routing for that day entirely and is
+recorded so the quote can say the distance was not measured.
+
+### Vehicle itineraries are day-by-day (19 Sept 2026)
+This replaced the free-form leg list from 26 Aug. Agents plan in days — "day 2,
+at Munnar, running up to Top Station" — so the form asks for exactly that.
+
+- **The number of day rows is DERIVED from the hire dates**, never typed. An
+  itinerary with a different number of days than the hire it prices should not
+  be expressible.
+- **Day N starts where day N-1 ended** (`chainDays`). Only the first pickup is
+  a real choice. Letting both ends be typed allows an invisible gap, and that
+  gap is unbilled distance the operator still pays for.
+- **A day excursion is `from === to` with a via point.** One shape, not two:
+  the route is Munnar → Top Station → Munnar, which measures correctly with no
+  special case. The UI presents it as a "stay at the same place" tick and
+  relabels the via field; the data underneath is unchanged.
+- **Buffer km stay per day** and ride on that day's last hop, so a leg reads
+  "Munnar → Thekkady, 95 km + 40 km sightseeing" rather than adding a
+  zero-distance row.
+
+**The pricing maths is untouched.** `measureItinerary` reduces the plan to the
+same `VehicleLeg[]` the engine has always consumed, and `totalLegKm` still
+hands the per-day / per-km logic one number.
+
+**Measurement happens INSIDE `quoteVehicle`, not in the page.** That is what
+makes the legs trustworthy: the priced screen and the save path both go through
+it, so they cannot disagree, and a hand-edited query string cannot supply its
+own kilometres. Verified — appending `&legKm=9000` to a URL carrying `days`
+changes nothing. `VehicleQuoteInput.legs` is only read for quotes saved before
+this existed.
+
+`garageId`, `pax` and `days` are all OPTIONAL on `VehicleQuoteInput` for that
+reason alone: older snapshots have no value for them and must keep rendering.
+
+**Children are listed by age, not counted.** An age is what actually decides
+anything downstream (a hotel's child policy, whether a seat is needed); a bare
+count throws that away. For a vehicle it only affects capacity, where everyone
+counts toward the seat total — erring toward suggesting a bigger vehicle rather
+than one the party cannot fit in. Over capacity warns, it does not block: a
+small child may genuinely not need a seat, and that is the agent's call.
 
 ### Combined trip quoting (26 Aug 2026)
 An agent assembles a whole trip — one vehicle, several hotel stays, a houseboat

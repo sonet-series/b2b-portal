@@ -127,6 +127,16 @@ export const MARKUP_KIND_LABEL: Record<MarkupKind, string> = {
   PERCENT: "Percentage (%)",
 };
 
+/**
+ * Where a road distance came from.
+ *
+ * GOOGLE is routed; MANUAL is a number a human typed because routing was
+ * unavailable. They are kept distinct so a saved quote can always say which
+ * kind of number it was priced on.
+ */
+export const DISTANCE_SOURCE = ["GOOGLE", "MANUAL"] as const;
+export type DistanceSource = (typeof DISTANCE_SOURCE)[number];
+
 /** The three documents every agent uploads at registration. */
 export const DOCUMENT_KIND = ["PAN_CARD", "BUSINESS_PROOF", "VISITING_CARD"] as const;
 export type DocumentKind = (typeof DOCUMENT_KIND)[number];
@@ -146,5 +156,6 @@ export const isDocumentKind = makeGuard(DOCUMENT_KIND);
 export const isAgentTier = makeGuard(AGENT_TIER);
 export const isRateCharge = makeGuard(RATE_CHARGE);
 export const isMarkupKind = makeGuard(MARKUP_KIND);
+export const isDistanceSource = makeGuard(DISTANCE_SOURCE);
 export const isHouseboatPricingMode = makeGuard(HOUSEBOAT_PRICING_MODE);
 export const isItineraryPricingMode = makeGuard(ITINERARY_PRICING_MODE);

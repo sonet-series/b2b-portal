@@ -10,6 +10,7 @@ const NAV = [
   { href: "/admin/hotels", label: "Hotels" },
   { href: "/admin/houseboats", label: "Houseboats" },
   { href: "/admin/vehicles", label: "Vehicles" },
+  { href: "/admin/garages", label: "Garages" },
   { href: "/admin/itineraries", label: "Packages" },
   { href: "/admin/agents", label: "Agents" },
   { href: "/admin/settings", label: "Settings" },

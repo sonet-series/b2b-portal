@@ -4,7 +4,7 @@ import { getQuote } from "@/lib/quote-store";
 import { formatMinor } from "@/lib/money";
 import { formatDateDisplay } from "@/lib/dates";
 import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
-import type { VehicleLeg } from "@/lib/quote-types";
+import type { VehicleLeg, ItineraryDay } from "@/lib/quote-types";
 
 export const dynamic = "force-dynamic";
 
@@ -34,13 +34,22 @@ export default async function QuoteDetailPage({
   // The itinerary a vehicle quote's distance was built from. Frozen at save
   // time alongside the rest of the inputs.
   let legs: VehicleLeg[] = [];
+  let days: ItineraryDay[] = [];
   try {
-    const snapshot = JSON.parse(quote.snapshotJson) as { legs?: VehicleLeg[] };
+    const snapshot = JSON.parse(quote.snapshotJson) as {
+      legs?: VehicleLeg[];
+      input?: { days?: ItineraryDay[] };
+    };
     legs = Array.isArray(snapshot.legs) ? snapshot.legs : [];
+    // The day plan the agent typed, as opposed to the road segments it was
+    // measured into. Absent on quotes saved before the itinerary builder, and
+    // on hand-typed leg quotes, both of which still render their legs below.
+    days = Array.isArray(snapshot.input?.days) ? snapshot.input.days : [];
   } catch {
     // A quote saved before legs existed, or malformed JSON — show the priced
     // lines regardless rather than failing the whole page.
     legs = [];
+    days = [];
   }
   const legTotal = legs.reduce((s, l) => s + l.km + l.bufferKm, 0);
 
@@ -68,6 +77,39 @@ export default async function QuoteDetailPage({
           </div>
           {usedOverride && <Badge tone="green">Your agency rate applied</Badge>}
         </div>
+
+        {days.length > 0 && (
+          <section className="mt-5 rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Day plan
+            </h2>
+            <ol className="mt-2 space-y-1 text-sm">
+              {days.map((d, i) => {
+                const local = d.from === d.to;
+                const via = d.via.filter((v) => v.trim() !== "");
+                return (
+                  <li key={i} className="flex flex-wrap gap-x-2 text-slate-700">
+                    <span className="w-14 shrink-0 text-slate-400">Day {i + 1}</span>
+                    <span className="w-24 shrink-0 tabular-nums text-slate-500">
+                      {formatDateDisplay(new Date(`${d.date}T00:00:00Z`))}
+                    </span>
+                    <span>
+                      {local ? `At ${d.from}` : `${d.from} → ${d.to}`}
+                      {via.length > 0 && (
+                        <span className="text-slate-500">
+                          {local ? ` · excursion to ${via.join(", ")}` : ` · via ${via.join(", ")}`}
+                        </span>
+                      )}
+                      {d.bufferKm > 0 && (
+                        <span className="text-slate-500"> · +{d.bufferKm} km sightseeing</span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        )}
 
         {legs.length > 0 && (
           <section className="mt-5 rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">

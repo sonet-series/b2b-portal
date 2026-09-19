@@ -200,7 +200,8 @@ model Vehicle {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  rates VehicleRate[]
+  rates    VehicleRate[]
+  garages  GarageVehicle[]
 
   @@index([active])
 }
@@ -643,4 +644,91 @@ model RateSheetRow {
   sortOrder Int @default(0)
 
   @@index([importId])
+}
+
+
+// ---------------------------------------------------------------------------
+// Garages, and the road distances quoted against them
+// ---------------------------------------------------------------------------
+
+/// A depot a vehicle is dispatched from.
+///
+/// This exists because a Kerala vehicle hire is billed GARAGE TO GARAGE, not
+/// pickup to drop. A car sent from Cochin to collect a party at Cochin airport,
+/// run to Madurai and released there has still driven Madurai -> Cochin empty,
+/// and that leg is chargeable. Quoting from the pickup point alone silently
+/// loses it, which is how an operator ends up eating a few hundred km.
+model Garage {
+  id String @id @default(uuid())
+
+  /// Short name the agent picks from: "Cochin", "Trivandrum".
+  name String @unique
+
+  /// The address Google routes from. Needs to be specific enough to resolve
+  /// to one place — a bare town name can land anywhere in the district, and
+  /// every quote from this garage inherits that error.
+  address String
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vehicles GarageVehicle[]
+
+  @@index([active])
+}
+
+/// Which vehicle types a garage actually holds.
+///
+/// Not every garage keeps every vehicle — a 26-seat coach may exist only at
+/// Cochin. The agent picks a garage first and is then offered only what can
+/// genuinely be dispatched from it, so an impossible hire cannot be quoted.
+model GarageVehicle {
+  id String @id @default(uuid())
+
+  garageId String
+  garage   Garage @relation(fields: [garageId], references: [id], onDelete: Cascade)
+
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([garageId, vehicleId])
+  @@index([garageId, active])
+}
+
+/// A cached road distance between two places.
+///
+/// Every routed hop costs a Google Routes API call, and the same hops recur
+/// constantly — Cochin -> Munnar is the same road for every agent who quotes
+/// it. Caching keeps a busy day from turning into a bill, and keeps a quote
+/// refreshable when the API is briefly unreachable.
+///
+/// Distance is stored in exact integer METRES for the same reason money is
+/// stored in paise: rounding to km at rest and summing afterwards loses
+/// kilometres across a ten-hop itinerary. Conversion happens at the edge, in
+/// src/lib/distance.ts.
+model RoadDistance {
+  id String @id @default(uuid())
+
+  /// Both sides are already normalised by normalisePlace() before they reach
+  /// here. Never write a raw user string to these columns or the cache will
+  /// miss on nothing more than a stray capital letter.
+  origin      String
+  destination String
+
+  meters  Int
+  seconds Int
+
+  /// DistanceSource enum: GOOGLE | MANUAL
+  /// MANUAL rows are distances a human typed when routing was unavailable.
+  /// They are kept apart so a typed number is never mistaken for a routed one.
+  source String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([origin, destination])
 }

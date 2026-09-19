@@ -1,0 +1,379 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { Button, Select, FormError } from "@/components/ui";
+import { DateField } from "@/components/date-field";
+
+/**
+ * The vehicle trip builder.
+ *
+ * Agents plan in days, not in legs: "day 1 Cochin to Munnar, day 2 at Munnar
+ * running up to Top Station, day 3 down to Thekkady". So the form asks for
+ * exactly that, derives the number of day rows from the hire dates, and works
+ * the kilometres out itself. Nobody types a distance unless Google cannot
+ * find a place.
+ *
+ * Everything submits as query params on a plain GET form, like every other
+ * quote screen, so a priced trip stays refreshable and shareable.
+ */
+
+export type GarageOption = {
+  id: string;
+  name: string;
+  vehicles: { id: string; type: string; capacity: number }[];
+};
+
+type DayRow = {
+  date: string;
+  from: string;
+  to: string;
+  via: string;
+  bufferKm: string;
+  /** Local-day flag. Drives `to`, and relabels `via` as the excursion. */
+  local: boolean;
+};
+
+const control =
+  "block w-full rounded-md border-0 px-3 py-2 text-sm text-slate-900 shadow-sm ring-1 " +
+  "ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset " +
+  "focus:ring-blue-600";
+
+function addDays(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function dayCount(start: string, end: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return 0;
+  const ms = Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`);
+  if (!Number.isFinite(ms) || ms < 0) return 0;
+  return Math.round(ms / 86_400_000) + 1;
+}
+
+export function TripForm({
+  garages,
+  initial,
+  fieldErrors,
+}: {
+  garages: GarageOption[];
+  initial: {
+    garageId: string;
+    vehicleId: string;
+    startDate: string;
+    endDate: string;
+    adults: string;
+    childAges: string[];
+    days: { date: string; from: string; to: string; via: string[]; bufferKm: string }[];
+  };
+  fieldErrors: Record<string, string>;
+}) {
+  const [garageId, setGarageId] = useState(initial.garageId || garages[0]?.id || "");
+  const [vehicleId, setVehicleId] = useState(initial.vehicleId);
+  const [startDate, setStartDate] = useState(initial.startDate);
+  const [endDate, setEndDate] = useState(initial.endDate);
+  const [adults, setAdults] = useState(initial.adults || "2");
+  const [childAges, setChildAges] = useState<string[]>(initial.childAges);
+  const [days, setDays] = useState<DayRow[]>(() =>
+    initial.days.map((d) => ({
+      date: d.date,
+      from: d.from,
+      to: d.to,
+      via: d.via.join(", "),
+      bufferKm: d.bufferKm,
+      local: d.to !== "" && d.to === d.from,
+    }))
+  );
+
+  const garage = garages.find((g) => g.id === garageId);
+  // Only what this garage actually holds. A coach that lives at Cochin must
+  // not be offerable out of Trivandrum.
+  const vehicles = garage?.vehicles ?? [];
+  const vehicle = vehicles.find((v) => v.id === vehicleId);
+
+  const count = dayCount(startDate, endDate);
+
+  /**
+   * Grow or shrink the day rows to match the dates, keeping whatever is
+   * already typed. The row count is derived, never typed — an itinerary with a
+   * different number of days than the hire it prices should not be expressible.
+   */
+  function syncDays(start: string, end: string) {
+    const n = dayCount(start, end);
+    setDays((prev) => {
+      const next: DayRow[] = [];
+      for (let i = 0; i < n; i++) {
+        const old = prev[i];
+        next.push({
+          date: addDays(start, i),
+          from: old?.from ?? "",
+          to: old?.to ?? "",
+          via: old?.via ?? "",
+          bufferKm: old?.bufferKm ?? "",
+          local: old?.local ?? false,
+        });
+      }
+      return next;
+    });
+  }
+
+  const update = (i: number, patch: Partial<DayRow>) =>
+    setDays((ds) => ds.map((d, j) => (j === i ? { ...d, ...patch } : d)));
+
+  // Day N starts where day N-1 ended. The vehicle is with the party for the
+  // whole hire, so only the first pickup is a real choice; the rest follow.
+  const chained = useMemo(() => {
+    const out: { from: string; to: string }[] = [];
+    days.forEach((d, i) => {
+      const from = i === 0 ? d.from : out[i - 1].to || out[i - 1].from;
+      out.push({ from, to: d.local ? from : d.to });
+    });
+    return out;
+  }, [days]);
+
+  const pax = (Number(adults) || 0) + childAges.length;
+  const overCapacity = vehicle != null && pax > vehicle.capacity;
+
+  const bufferTotal = days.reduce((s, d) => s + (Number(d.bufferKm) || 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Select
+          label="Garage"
+          name="garageId"
+          required
+          value={garageId}
+          onChange={(e) => {
+            setGarageId(e.target.value);
+            setVehicleId("");
+          }}
+          options={garages.map((g) => ({ value: g.id, label: g.name }))}
+          hint="The hire is measured from here and back to here."
+          error={fieldErrors.garageId}
+        />
+        <Select
+          label="Vehicle"
+          name="vehicleId"
+          required
+          value={vehicleId}
+          onChange={(e) => setVehicleId(e.target.value)}
+          options={[
+            { value: "", label: vehicles.length === 0 ? "No vehicles at this garage" : "Choose a vehicle" },
+            ...vehicles.map((v) => ({ value: v.id, label: `${v.type} — ${v.capacity} seats` })),
+          ]}
+          error={fieldErrors.vehicleId}
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <DateField
+          label="Pick-up date"
+          name="startDate"
+          required
+          defaultValue={initial.startDate}
+          onIsoChange={(iso) => {
+            setStartDate(iso);
+            syncDays(iso, endDate);
+          }}
+          error={fieldErrors.startDate}
+        />
+        <DateField
+          label="Drop date"
+          name="endDate"
+          required
+          defaultValue={initial.endDate}
+          hint="Same day for a one-way transfer."
+          onIsoChange={(iso) => {
+            setEndDate(iso);
+            syncDays(startDate, iso);
+          }}
+          error={fieldErrors.endDate}
+        />
+      </div>
+
+      {/* --- who is travelling ------------------------------------------- */}
+      <div className="rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Passengers</p>
+
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="w-28">
+            <label htmlFor="adults" className="mb-1 block text-sm font-medium text-slate-700">
+              Adults
+            </label>
+            <input
+              id="adults"
+              name="adults"
+              value={adults}
+              onChange={(e) => setAdults(e.target.value)}
+              inputMode="numeric"
+              className={`${control} tabular-nums`}
+            />
+          </div>
+
+          <div className="flex-1">
+            <span className="mb-1 block text-sm font-medium text-slate-700">Children (age)</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {childAges.map((age, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  <input
+                    name="childAge"
+                    value={age}
+                    onChange={(e) =>
+                      setChildAges((cs) => cs.map((c, j) => (j === i ? e.target.value : c)))
+                    }
+                    inputMode="numeric"
+                    placeholder="age"
+                    aria-label={`Child ${i + 1} age`}
+                    className={`${control} w-20 tabular-nums`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setChildAges((cs) => cs.filter((_, j) => j !== i))}
+                    aria-label={`Remove child ${i + 1}`}
+                    className="rounded px-1 text-sm text-slate-400 hover:text-red-700"
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+              <Button type="button" tone="secondary" onClick={() => setChildAges((cs) => [...cs, ""])}>
+                Add child
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {fieldErrors.adults && <FormError message={fieldErrors.adults} />}
+        {fieldErrors.childAges && <FormError message={fieldErrors.childAges} />}
+
+        {overCapacity && (
+          <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-inset ring-amber-200">
+            {pax} passengers in a {vehicle!.capacity}-seat {vehicle!.type}. You can still quote it —
+            a small child may not need a seat — but check before you send it.
+          </p>
+        )}
+      </div>
+
+      {/* --- the itinerary ------------------------------------------------ */}
+      <div className="rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Itinerary</p>
+          <p className="text-xs text-slate-500">
+            Distances are calculated for you, from the garage and back again.
+          </p>
+        </div>
+
+        {count === 0 ? (
+          <p className="text-sm text-slate-500">Pick the dates above and the days will appear here.</p>
+        ) : (
+          <div className="space-y-3">
+            {days.map((d, i) => (
+              <div key={i} className="rounded-md bg-white p-3 ring-1 ring-inset ring-slate-200">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-slate-900">
+                    Day {i + 1}
+                    <span className="ml-2 font-normal text-slate-500">
+                      {d.date.slice(8, 10)}/{d.date.slice(5, 7)}/{d.date.slice(0, 4)}
+                    </span>
+                  </p>
+                  <label className="flex items-center gap-2 text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={d.local}
+                      onChange={(e) => update(i, { local: e.target.checked })}
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+                    />
+                    Stay at the same place
+                  </label>
+                </div>
+
+                <input type="hidden" name="dayDate" value={d.date} />
+                <input type="hidden" name="dayTo" value={chained[i]?.to ?? ""} />
+
+                <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_7rem]">
+                  <div>
+                    <span className="mb-1 block text-xs text-slate-500">From</span>
+                    {i === 0 ? (
+                      <input
+                        name="dayFrom"
+                        value={d.from}
+                        onChange={(e) => update(i, { from: e.target.value })}
+                        placeholder="Cochin Airport"
+                        aria-label="Pick-up point"
+                        className={control}
+                      />
+                    ) : (
+                      <>
+                        {/* Chained, not typed: the vehicle cannot begin a day
+                            somewhere other than where it finished the last. */}
+                        <input type="hidden" name="dayFrom" value={chained[i]?.from ?? ""} />
+                        <p className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">
+                          {chained[i]?.from || "—"}
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  <div>
+                    <span className="mb-1 block text-xs text-slate-500">To</span>
+                    {d.local ? (
+                      <p className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">
+                        {chained[i]?.from || "—"}
+                      </p>
+                    ) : (
+                      <input
+                        value={d.to}
+                        onChange={(e) => update(i, { to: e.target.value })}
+                        placeholder="Munnar"
+                        aria-label={`Day ${i + 1} destination`}
+                        className={control}
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <span className="mb-1 block text-xs text-slate-500">
+                      {d.local ? "Day excursion to" : "Via"}
+                    </span>
+                    <input
+                      name="dayVia"
+                      value={d.via}
+                      onChange={(e) => update(i, { via: e.target.value })}
+                      placeholder={d.local ? "Top Station" : "optional"}
+                      aria-label={`Day ${i + 1} ${d.local ? "excursion" : "via point"}`}
+                      className={control}
+                    />
+                  </div>
+
+                  <div>
+                    <span className="mb-1 block text-xs text-slate-500">Buffer km</span>
+                    <input
+                      name="dayBufferKm"
+                      value={d.bufferKm}
+                      onChange={(e) => update(i, { bufferKm: e.target.value })}
+                      inputMode="numeric"
+                      placeholder="0"
+                      aria-label={`Day ${i + 1} sightseeing buffer`}
+                      className={`${control} tabular-nums`}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {fieldErrors["days.0.from"] && <FormError message={fieldErrors["days.0.from"]} />}
+
+        <p className="mt-3 text-xs text-slate-500">
+          Buffer km is local running at that stop — temple visits, a viewpoint, the odd detour —
+          added on top of the measured road distance.
+          {bufferTotal > 0 && (
+            <strong className="text-slate-700"> {bufferTotal.toLocaleString("en-IN")} km added so far.</strong>
+          )}
+        </p>
+      </div>
+    </div>
+  );
+}

@@ -49,9 +49,30 @@ export type QuoteUnavailable = {
   reason: string;
 };
 
+/**
+ * The measured itinerary behind a vehicle quote.
+ *
+ * Carried on the result so the agent can see where the kilometres came from.
+ * A distance nobody can check is a distance nobody can argue with when the
+ * customer asks why the hire costs what it does.
+ */
+export type ItinerarySummary = {
+  legs: VehicleLeg[];
+  /** Road distance, garage to garage. km. */
+  routedKm: number;
+  /** Sightseeing buffer the agent added. km. */
+  bufferKm: number;
+  /** What the hire is priced on. km. */
+  totalKm: number;
+  /** True when any leg's distance was typed rather than measured. */
+  anyManual: boolean;
+};
+
 export type QuoteResult = {
   options: QuoteOption[];
   unavailable: QuoteUnavailable[];
+  /** Vehicle quotes only, and only when built from a day-by-day itinerary. */
+  itinerary?: ItinerarySummary;
 };
 
 export type HotelQuoteInput = {
@@ -85,14 +106,89 @@ export type VehicleLeg = {
   bufferKm: number;
 };
 
+/**
+ * Who is travelling.
+ *
+ * Children are listed by age rather than counted, because an age is the thing
+ * that actually decides anything downstream — a hotel's child policy, whether
+ * a seat is needed. A bare count throws that away and cannot be recovered.
+ *
+ * For a vehicle it affects capacity only: the hire is priced by distance and
+ * days, not by head. Everyone counts toward the seat count, including small
+ * children, which errs toward suggesting a larger vehicle rather than one the
+ * party cannot actually fit in.
+ */
+export type PaxInput = {
+  adults: number;
+  /** One entry per child, each their age in years at the time of travel. */
+  childAges: number[];
+};
+
+export function totalPax(pax: PaxInput | undefined): number {
+  if (!pax) return 0;
+  return pax.adults + pax.childAges.length;
+}
+
+/**
+ * One day of a vehicle itinerary.
+ *
+ * Agents plan in days, not in legs — "day 2, at Munnar, running up to Top
+ * Station" is how the trip is actually described to the customer. The road
+ * segments and their distances are derived from this, never typed.
+ */
+export type ItineraryDay = {
+  /** ISO date. Derived from the hire dates, so it cannot disagree with them. */
+  date: string;
+  /** Where the day starts. Only day 1 is freely chosen; the rest are chained. */
+  from: string;
+  /** Where the day ends. Equal to `from` for a day spent at one stop. */
+  to: string;
+  /**
+   * Places between `from` and `to`. On a transfer day these are waypoints; on
+   * a day spent at one stop this is the excursion, which routes out and back.
+   */
+  via: string[];
+  /** Local sightseeing km added on top of the routed distance. */
+  bufferKm: number;
+  /**
+   * Set only when routing could not measure this day and the agent typed the
+   * distance instead. Its presence is what makes the quote able to say the
+   * number was not measured.
+   */
+  manualKm?: number;
+};
+
 export type VehicleQuoteInput = {
   vehicleId: string;
   startDate: string;
   endDate: string;
+
   /**
-   * The itinerary. Total km is the sum of every leg's distance and buffer, and
-   * that total feeds the existing per-day / per-km pricing unchanged.
-   * Empty is allowed: a point-to-point transfer needs no distance.
+   * The garage the vehicle is dispatched from. The hire is billed garage to
+   * garage, so this adds the run out to the pickup point and the run home
+   * after the drop.
+   *
+   * Optional because quotes saved before garages existed have no value for
+   * it, and those snapshots must keep rendering.
+   */
+  garageId?: string;
+
+  /** Optional for the same backward-compatibility reason as `garageId`. */
+  pax?: PaxInput;
+
+  /**
+   * The day-by-day plan. Absent on quotes saved before this existed, which
+   * carried hand-typed `legs` directly.
+   */
+  days?: ItineraryDay[];
+
+  /**
+   * The measured road segments. Derived from `days` and the garage when those
+   * are present, and typed by hand on older quotes.
+   *
+   * Either way this is the ONLY thing pricing consumes: `totalLegKm` reduces
+   * it to the single number the per-day / per-km logic has always taken, so
+   * none of the distance work above changed the pricing maths at all.
    */
   legs: VehicleLeg[];
 };

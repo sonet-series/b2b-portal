@@ -154,6 +154,43 @@ generates or resets — so it is safe on every container start.
 `SEED_DEMO` is deliberately unset in production: the demo catalogue must never
 appear in a real database.
 
+## Vehicle quoting needs a Google Maps key AND at least one garage
+
+Two things gate the cab flow, and neither is optional.
+
+**1. A Routes API key.** Vehicle itineraries are measured with the Google
+Routes API, so add a key to `.env.production`:
+
+```bash
+cd /opt/b2b-portal
+printf 'GOOGLE_MAPS_API_KEY=...\n' >> .env.production
+docker compose up -d --force-recreate web
+```
+
+Enable **Routes API** on that key in Google Cloud (not the legacy Distance
+Matrix), and restrict it by IP to this server. Without the key the quote
+screen refuses and says so; it never falls back to the fabricated dev stub,
+which is gated on `NODE_ENV !== "production"`. A stub inventing road distances
+on the live site would put a confidently wrong number on a customer's quote.
+
+Cost is bounded by the `RoadDistance` cache: every hop is stored after its
+first lookup, and the hops repeat constantly across agents — Cochin → Munnar
+is the same road for everybody.
+
+**Note:** the Google Places key flagged for rotation in the `seriestours-website`
+repo is a SEPARATE key. Do not reuse it here; issue a new one for this server.
+
+**2. At least one garage, with vehicles in it.** Garages are new and production
+has none, so after this deploy the vehicle quote screen will show "No vehicles
+available yet" until Sonet adds them:
+
+1. `/admin/garages` → **Add garage**, with an address specific enough to
+   resolve to one place. Every quote dispatched from that garage is measured
+   from this address, so a bare town name puts the error into every hire.
+2. On the garage's page, tick which vehicles it holds, and **Save fleet**.
+
+Agents only ever see garages that hold at least one vehicle with a live rate.
+
 ## AI rate-sheet import needs an API key
 
 The hotel rate-sheet importer calls the Claude API. **Add an Anthropic API key
