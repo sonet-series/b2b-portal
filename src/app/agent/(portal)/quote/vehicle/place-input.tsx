@@ -165,19 +165,19 @@ export function PlaceInput({
                   <div className="flex flex-wrap gap-1">
                     {group.places.map((place) => (
                       <button
-                        key={place}
+                        key={place.name}
                         type="button"
                         onClick={() => {
                           // Same guard as choosing a suggestion: setting the
                           // value must not immediately re-open the dropdown.
                           justPicked.current = true;
-                          onChange(place);
+                          onChange(place.name);
                           setShowPicks(false);
                           setOpen(false);
                         }}
                         className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-blue-100 hover:text-blue-900"
                       >
-                        {place}
+                        {place.name}
                       </button>
                     ))}
                   </div>

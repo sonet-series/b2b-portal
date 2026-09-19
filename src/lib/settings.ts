@@ -36,11 +36,22 @@ export const SETTING_KEYS = {
    * needs to see it stated separately.
    */
   GST_BPS: "gstBps",
+
+  /**
+   * Toll and parking allowed per day of the hire, in PAISE. Cost, not the
+   * agent price — marked up by the vehicle rule like every other charge.
+   *
+   * Per day rather than per route: tolls vary hop by hop and no operator
+   * prices them individually. A daily figure is what is actually quoted, and
+   * it is one number to keep current instead of a matrix nobody maintains.
+   */
+  TOLL_PARKING_PER_DAY_MINOR: "tollParkingPerDayMinor",
 } as const;
 
 const DEFAULTS: Record<string, number> = {
   [SETTING_KEYS.PER_STOP_KM]: 60,
   [SETTING_KEYS.GST_BPS]: 500, // 5%
+  [SETTING_KEYS.TOLL_PARKING_PER_DAY_MINOR]: 30_000, // ₹300/day
 };
 
 export async function getSetting(key: string): Promise<number> {
@@ -68,3 +79,9 @@ export async function gstBps(): Promise<number> {
 }
 
 export { withGst, formatBps, type QuoteTotals } from "./settings-shared";
+
+
+/** Toll and parking COST allowed per day of hire, in paise. */
+export async function tollParkingPerDayMinor(): Promise<number> {
+  return getSetting(SETTING_KEYS.TOLL_PARKING_PER_DAY_MINOR);
+}

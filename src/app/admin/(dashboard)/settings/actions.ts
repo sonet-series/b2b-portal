@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { setSetting, SETTING_KEYS } from "@/lib/settings";
+import { toMinor } from "@/lib/money";
 import { getAdminSession } from "@/lib/auth";
 import { markupRuleSchema, formObject, toFormState, type FormState } from "@/lib/validation";
 
@@ -55,4 +56,46 @@ export async function savePerStopKm(_prev: FormState, formData: FormData): Promi
   await setSetting(SETTING_KEYS.PER_STOP_KM, km);
   revalidatePath("/admin/settings");
   return { ok: true, message: `Local running set to ${km} km per overnight stop.` };
+}
+
+
+/** "1,500" or "1500.50" — the same shape the rate forms accept. */
+function parseAmount(raw: string): number | null {
+  if (!/^\d[\d,]*(\.\d{1,2})?$/.test(raw)) return null;
+  const minor = toMinor(raw);
+  return minor >= 0 ? minor : null;
+}
+
+export async function saveTollParking(_prev: FormState, formData: FormData): Promise<FormState> {
+  if (!(await getAdminSession())) throw new Error("Not signed in.");
+
+  const raw = String(formData.get("amount") ?? "").trim();
+  const minor = parseAmount(raw);
+  if (minor === null) {
+    return { ok: false, message: "Enter an amount like 300 or 300.50.", errors: { amount: "Not an amount" } };
+  }
+
+  await setSetting(SETTING_KEYS.TOLL_PARKING_PER_DAY_MINOR, minor);
+  revalidatePath("/admin/settings");
+  return { ok: true, message: `Toll and parking set to ₹${raw} per day.` };
+}
+
+export async function saveStatePermit(_prev: FormState, formData: FormData): Promise<FormState> {
+  if (!(await getAdminSession())) throw new Error("Not signed in.");
+
+  const state = String(formData.get("state") ?? "").trim();
+  const raw = String(formData.get("amount") ?? "").trim();
+  const minor = parseAmount(raw);
+  if (state === "") return { ok: false, message: "Choose a state." };
+  if (minor === null) {
+    return { ok: false, message: "Enter an amount like 1500.", errors: { amount: "Not an amount" } };
+  }
+
+  await prisma.statePermit.upsert({
+    where: { state },
+    create: { state, costMinor: minor },
+    update: { costMinor: minor, active: true },
+  });
+  revalidatePath("/admin/settings");
+  return { ok: true, message: `${state} permit set to ₹${raw} per entry.` };
 }

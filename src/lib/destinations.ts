@@ -17,56 +17,91 @@
  * that changes rarely and an empty one would quietly remove the shortcut.
  */
 
+export type Destination = {
+  name: string;
+  /**
+   * The Indian state it sits in.
+   *
+   * Carried because an interstate permit is charged per state ENTERED, and
+   * this list is the only place we reliably know where a place is. Google's
+   * autocomplete knows too, but a typed place name does not, so the quote
+   * treats an unrecognised place as unknown and says so rather than assuming
+   * no permit is due.
+   */
+  state: string;
+};
+
 export type DestinationGroup = {
   label: string;
-  places: string[];
+  places: Destination[];
 };
+
+/** The operator is based here, so no permit applies. */
+export const HOME_STATE = "Kerala";
+
+const KL = (name: string): Destination => ({ name, state: "Kerala" });
+const TN = (name: string): Destination => ({ name, state: "Tamil Nadu" });
+const KA = (name: string): Destination => ({ name, state: "Karnataka" });
 
 export const DESTINATION_GROUPS: DestinationGroup[] = [
   {
     label: "Airports & stations",
     places: [
-      "Cochin International Airport",
-      "Trivandrum International Airport",
-      "Calicut International Airport",
-      "Kannur International Airport",
-      "Madurai Airport",
-      "Ernakulam Junction",
+      KL("Cochin International Airport"),
+      KL("Trivandrum International Airport"),
+      KL("Calicut International Airport"),
+      KL("Kannur International Airport"),
+      TN("Madurai Airport"),
+      KL("Ernakulam Junction"),
     ],
   },
   {
     label: "Kerala",
     places: [
-      "Munnar",
-      "Thekkady",
-      "Alleppey",
-      "Kumarakom",
-      "Kovalam",
-      "Varkala",
-      "Wayanad",
-      "Athirappilly",
-      "Vagamon",
-      "Guruvayur",
-      "Kochi",
-      "Trivandrum",
-      "Bekal",
-      "Poovar",
-    ],
+      "Munnar", "Thekkady", "Alleppey", "Kumarakom", "Kovalam", "Varkala",
+      "Wayanad", "Athirappilly", "Vagamon", "Guruvayur", "Kochi",
+      "Trivandrum", "Bekal", "Poovar",
+    ].map(KL),
   },
   {
     label: "Beyond Kerala",
     places: [
-      "Madurai",
-      "Rameswaram",
-      "Kanyakumari",
-      "Ooty",
-      "Kodaikanal",
-      "Coorg",
-      "Mysore",
-      "Bangalore",
+      TN("Madurai"), TN("Rameswaram"), TN("Kanyakumari"), TN("Ooty"),
+      TN("Kodaikanal"), KA("Coorg"), KA("Mysore"), KA("Bangalore"),
     ],
   },
 ];
 
-/** Flattened, for a quick "is this one of ours" check. */
-export const ALL_DESTINATIONS = DESTINATION_GROUPS.flatMap((g) => g.places);
+export const ALL_DESTINATIONS: Destination[] = DESTINATION_GROUPS.flatMap((g) => g.places);
+
+const BY_NAME = new Map(ALL_DESTINATIONS.map((d) => [d.name.toLowerCase(), d]));
+
+/** The state a place sits in, or null when it is not one of ours. */
+export function stateOf(place: string): string | null {
+  return BY_NAME.get(place.trim().toLowerCase())?.state ?? null;
+}
+
+/**
+ * Which states an itinerary enters, and which places could not be placed.
+ *
+ * The home state is excluded — no permit is due for driving at home. Unknown
+ * places are REPORTED rather than assumed to be local, because assuming would
+ * silently drop a permit from the price.
+ */
+export function statesEntered(places: readonly string[]): {
+  states: string[];
+  unknown: string[];
+} {
+  const states = new Set<string>();
+  const unknown = new Set<string>();
+
+  for (const raw of places) {
+    const place = raw.trim();
+    if (place === "") continue;
+    const state = stateOf(place);
+    if (state === null) unknown.add(place);
+    else if (state !== HOME_STATE) states.add(state);
+  }
+
+  return { states: [...states].sort(), unknown: [...unknown] };
+}

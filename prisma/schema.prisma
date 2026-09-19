@@ -769,3 +769,28 @@ model Setting {
 
   updatedAt DateTime @updatedAt
 }
+
+
+/// An interstate permit fee, per state entered.
+///
+/// A row per state rather than one number, because the fee differs by state
+/// and is charged per ENTRY — a Kerala operator taking a party into Tamil Nadu
+/// pays Tamil Nadu, and into Karnataka pays Karnataka, at different rates.
+///
+/// Stored as COST like everything else in the catalogue, and marked up by the
+/// vehicle rule, so a permit behaves the same way as any other charge a
+/// customer is quoted. See src/lib/ancillary.ts.
+model StatePermit {
+  id String @id @default(uuid())
+
+  /// Must match the state names in src/lib/destinations.ts exactly — that list
+  /// is what decides which states an itinerary enters.
+  state String @unique
+
+  /// Per entry, in paise. COST, not the agent price.
+  costMinor Int
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

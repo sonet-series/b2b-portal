@@ -709,6 +709,29 @@ into a line: a tax is not a price. `withGst` lives in `settings-shared.ts`,
 which has no server-only import, and the RATE is always passed in — a client
 component must not be able to render a defaulted tax rate.
 
+### Toll, parking and interstate permits (19 Sept 2026)
+Quoted rather than excluded. "Plus tolls at actuals" means the agent cannot
+give their customer a final number, which is the point of the portal.
+
+- **Toll and parking**: one COST per day of hire (`Setting`, default ₹300).
+  Per day rather than per route — tolls vary hop by hop, no operator prices
+  them individually, and one figure to keep current beats a matrix nobody
+  maintains.
+- **Interstate permits**: `StatePermit`, one COST per state ENTERED. A row per
+  state because the fee differs by state; Kerala is home and never charged.
+
+Both are **marked up by the VEHICLE rule**, like driver allowance and extra km.
+They are charges on a vehicle hire, so they follow the vehicle's markup rather
+than having a rule of their own to keep in step.
+
+**Which states a trip enters comes from `src/lib/destinations.ts`**, which now
+carries a state per place. A place NOT on that list is reported as unknown and
+the quote says so — never assumed local. Assuming would silently drop a permit,
+and an uncharged permit is money handed over at a border with no way back.
+
+They are appended to every option **after** the options are built, not inside
+each `options.push`, so a pricing mode added later cannot quietly omit them.
+
 ### Local running is per STOP, not a percentage (19 Sept 2026)
 A percentage road margin was tried first and replaced the same day. Sonet's
 correction was right and worth recording: **a percentage scales with distance

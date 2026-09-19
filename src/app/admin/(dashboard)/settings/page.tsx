@@ -4,8 +4,12 @@ import { PRODUCT_TYPE, AGENT_TIER, AGENT_TIER_LABEL, type ProductType } from "@/
 import { Card, PageHeader } from "@/components/ui";
 import { MarkupRow } from "./markup-row";
 import { LocalRunningPanel } from "./local-running-panel";
-import { perStopKm } from "@/lib/settings";
-import { savePerStopKm } from "./actions";
+import { perStopKm, tollParkingPerDayMinor } from "@/lib/settings";
+import { prisma } from "@/lib/db";
+import { toMajor } from "@/lib/money";
+import { ALL_DESTINATIONS, HOME_STATE } from "@/lib/destinations";
+import { ChargesPanel } from "./charges-panel";
+import { savePerStopKm, saveTollParking, saveStatePermit } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +22,13 @@ const PRODUCT_LABEL: Record<ProductType, string> = {
 
 export default async function SettingsPage() {
   const stopKm = await perStopKm();
+  const tollPerDay = await tollParkingPerDayMinor();
+  const permits = await prisma.statePermit.findMany({ orderBy: { state: "asc" } });
+  // Only states the destination list can actually recognise on an itinerary —
+  // offering one we cannot detect would create a fee that never applies.
+  const knownStates = [...new Set(ALL_DESTINATIONS.map((d) => d.state))]
+    .filter((st) => st !== HOME_STATE)
+    .sort();
   // Self-heals if a rule is somehow missing, so the screen can never show a
   // blank row that silently falls back to a default nobody can see.
   await ensureMarkupRules();
@@ -68,6 +79,14 @@ export default async function SettingsPage() {
       </p>
 
       <LocalRunningPanel action={savePerStopKm} km={String(stopKm)} />
+
+      <ChargesPanel
+        tollAction={saveTollParking}
+        permitAction={saveStatePermit}
+        tollPerDay={String(toMajor(tollPerDay))}
+        permits={permits.map((p) => ({ state: p.state, cost: String(toMajor(p.costMinor)) }))}
+        knownStates={knownStates}
+      />
     </>
   );
 }

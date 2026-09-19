@@ -5,6 +5,7 @@ import { loadMarkupTable } from "./markup-store";
 import { sellPrice, sellPriceOptional, type MarkupTable } from "./markup";
 import { priceHouseboat, priceItinerary, PricingError } from "./pricing";
 import { measureItinerary } from "./itinerary";
+import { priceAncillaries } from "./ancillary";
 import {
   parseDateOnly,
   formatDateDisplay,
@@ -452,6 +453,15 @@ export async function quoteVehicle(
   const options: QuoteOption[] = [];
   const unavailable: QuoteUnavailable[] = [];
 
+  /*
+   * Toll, parking and permits ride on every option: they are incurred whether
+   * the hire is priced per day, per km or as a flat transfer. Priced once here
+   * and appended to each option's lines, so the totals cannot drift apart.
+   */
+  const ancillary = input.days?.length
+    ? await priceAncillaries(input.days, days, agent.tier, markup)
+    : null;
+
   const engagedDays: Date[] = [];
   for (let i = 0; i < days; i++) {
     engagedDays.push(new Date(startOfUtcDay(start).getTime() + i * MS_PER_DAY));
@@ -512,6 +522,17 @@ export async function quoteVehicle(
         }
       }
 
+      // Resolved whether or not the trip goes over: the rate is a term of the
+      // hire, and the customer asking "what if we add a day trip" needs it
+      // stated on a quote that happens to be within its allowance.
+      if (segments.length > 0) {
+        const rateForTerms = resolveCharge(
+          agent, markup, "vehicle", overrides, segments[0].rate.id, "EXTRA_KM",
+          segments[0].rate.extraKmCostMinor
+        );
+        extraKmRateMinor = rateForTerms?.minor;
+      }
+
       // Extra km bill against the allowance accumulated across all segments,
       // not per segment — the allowance is a trip-level pool.
       if (km != null && km > includedKm) {
@@ -520,7 +541,6 @@ export async function quoteVehicle(
           agent, markup, "vehicle", overrides, segments[0].rate.id, "EXTRA_KM",
           segments[0].rate.extraKmCostMinor
         );
-        extraKmRateMinor = extraRate?.minor;
         if (!extraRate) {
           unavailable.push({
             title,
@@ -615,6 +635,30 @@ export async function quoteVehicle(
   }
 
   options.sort((a, b) => a.totalMinor - b.totalMinor);
+  /*
+   * Appended here rather than inside each options.push, so a new pricing mode
+   * cannot be added later that quietly omits them. Toll, parking and permits
+   * are incurred whichever way the hire is priced.
+   */
+  if (ancillary && ancillary.lines.length > 0) {
+    for (const option of options) {
+      option.lines = [...option.lines, ...ancillary.lines];
+      option.totalMinor += ancillary.totalMinor;
+    }
+  }
+
+  // A place we could not place is a permit we may have failed to charge, and
+  // an unpaid permit is money handed over at a border with no way back.
+  if (ancillary && ancillary.unknownPlaces.length > 0) {
+    unavailable.push({
+      title: "Check the interstate permits",
+      reason:
+        `These places are not on our destination list, so we could not tell which state they are in: ` +
+        `${ancillary.unknownPlaces.join(", ")}. If the trip crosses a state border, the permit may be missing from this price.`,
+    });
+  }
+
+
   return { options, unavailable, itinerary };
 }
 
