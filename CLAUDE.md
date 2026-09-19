@@ -688,6 +688,28 @@ that (see the P3009 note). The wording is what the user asked for; the table
 name is invisible to them. If it is ever renamed, do it with `@@map` to the
 existing table names so no data moves.
 
+### The quote may only CLAIM what it charged (20 Sept 2026)
+The printed quote carried a fixed line — "toll, parking and interstate permits
+are charged at actuals unless stated otherwise" — written before those charges
+existed. Once they were in the price it told the customer to expect extra costs
+they had already paid for. Found by reading a PDF Sonet downloaded, not by
+looking at the code.
+
+`QuoteOption.terms` now carries `includesTollParking` and `permitStates`, both
+set from what `priceAncillaries` actually charged, and the document states only
+those. `permitStates` is a LIST rather than a flag on purpose: a trip crossing
+two states with a permit set for only one must name the one it covers — saying
+"permits included" would be a promise the operator then pays for at a border.
+
+**A sentence on a customer document must be derived from the pricing, never
+kept in step with it by hand.**
+
+### `dayIndex: -2` is the local-running allowance (20 Sept 2026)
+It used to share `-1` with the depot bookends, because both were "not a day".
+The printed quote summed everything at `-1` and reported 120 km of local
+running as "vehicle positioning to and from base" — two different things the
+customer pays for, added into one wrong sentence.
+
 ### Agents see a price, not a breakdown (19 Sept 2026)
 Confirmed with Sonet, 19 Sept 2026. The portal and the PDF show **Total, GST,
 Grand total** — no hire/bata/extra-km itemisation. An agent quotes one number

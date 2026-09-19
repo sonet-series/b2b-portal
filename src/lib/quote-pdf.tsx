@@ -135,7 +135,12 @@ export type QuotePdfInput = {
   /** Basis points of GST to apply to `totalMinor`. */
   gstBps: number;
   /** What the price covers, stated rather than itemised. */
-  terms?: { includedKm?: number; extraKmRateMinor?: number };
+  terms?: {
+    includedKm?: number;
+    extraKmRateMinor?: number;
+    includesTollParking?: boolean;
+    permitStates?: string[];
+  };
 };
 
 function Fact({ label, value, last }: { label: string; value: string; last?: boolean }) {
@@ -153,6 +158,9 @@ function QuoteDocument(q: QuotePdfInput) {
     q.legs.filter((l) => l.dayIndex === i).reduce((sum, l) => sum + l.km + l.bufferKm, 0);
   const positioningKm = q.legs
     .filter((l) => l.dayIndex === -1)
+    .reduce((sum, l) => sum + l.km + l.bufferKm, 0);
+  const localKm = q.legs
+    .filter((l) => l.dayIndex === -2)
     .reduce((sum, l) => sum + l.km + l.bufferKm, 0);
   const totalKm = q.legs.reduce((sum, l) => sum + l.km + l.bufferKm, 0);
   const haveDayTotals = q.legs.some((l) => typeof l.dayIndex === "number");
@@ -249,6 +257,12 @@ function QuoteDocument(q: QuotePdfInput) {
               );
             })}
 
+            {haveDayTotals && localKm > 0 && (
+              <View style={s.totalRow}>
+                <Text style={s.totalLabel}>Local sightseeing at each stop</Text>
+                <Text style={s.totalLabel}>{localKm.toLocaleString("en-IN")} km</Text>
+              </View>
+            )}
             {haveDayTotals && positioningKm > 0 && (
               <View style={s.totalRow}>
                 <Text style={s.totalLabel}>Vehicle positioning to and from base</Text>
@@ -284,22 +298,30 @@ function QuoteDocument(q: QuotePdfInput) {
           <Text style={s.grandAmt}>{formatMinor(totals.grossMinor)}</Text>
         </View>
 
-        {(q.terms?.includedKm != null || q.terms?.extraKmRateMinor != null) && (
+        {(q.terms?.includedKm != null ||
+          q.terms?.extraKmRateMinor != null ||
+          q.terms?.includesTollParking ||
+          (q.terms?.permitStates?.length ?? 0) > 0) && (
           <View style={s.termsBox}>
             <Text style={s.termsLabel}>WHAT THIS INCLUDES</Text>
-            {q.terms.includedKm != null && (
+            {q.terms?.includedKm != null && (
               <Text style={s.termsText}>
-                {q.terms.includedKm.toLocaleString("en-IN")} km over the hire, depot to depot.
+                {q.terms!.includedKm!.toLocaleString("en-IN")} km over the hire, depot to depot.
               </Text>
             )}
-            {q.terms.extraKmRateMinor != null && (
+            {q.terms?.extraKmRateMinor != null && (
               <Text style={s.termsText}>
-                Beyond that, {formatMinor(q.terms.extraKmRateMinor)} per km.
+                Beyond that, {formatMinor(q.terms!.extraKmRateMinor!)} per km.
               </Text>
             )}
-            <Text style={s.termsText}>
-              Toll, parking and interstate permits are charged at actuals unless stated otherwise.
-            </Text>
+            {q.terms?.includesTollParking && (
+              <Text style={s.termsText}>Toll and parking are included.</Text>
+            )}
+            {(q.terms?.permitStates?.length ?? 0) > 0 && (
+              <Text style={s.termsText}>
+                Interstate permits for {q.terms!.permitStates!.join(" and ")} are included.
+              </Text>
+            )}
           </View>
         )}
 

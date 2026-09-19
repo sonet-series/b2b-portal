@@ -54,6 +54,17 @@ export type QuoteOption = {
     includedKm?: number;
     /** Charged per km beyond `includedKm`, in paise, already marked up. */
     extraKmRateMinor?: number;
+    /** True when toll and parking are in this price rather than extra. */
+    includesTollParking?: boolean;
+    /**
+     * States whose interstate permit IS in this price.
+     *
+     * The list, not a flag: the customer document must only claim what was
+     * actually charged. A trip crossing two states with a permit set for one
+     * of them has to say which — claiming both would be a promise the
+     * operator then pays for at a border.
+     */
+    permitStates?: string[];
   };
 };
 
@@ -123,7 +134,12 @@ export type VehicleLeg = {
   bufferKm: number;
   /**
    * Which day of the itinerary this leg belongs to, 0-based; -1 for the two
-   * garage runs that bracket the trip.
+   * depot runs that bracket the trip, and -2 for the local-running allowance.
+   *
+   * -2 is its own marker rather than sharing -1: they were both "not a day",
+   * so the printed quote summed them together and labelled 120 km of local
+   * running as "vehicle positioning to and from base". Two different things
+   * the customer is paying for must not add up into one wrong sentence.
    *
    * Carried explicitly so the printed quote can total each day WITHOUT parsing
    * it back out of `label`. The label is display text — it has already changed

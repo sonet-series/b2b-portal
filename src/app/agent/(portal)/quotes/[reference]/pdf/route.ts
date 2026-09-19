@@ -41,12 +41,21 @@ export async function GET(
   let days: ItineraryDay[] = [];
   let adults = 0;
   let childAges: number[] = [];
-  let terms: { includedKm?: number; extraKmRateMinor?: number } | undefined;
+  let terms:
+    | { includedKm?: number; extraKmRateMinor?: number; includesTollParking?: boolean; permitStates?: string[] }
+    | undefined;
   try {
     const snap = JSON.parse(quote.snapshotJson) as {
       legs?: VehicleLeg[];
       input?: { days?: ItineraryDay[]; adults?: number; childAges?: number[] };
-      option?: { terms?: { includedKm?: number; extraKmRateMinor?: number } };
+      option?: {
+        terms?: {
+          includedKm?: number;
+          extraKmRateMinor?: number;
+          includesTollParking?: boolean;
+          permitStates?: string[];
+        };
+      };
     };
     legs = Array.isArray(snap.legs) ? snap.legs : [];
     days = Array.isArray(snap.input?.days) ? snap.input.days : [];

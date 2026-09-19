@@ -25,6 +25,10 @@ export type AncillaryResult = {
   states: string[];
   /** States entered that have no permit set for this vehicle. */
   missingPermits: string[];
+  /** States whose permit was actually charged — what the quote may claim. */
+  chargedPermits: string[];
+  /** True when a toll and parking amount was charged. */
+  chargedTollParking: boolean;
   /**
    * True when the route states could not be fully determined, so a transit
    * state may have been missed. Distinct from missingPermits: that is a state
@@ -68,6 +72,8 @@ export async function priceAncillaries(
   markup: MarkupTable
 ): Promise<AncillaryResult> {
   const lines: QuoteLineDraft[] = [];
+  let chargedTollParking = false;
+  let chargedPermits: string[] = [];
 
   // --- toll and parking -----------------------------------------------
   /*
@@ -81,6 +87,7 @@ export async function priceAncillaries(
   const perDayCost = vehicleToll?.costMinor ?? (await tollParkingPerDayMinor());
   if (perDayCost > 0 && hireDays > 0) {
     const unit = sellPrice(markup, "vehicle", tier, perDayCost);
+    chargedTollParking = true;
     lines.push({
       description: `Toll and parking · ${hireDays} day${hireDays === 1 ? "" : "s"}`,
       quantity: hireDays,
@@ -118,6 +125,7 @@ export async function priceAncillaries(
     // with no way to recover it. Reported, never assumed to be zero.
     const priced = new Set(permits.map((p) => p.state));
     missingPermits = states.filter((st) => !priced.has(st));
+    chargedPermits = [...priced].sort();
 
     for (const permit of permits) {
       const unit = sellPrice(markup, "vehicle", tier, permit.costMinor);
@@ -136,6 +144,8 @@ export async function priceAncillaries(
     totalMinor: lines.reduce((sum, l) => sum + l.totalMinor, 0),
     states,
     missingPermits,
+    chargedPermits,
+    chargedTollParking,
     statesIncomplete: routeStatesIncomplete,
     unknownPlaces: unknown,
   };

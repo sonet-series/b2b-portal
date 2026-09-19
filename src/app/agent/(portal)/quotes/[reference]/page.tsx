@@ -42,12 +42,21 @@ export default async function QuoteDetailPage({
   let legs: VehicleLeg[] = [];
   let days: ItineraryDay[] = [];
   let editUrl: string | null = null;
-  let terms: { includedKm?: number; extraKmRateMinor?: number } | undefined;
+  let terms:
+    | { includedKm?: number; extraKmRateMinor?: number; includesTollParking?: boolean; permitStates?: string[] }
+    | undefined;
   try {
     const snapshot = JSON.parse(quote.snapshotJson) as {
       legs?: VehicleLeg[];
       input?: AnyQuoteInput & { days?: ItineraryDay[] };
-      option?: { terms?: { includedKm?: number; extraKmRateMinor?: number } };
+      option?: {
+        terms?: {
+          includedKm?: number;
+          extraKmRateMinor?: number;
+          includesTollParking?: boolean;
+          permitStates?: string[];
+        };
+      };
     };
     legs = Array.isArray(snapshot.legs) ? snapshot.legs : [];
     // The day plan the agent typed, as opposed to the road segments it was
@@ -210,23 +219,30 @@ export default async function QuoteDetailPage({
           </div>
         </dl>
 
-        {(terms?.includedKm != null || terms?.extraKmRateMinor != null) && (
+        {(terms?.includedKm != null ||
+          terms?.extraKmRateMinor != null ||
+          terms?.includesTollParking ||
+          (terms?.permitStates?.length ?? 0) > 0) && (
           <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
-            {terms.includedKm != null && (
+            {terms?.includedKm != null && (
               <>
                 <strong className="text-slate-900">
-                  {terms.includedKm.toLocaleString("en-IN")} km
+                  {terms!.includedKm!.toLocaleString("en-IN")} km
                 </strong>{" "}
                 included
               </>
             )}
-            {terms.includedKm != null && terms.extraKmRateMinor != null && " · "}
-            {terms.extraKmRateMinor != null && (
+            {terms?.includedKm != null && terms?.extraKmRateMinor != null && " · "}
+            {terms?.extraKmRateMinor != null && (
               <>
                 extra km at{" "}
-                <strong className="text-slate-900">{formatMinor(terms.extraKmRateMinor)}</strong> per
+                <strong className="text-slate-900">{formatMinor(terms!.extraKmRateMinor!)}</strong> per
                 km
               </>
+            )}
+            {terms?.includesTollParking && <> · toll and parking included</>}
+            {(terms?.permitStates?.length ?? 0) > 0 && (
+              <> · {terms!.permitStates!.join(" and ")} permit included</>
             )}
           </p>
         )}

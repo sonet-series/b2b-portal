@@ -668,6 +668,14 @@ export async function quoteVehicle(
     for (const option of options) {
       option.lines = [...option.lines, ...ancillary.lines];
       option.totalMinor += ancillary.totalMinor;
+      // Recorded on the option so the customer document states only what was
+      // actually charged, rather than a sentence that has to be kept in step
+      // with the pricing by hand.
+      option.terms = {
+        ...option.terms,
+        includesTollParking: ancillary.chargedTollParking,
+        permitStates: ancillary.chargedPermits,
+      };
     }
   }
 

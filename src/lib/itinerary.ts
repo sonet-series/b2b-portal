@@ -303,7 +303,10 @@ export async function measureItinerary(
       label: `Local running at ${stops.length} stop${stops.length === 1 ? "" : "s"} (${perStop} km each)`,
       km: localAllowance,
       bufferKm: 0,
-      dayIndex: -1,
+      // -2, not -1: sharing the depot marker made the printed quote add this
+      // into "vehicle positioning to and from base" and report 120 km of local
+      // running as dead mileage.
+      dayIndex: -2,
     });
   }
 
