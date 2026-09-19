@@ -171,17 +171,36 @@ async function fetchFromGoogle(
     routes?: { distanceMeters?: number; duration?: string }[];
   };
   const route = data.routes?.[0];
-  if (!route || typeof route.distanceMeters !== "number") {
+
+  // No route AT ALL is the real failure: a misspelt place, or two points with
+  // no road between them. Google reports that as an empty `routes` array.
+  if (!route) {
     throw new DistanceError(
       "Google found no driving route between these two places. Check the spelling, or enter the distance by hand."
     );
   }
 
-  // duration arrives as a protobuf duration string: "12345s".
+  /*
+   * An ABSENT distanceMeters means zero, not missing.
+   *
+   * The Routes API serialises proto3, which omits fields holding their default
+   * value — so a route of 0 m comes back with no distanceMeters field at all.
+   * That happens whenever the two ends resolve to the same place, which is
+   * completely ordinary here: a garage AT Cochin airport, quoting a pickup at
+   * Cochin airport, is a zero-kilometre leg and not an error.
+   *
+   * Treating absent as missing rejected exactly those legs, and the message it
+   * produced ("no driving route between these two places") sent you looking at
+   * your spelling for a hop that had routed perfectly well.
+   */
+  const meters = route.distanceMeters ?? 0;
+
+  // duration arrives as a protobuf duration string: "12345s", and is omitted
+  // on a zero-length route for the same reason.
   const seconds = Number.parseInt(route.duration ?? "0", 10);
 
   return {
-    meters: route.distanceMeters,
+    meters,
     seconds: Number.isFinite(seconds) ? seconds : 0,
   };
 }

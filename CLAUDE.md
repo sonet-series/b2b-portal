@@ -479,6 +479,17 @@ Matrix). Four things about it are load-bearing:
    wider than the persisted `DistanceSource`. The stub is gated on
    `NODE_ENV !== "production"` and is never cached.
 
+**An ABSENT `distanceMeters` in Google's reply means ZERO, not missing** (found
+in production, 19 Sept 2026). The Routes API serialises proto3, which omits any
+field holding its default value, so a zero-metre route comes back as `{}` with
+no distance field at all. That is completely ordinary here: a garage AT Cochin
+airport quoting a pickup at Cochin airport is a genuine zero-kilometre leg.
+
+Reading absent as missing rejected exactly those legs, and the message it
+produced — "Google found no driving route between these two places, check the
+spelling" — sent Sonet hunting a typo on a hop that had routed perfectly. The
+real no-route case is an EMPTY `routes` array, and that is still refused.
+
 **A leg that cannot be measured makes the whole trip unquotable.** Pricing what
 we could measure and mentioning the rest produces a number that looks complete
 and is short by however far the missing leg runs. The escape hatch is
