@@ -364,6 +364,21 @@ model Agent {
   /// Internal note from Sonet, e.g. why a signup was rejected.
   adminNotes String?
 
+  /// The agency's own logo, for the quote they print and hand to their
+  /// customer. Stored on disk under UPLOAD_DIR like every other upload, not in
+  /// SQLite — blobs would bloat every .backup copy, and cheap copying is the
+  /// whole point of a single-file database.
+  ///
+  /// Deliberately NOT an AgentDocument. Those are identity papers: sensitive,
+  /// admin-only, and never served to the agent. A logo is the exact opposite —
+  /// it exists to be displayed, and the agent reads their own. Putting them in
+  /// one table would mean one access rule for two opposite kinds of file.
+  ///
+  /// Nullable as a pair: an agency without a logo prints an unbranded quote
+  /// rather than being blocked from printing at all.
+  logoStoredName String?
+  logoMimeType   String?
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   approvedAt  DateTime?

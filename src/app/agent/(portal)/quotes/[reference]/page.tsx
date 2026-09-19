@@ -58,7 +58,14 @@ export default async function QuoteDetailPage({
       <PageHeader
         title={`Quote ${quote.reference}`}
         description={`${PRODUCT_LABEL[quote.productType] ?? quote.productType} · quoted ${quote.createdAt.toISOString().slice(0, 10)}`}
-        action={<LinkButton href="/agent/quotes">All quotes</LinkButton>}
+        action={
+          <div className="flex gap-2">
+            <LinkButton href={`/agent/quotes/${quote.reference}/print`} tone="primary">
+              Print
+            </LinkButton>
+            <LinkButton href="/agent/quotes">All quotes</LinkButton>
+          </div>
+        }
       />
 
       <Card>

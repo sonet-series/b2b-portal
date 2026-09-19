@@ -677,6 +677,33 @@ quietly inventing room rates would be worse than no feature.
 
 Houseboats and packages can follow the same pattern once hotels are proven.
 
+### Branded quote printing (19 Sept 2026)
+The agent prints a saved quote and hands it to THEIR customer, so the page
+carries the agency's branding and **nothing of ours**. Series Tours appears
+nowhere on it — the agent is reselling, and our name on that document shows
+their customer exactly who the supplier is.
+
+**The logo is NOT an `AgentDocument`.** Those are identity papers: sensitive,
+admin-only, never served to the agent. A logo is the opposite — it exists to be
+displayed, and the agent reads their own. One table would have meant one access
+rule for two opposite kinds of file, so the logo lives in two nullable columns
+on `Agent` and is served by `/agent/branding/logo`, which takes the agent id
+**from the session, never from the URL**, so there is no id to tamper with.
+
+Nullable as a pair: an agency with no logo prints an unbranded quote rather
+than being unable to print at all.
+
+**Printing is the browser's own**, via `@media print` rules and
+`window.print()`. No PDF library to keep current, and "Save as PDF" in the
+print dialogue produces the file anyway.
+
+**Do not hide the portal chrome with a `print:` utility class.** It was tried
+and Tailwind emitted no rule for it — the class sat on the header looking
+correct while the nav would still have printed. The rule is written by hand in
+the print page's own `<style>` block, where it was verified present in
+`document.styleSheets`. On this page that is not cosmetic: a silent failure
+puts our name on their customer's document.
+
 ### Agent documents (26 Aug 2026)
 Registration collects three files — PAN card, business proof, visiting card —
 which replaced the free-text GST/licence field. Address, alternative phone and

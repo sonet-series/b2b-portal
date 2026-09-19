@@ -13,6 +13,7 @@ const NAV = [
   { href: "/agent/quote/package", label: "Packages" },
   { href: "/agent/trip", label: "Current trip" },
   { href: "/agent/quotes", label: "Saved quotes" },
+  { href: "/agent/branding", label: "Branding" },
 ];
 
 async function signOut() {
@@ -33,7 +34,7 @@ export default async function AgentLayout({ children }: { children: React.ReactN
   return (
     <TripCartProvider>
     <div className="flex min-h-screen flex-col bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="border-b border-slate-200 bg-white print:hidden">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <Link href="/agent" className="text-sm font-semibold text-slate-900">
             Series Tours <span className="font-normal text-slate-400">B2B</span>
@@ -61,7 +62,9 @@ export default async function AgentLayout({ children }: { children: React.ReactN
           </form>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 print:max-w-none print:p-0">
+        {children}
+      </main>
       <TripCartBar />
     </div>
     </TripCartProvider>
