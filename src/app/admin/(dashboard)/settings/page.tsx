@@ -7,7 +7,7 @@ import { LocalRunningPanel } from "./local-running-panel";
 import { perStopKm, tollParkingPerDayMinor } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { toMajor } from "@/lib/money";
-import { ALL_DESTINATIONS, HOME_STATE } from "@/lib/destinations";
+import { allStates } from "@/lib/destinations";
 import { ChargesPanel } from "./charges-panel";
 import { savePerStopKm, saveTollParking, saveStatePermit } from "./actions";
 
@@ -37,11 +37,14 @@ export default async function SettingsPage() {
     orderBy: [{ capacity: "asc" }, { type: "asc" }],
     select: { id: true, type: true },
   });
-  // Only states the destination list can actually recognise on an itinerary —
-  // offering one we cannot detect would create a fee that never applies.
-  const knownStates = [...new Set(ALL_DESTINATIONS.map((d) => d.state))]
-    .filter((st) => st !== HOME_STATE)
-    .sort();
+  /*
+   * Every state the destination list knows, including Kerala.
+   *
+   * Kerala is no longer excluded: home is now a property of the DEPOT, so a
+   * Chennai depot makes Kerala a state that needs a permit. Filtering it out
+   * here would make that permit impossible to set.
+   */
+  const knownStates = allStates();
   // Self-heals if a rule is somehow missing, so the screen can never show a
   // blank row that silently falls back to a default nobody can see.
   await ensureMarkupRules();

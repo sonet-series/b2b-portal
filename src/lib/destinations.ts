@@ -36,8 +36,16 @@ export type DestinationGroup = {
   places: Destination[];
 };
 
-/** The operator is based here, so no permit applies. */
-export const HOME_STATE = "Kerala";
+/**
+ * Every state the destination list knows about.
+ *
+ * Used to offer depot states and permit states. Derived from the list rather
+ * than written out again, so adding a Chennai destination automatically makes
+ * Tamil Nadu available as a depot state.
+ */
+export function allStates(): string[] {
+  return [...new Set(ALL_DESTINATIONS.map((d) => d.state))].sort();
+}
 
 const KL = (name: string): Destination => ({ name, state: "Kerala" });
 const TN = (name: string): Destination => ({ name, state: "Tamil Nadu" });
@@ -84,11 +92,19 @@ export function stateOf(place: string): string | null {
 /**
  * Which states an itinerary enters, and which places could not be placed.
  *
- * The home state is excluded — no permit is due for driving at home. Unknown
- * places are REPORTED rather than assumed to be local, because assuming would
- * silently drop a permit from the price.
+ * `homeState` comes from the DEPOT the vehicle is dispatched from, not from a
+ * constant. Home is a property of where the vehicle starts: a Chennai depot
+ * makes Tamil Nadu home and Kerala the state needing a permit — the exact
+ * inverse of Kochi. A hardcoded Kerala would have charged the wrong permits,
+ * or none at all, the day a depot opened outside it.
+ *
+ * Unknown places are REPORTED rather than assumed to be local, because
+ * assuming would silently drop a permit from the price.
  */
-export function statesEntered(places: readonly string[]): {
+export function statesEntered(
+  places: readonly string[],
+  homeState: string
+): {
   states: string[];
   unknown: string[];
 } {
@@ -100,7 +116,7 @@ export function statesEntered(places: readonly string[]): {
     if (place === "") continue;
     const state = stateOf(place);
     if (state === null) unknown.add(place);
-    else if (state !== HOME_STATE) states.add(state);
+    else if (state !== homeState) states.add(state);
   }
 
   return { states: [...states].sort(), unknown: [...unknown] };

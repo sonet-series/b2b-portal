@@ -46,6 +46,8 @@ export async function priceAncillaries(
   itineraryDays: readonly ItineraryDay[],
   hireDays: number,
   vehicleId: string,
+  /** The depot's state — home for this hire, so no permit is due there. */
+  homeState: string,
   tier: AgentTier,
   markup: MarkupTable
 ): Promise<AncillaryResult> {
@@ -74,7 +76,7 @@ export async function priceAncillaries(
 
   // --- interstate permits ----------------------------------------------
   const places = itineraryDays.flatMap((d) => [d.from, d.to, ...d.via]);
-  const { states, unknown } = statesEntered(places);
+  const { states, unknown } = statesEntered(places, homeState);
   let missingPermits: string[] = [];
 
   if (states.length > 0) {

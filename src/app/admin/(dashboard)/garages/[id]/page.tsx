@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { PageHeader, FormSuccess } from "@/components/ui";
+import { allStates } from "@/lib/destinations";
 import { GarageForm } from "../garage-form";
 import { FleetPanel } from "./fleet-panel";
 import { updateGarage, setGarageFleet } from "../actions";
@@ -40,8 +41,14 @@ export default async function GaragePage({
       <div className="space-y-6">
         <GarageForm
           action={updateGarage.bind(null, garage.id)}
-          garage={{ name: garage.name, address: garage.address, active: garage.active }}
+          garage={{
+            name: garage.name,
+            address: garage.address,
+            state: garage.state,
+            active: garage.active,
+          }}
           submitLabel="Save depot"
+          states={allStates()}
         />
 
         <FleetPanel

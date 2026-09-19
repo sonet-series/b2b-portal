@@ -383,6 +383,12 @@ export async function quoteVehicle(
   });
   if (!vehicle) throw new PricingError("That vehicle is not available.");
 
+  // Fetched once, up front: its state is home for the permit maths, and the
+  // itinerary block below needs the same row.
+  const depot = input.garageId
+    ? await prisma.garage.findFirst({ where: { id: input.garageId, active: true } })
+    : null;
+
   /*
    * Measure the itinerary HERE rather than taking distances from the caller.
    *
@@ -399,10 +405,12 @@ export async function quoteVehicle(
   let itinerary: ItinerarySummary | undefined;
 
   if (input.garageId && input.days && input.days.length > 0) {
-    const garage = await prisma.garage.findFirst({
-      where: { id: input.garageId, active: true },
-      include: { vehicles: { where: { vehicleId: input.vehicleId, active: true } } },
-    });
+    const garage = depot
+      ? await prisma.garage.findFirst({
+          where: { id: input.garageId, active: true },
+          include: { vehicles: { where: { vehicleId: input.vehicleId, active: true } } },
+        })
+      : null;
     if (!garage) throw new PricingError("That depot is not available.");
 
     // Checked server-side, not just hidden in the dropdown. The garage list
@@ -458,9 +466,10 @@ export async function quoteVehicle(
    * the hire is priced per day, per km or as a flat transfer. Priced once here
    * and appended to each option's lines, so the totals cannot drift apart.
    */
-  const ancillary = input.days?.length
-    ? await priceAncillaries(input.days, days, vehicle.id, agent.tier, markup)
-    : null;
+  const ancillary =
+    input.days?.length && depot
+      ? await priceAncillaries(input.days, days, vehicle.id, depot.state, agent.tier, markup)
+      : null;
 
   const engagedDays: Date[] = [];
   for (let i = 0; i < days; i++) {

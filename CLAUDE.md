@@ -737,6 +737,18 @@ each `options.push`, so a pricing mode added later cannot quietly omit them.
 carries a state per place. A place NOT on that list is reported as unknown —
 never assumed local, because assuming would silently drop a permit.
 
+**Home is a property of the DEPOT, not a constant** (Sonet, 19 Sept 2026, and
+he was right to push on it). `Garage.state` decides which states need a permit
+for hires dispatched from it. A Chennai depot makes Tamil Nadu home and Kerala
+the state needing a permit — the exact inverse of Kochi. A hardcoded Kerala
+would have charged the wrong permits, or none, the day a second depot opened
+outside the state, and nothing would have flagged it. Only Kochi exists today;
+Chennai and Coimbatore are planned.
+
+`allStates()` derives the pickers from the destination list, so adding a
+destination in a new state makes that state available as a depot state and as
+a permit state with no further change.
+
 **The migration that added the vehicle dimension is hand-written.** Prisma's
 generated version was the P3009 bug for the third time: a NOT NULL `vehicleId`
 whose `INSERT ... SELECT` did not list it. The hand-written one fans each

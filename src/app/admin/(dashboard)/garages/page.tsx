@@ -23,7 +23,7 @@ export default async function GaragesPage() {
           hint="Agents cannot quote a vehicle until at least one depot exists with vehicles at it."
         />
       ) : (
-        <Table head={["Depot", "Address", "Vehicles", ""]}>
+        <Table head={["Depot", "State", "Address", "Vehicles", ""]}>
           {garages.map((g) => (
             <tr key={g.id} className={g.active ? undefined : "bg-slate-50"}>
               <Td>
@@ -34,6 +34,7 @@ export default async function GaragesPage() {
                   </span>
                 )}
               </Td>
+              <Td>{g.state}</Td>
               <Td className="text-slate-500">{g.address}</Td>
               <Td>
                 {g._count.vehicles === 0 ? <Badge tone="amber">No vehicles</Badge> : g._count.vehicles}

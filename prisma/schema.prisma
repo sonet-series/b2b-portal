@@ -688,8 +688,20 @@ model Garage {
 
   /// The address Google routes from. Needs to be specific enough to resolve
   /// to one place — a bare town name can land anywhere in the district, and
-  /// every quote from this garage inherits that error.
+  /// every quote from this depot inherits that error.
   address String
+
+  /// The state this depot sits in, and therefore the HOME state for any hire
+  /// dispatched from it.
+  ///
+  /// On the depot rather than a constant because home is a property of where
+  /// the vehicle starts, not of the company. A Chennai depot makes Tamil Nadu
+  /// home and Kerala the state needing a permit — the exact inverse of Kochi.
+  /// Hardcoding Kerala would have quietly charged the wrong permits, or none,
+  /// the day a second depot opened outside it.
+  ///
+  /// Must match the state names in src/lib/destinations.ts exactly.
+  state String @default("Kerala")
 
   active    Boolean  @default(true)
   createdAt DateTime @default(now())

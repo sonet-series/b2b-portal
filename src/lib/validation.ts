@@ -243,6 +243,12 @@ export const garageSchema = z.object({
    * place a loose address happens to resolve to.
    */
   address: text("Depot address", 300),
+  /**
+   * Home for every hire from this depot. Free text against the destination
+   * list rather than an enum, because the list of states we serve is data
+   * that grows, not a shape the schema should have to change for.
+   */
+  state: text("State", 60),
   active: checkbox,
 });
 
