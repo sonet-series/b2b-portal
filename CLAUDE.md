@@ -496,6 +496,40 @@ and is short by however far the missing leg runs. The escape hatch is
 `ItineraryDay.manualKm`, which skips routing for that day entirely and is
 recorded so the quote can say the distance was not measured.
 
+### Place names are picked, not typed (19 Sept 2026)
+Typed place names are the weakest link in a measured itinerary, and the live
+site proved it within one quote: a garage at "Cochin International Airport" and
+a pickup typed as "Cochin Airport" are the same place to a person and two
+strings to a router. Worse than an error is the case that does not error — a
+misspelt resort resolving somewhere plausible but wrong, on a quote that reads
+perfectly normally.
+
+`src/lib/places.ts` calls Google **Places Autocomplete (New)**, and
+`PlaceInput` turns the three place fields into comboboxes. Four things matter:
+
+1. **It is proxied through our own route handler, never called from the
+   browser.** The key is IP-restricted to the server, so a browser call would
+   be rejected — and the key would be sitting in the page source. The handler
+   re-checks the agent session, because a route handler is its own entry point
+   and without that it is an open proxy onto a billed API.
+
+2. **Suggestions are an accuracy aid, never a gate.** If Google is unreachable
+   or the key lacks the Places API, the handler returns an empty list and the
+   field behaves as the plain text input it has underneath. A quote must never
+   depend on a lookup service being up.
+
+3. **The field takes `structuredFormat.mainText`, not the full `text`.** The
+   full value is the whole formatted address, which would make every itinerary
+   row and every saved quote line unreadable. The secondary text is shown in
+   the dropdown only, to tell two similar places apart while choosing.
+
+4. **Debounced at 300ms with a 3-character minimum, and cached in-process.**
+   Autocomplete bills per request; an undebounced field bills per keystroke.
+
+**Production needs "Places API (New)" enabled on the key** and allowed under
+its API restrictions — it is a separate API from Routes, and the key was
+created with Routes only.
+
 ### Vehicle itineraries are day-by-day (19 Sept 2026)
 This replaced the free-form leg list from 26 Aug. Agents plan in days — "day 2,
 at Munnar, running up to Top Station" — so the form asks for exactly that.

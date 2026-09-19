@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { Button, Select, FormError } from "@/components/ui";
 import { DateField } from "@/components/date-field";
+import { PlaceInput } from "./place-input";
 
 /**
  * The vehicle trip builder.
@@ -44,6 +45,15 @@ function addDays(iso: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function blankRows(start: string, end: string): DayRow[] {
+  const n = dayCount(start, end);
+  const rows: DayRow[] = [];
+  for (let i = 0; i < n; i++) {
+    rows.push({ date: addDays(start, i), from: "", to: "", via: "", bufferKm: "", local: false });
+  }
+  return rows;
+}
+
 function dayCount(start: string, end: string): number {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return 0;
   const ms = Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`);
@@ -74,16 +84,23 @@ export function TripForm({
   const [endDate, setEndDate] = useState(initial.endDate);
   const [adults, setAdults] = useState(initial.adults || "2");
   const [childAges, setChildAges] = useState<string[]>(initial.childAges);
-  const [days, setDays] = useState<DayRow[]>(() =>
-    initial.days.map((d) => ({
-      date: d.date,
-      from: d.from,
-      to: d.to,
-      via: d.via.join(", "),
-      bufferKm: d.bufferKm,
-      local: d.to !== "" && d.to === d.from,
-    }))
-  );
+  const [days, setDays] = useState<DayRow[]>(() => {
+    if (initial.days.length > 0) {
+      return initial.days.map((d) => ({
+        date: d.date,
+        from: d.from,
+        to: d.to,
+        via: d.via.join(", "),
+        bufferKm: d.bufferKm,
+        local: d.to !== "" && d.to === d.from,
+      }));
+    }
+    // Dates can arrive in the URL with no itinerary behind them — a half-built
+    // quote someone bookmarked, or a link shared before the days were filled
+    // in. The rows are derived from the dates, so derive them here too rather
+    // than waiting for a date to be RETYPED before the itinerary appears.
+    return blankRows(initial.startDate, initial.endDate);
+  });
 
   const garage = garages.find((g) => g.id === garageId);
   // Only what this garage actually holds. A coach that lives at Cochin must
@@ -99,22 +116,17 @@ export function TripForm({
    * different number of days than the hire it prices should not be expressible.
    */
   function syncDays(start: string, end: string) {
-    const n = dayCount(start, end);
-    setDays((prev) => {
-      const next: DayRow[] = [];
-      for (let i = 0; i < n; i++) {
-        const old = prev[i];
-        next.push({
-          date: addDays(start, i),
-          from: old?.from ?? "",
-          to: old?.to ?? "",
-          via: old?.via ?? "",
-          bufferKm: old?.bufferKm ?? "",
-          local: old?.local ?? false,
-        });
-      }
-      return next;
-    });
+    setDays((prev) =>
+      blankRows(start, end).map((row, i) => ({
+        ...row,
+        // Keep whatever is already typed at that position.
+        from: prev[i]?.from ?? "",
+        to: prev[i]?.to ?? "",
+        via: prev[i]?.via ?? "",
+        bufferKm: prev[i]?.bufferKm ?? "",
+        local: prev[i]?.local ?? false,
+      }))
+    );
   }
 
   const update = (i: number, patch: Partial<DayRow>) =>
@@ -296,13 +308,12 @@ export function TripForm({
                   <div>
                     <span className="mb-1 block text-xs text-slate-500">From</span>
                     {i === 0 ? (
-                      <input
+                      <PlaceInput
                         name="dayFrom"
                         value={d.from}
-                        onChange={(e) => update(i, { from: e.target.value })}
-                        placeholder="Cochin Airport"
-                        aria-label="Pick-up point"
-                        className={control}
+                        onChange={(v) => update(i, { from: v })}
+                        placeholder="Cochin International Airport"
+                        ariaLabel="Pick-up point"
                       />
                     ) : (
                       <>
@@ -323,12 +334,11 @@ export function TripForm({
                         {chained[i]?.from || "—"}
                       </p>
                     ) : (
-                      <input
+                      <PlaceInput
                         value={d.to}
-                        onChange={(e) => update(i, { to: e.target.value })}
+                        onChange={(v) => update(i, { to: v })}
                         placeholder="Munnar"
-                        aria-label={`Day ${i + 1} destination`}
-                        className={control}
+                        ariaLabel={`Day ${i + 1} destination`}
                       />
                     )}
                   </div>
@@ -337,13 +347,12 @@ export function TripForm({
                     <span className="mb-1 block text-xs text-slate-500">
                       {d.local ? "Day excursion to" : "Via"}
                     </span>
-                    <input
+                    <PlaceInput
                       name="dayVia"
                       value={d.via}
-                      onChange={(e) => update(i, { via: e.target.value })}
+                      onChange={(v) => update(i, { via: v })}
                       placeholder={d.local ? "Top Station" : "optional"}
-                      aria-label={`Day ${i + 1} ${d.local ? "excursion" : "via point"}`}
-                      className={control}
+                      ariaLabel={`Day ${i + 1} ${d.local ? "excursion" : "via point"}`}
                     />
                   </div>
 
