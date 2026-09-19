@@ -23,7 +23,20 @@ const PRODUCT_LABEL: Record<ProductType, string> = {
 export default async function SettingsPage() {
   const stopKm = await perStopKm();
   const tollPerDay = await tollParkingPerDayMinor();
-  const permits = await prisma.statePermit.findMany({ orderBy: { state: "asc" } });
+  const permits = await prisma.statePermit.findMany({
+    where: { active: true },
+    include: { vehicle: { select: { type: true } } },
+    orderBy: [{ state: "asc" }, { vehicleId: "asc" }],
+  });
+  const tollRates = await prisma.vehicleTollRate.findMany({
+    include: { vehicle: { select: { type: true } } },
+    orderBy: { vehicle: { type: "asc" } },
+  });
+  const vehicles = await prisma.vehicle.findMany({
+    where: { active: true },
+    orderBy: [{ capacity: "asc" }, { type: "asc" }],
+    select: { id: true, type: true },
+  });
   // Only states the destination list can actually recognise on an itinerary —
   // offering one we cannot detect would create a fee that never applies.
   const knownStates = [...new Set(ALL_DESTINATIONS.map((d) => d.state))]
@@ -83,9 +96,15 @@ export default async function SettingsPage() {
       <ChargesPanel
         tollAction={saveTollParking}
         permitAction={saveStatePermit}
-        tollPerDay={String(toMajor(tollPerDay))}
-        permits={permits.map((p) => ({ state: p.state, cost: String(toMajor(p.costMinor)) }))}
+        tollDefault={String(toMajor(tollPerDay))}
+        tollRates={tollRates.map((r) => ({ vehicle: r.vehicle.type, cost: String(toMajor(r.costMinor)) }))}
+        permits={permits.map((p) => ({
+          state: p.state,
+          vehicle: p.vehicle.type,
+          cost: String(toMajor(p.costMinor)),
+        }))}
         knownStates={knownStates}
+        vehicles={vehicles}
       />
     </>
   );

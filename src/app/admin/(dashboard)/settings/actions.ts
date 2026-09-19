@@ -66,36 +66,56 @@ function parseAmount(raw: string): number | null {
   return minor >= 0 ? minor : null;
 }
 
+/**
+ * Toll and parking, either the fallback or one vehicle's rate.
+ *
+ * An empty `vehicleId` means the fallback, which every vehicle without its own
+ * rate uses. Toll applies to every hire, so there has to be a number that
+ * always answers.
+ */
 export async function saveTollParking(_prev: FormState, formData: FormData): Promise<FormState> {
   if (!(await getAdminSession())) throw new Error("Not signed in.");
 
   const raw = String(formData.get("amount") ?? "").trim();
+  const vehicleId = String(formData.get("vehicleId") ?? "").trim();
   const minor = parseAmount(raw);
   if (minor === null) {
     return { ok: false, message: "Enter an amount like 300 or 300.50.", errors: { amount: "Not an amount" } };
   }
 
-  await setSetting(SETTING_KEYS.TOLL_PARKING_PER_DAY_MINOR, minor);
+  if (vehicleId === "") {
+    await setSetting(SETTING_KEYS.TOLL_PARKING_PER_DAY_MINOR, minor);
+    revalidatePath("/admin/settings");
+    return { ok: true, message: `Default toll and parking set to ₹${raw} per day.` };
+  }
+
+  await prisma.vehicleTollRate.upsert({
+    where: { vehicleId },
+    create: { vehicleId, costMinor: minor },
+    update: { costMinor: minor },
+  });
   revalidatePath("/admin/settings");
-  return { ok: true, message: `Toll and parking set to ₹${raw} per day.` };
+  return { ok: true, message: `Toll and parking set to ₹${raw} per day for that vehicle.` };
 }
 
 export async function saveStatePermit(_prev: FormState, formData: FormData): Promise<FormState> {
   if (!(await getAdminSession())) throw new Error("Not signed in.");
 
   const state = String(formData.get("state") ?? "").trim();
+  const vehicleId = String(formData.get("vehicleId") ?? "").trim();
   const raw = String(formData.get("amount") ?? "").trim();
   const minor = parseAmount(raw);
   if (state === "") return { ok: false, message: "Choose a state." };
+  if (vehicleId === "") return { ok: false, message: "Choose a vehicle." };
   if (minor === null) {
     return { ok: false, message: "Enter an amount like 1500.", errors: { amount: "Not an amount" } };
   }
 
   await prisma.statePermit.upsert({
-    where: { state },
-    create: { state, costMinor: minor },
+    where: { state_vehicleId: { state, vehicleId } },
+    create: { state, vehicleId, costMinor: minor },
     update: { costMinor: minor, active: true },
   });
   revalidatePath("/admin/settings");
-  return { ok: true, message: `${state} permit set to ₹${raw} per entry.` };
+  return { ok: true, message: `${state} permit set to ₹${raw} per entry for that vehicle.` };
 }

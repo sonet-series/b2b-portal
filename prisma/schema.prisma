@@ -205,8 +205,10 @@ model Vehicle {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  rates    VehicleRate[]
-  garages  GarageVehicle[]
+  rates      VehicleRate[]
+  garages    GarageVehicle[]
+  tollRate   VehicleTollRate?
+  permits    StatePermit[]
 
   @@index([active])
 }
@@ -771,21 +773,46 @@ model Setting {
 }
 
 
-/// An interstate permit fee, per state entered.
+/// Toll and parking allowed per day, per vehicle type.
 ///
-/// A row per state rather than one number, because the fee differs by state
-/// and is charged per ENTRY — a Kerala operator taking a party into Tamil Nadu
-/// pays Tamil Nadu, and into Karnataka pays Karnataka, at different rates.
+/// Per vehicle because a 17-seat coach pays materially more at a toll booth
+/// than a Dzire, and quoting one figure for both is wrong in one direction or
+/// the other every time.
 ///
-/// Stored as COST like everything else in the catalogue, and marked up by the
-/// vehicle rule, so a permit behaves the same way as any other charge a
-/// customer is quoted. See src/lib/ancillary.ts.
+/// Optional per vehicle: `Setting.tollParkingPerDayMinor` is the fallback.
+/// Toll applies to EVERY hire, so a vehicle without a row must still quote
+/// rather than block — unlike a permit, which only applies when a trip
+/// actually crosses a border.
+model VehicleTollRate {
+  id String @id @default(uuid())
+
+  vehicleId String  @unique
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  /// Per day of hire, in paise. COST, not the agent price.
+  costMinor Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// An interstate permit fee, per state entered, per vehicle type.
+///
+/// Both dimensions are real: the fee differs by state, and within a state it
+/// differs by seating capacity — a 26-seat coach and a sedan are not charged
+/// the same to enter Tamil Nadu.
+///
+/// Stored as COST and marked up by the vehicle rule, like every other charge
+/// on a hire. See src/lib/ancillary.ts.
 model StatePermit {
   id String @id @default(uuid())
 
   /// Must match the state names in src/lib/destinations.ts exactly — that list
   /// is what decides which states an itinerary enters.
-  state String @unique
+  state String
+
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
   /// Per entry, in paise. COST, not the agent price.
   costMinor Int
@@ -793,4 +820,7 @@ model StatePermit {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([state, vehicleId])
+  @@index([state, active])
 }

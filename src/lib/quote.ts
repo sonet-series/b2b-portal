@@ -459,7 +459,7 @@ export async function quoteVehicle(
    * and appended to each option's lines, so the totals cannot drift apart.
    */
   const ancillary = input.days?.length
-    ? await priceAncillaries(input.days, days, agent.tier, markup)
+    ? await priceAncillaries(input.days, days, vehicle.id, agent.tier, markup)
     : null;
 
   const engagedDays: Date[] = [];
@@ -649,6 +649,15 @@ export async function quoteVehicle(
 
   // A place we could not place is a permit we may have failed to charge, and
   // an unpaid permit is money handed over at a border with no way back.
+  if (ancillary && ancillary.missingPermits.length > 0) {
+    unavailable.push({
+      title: "Interstate permit not set",
+      reason:
+        `This trip enters ${ancillary.missingPermits.join(" and ")}, and no permit fee is set for the ` +
+        `${vehicle.type}. The price below does not include it — ask Series Tours to add the fee.`,
+    });
+  }
+
   if (ancillary && ancillary.unknownPlaces.length > 0) {
     unavailable.push({
       title: "Check the interstate permits",
