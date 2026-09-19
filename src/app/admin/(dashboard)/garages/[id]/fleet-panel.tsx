@@ -40,9 +40,9 @@ export function FleetPanel({
 
   return (
     <Card>
-      <h2 className="text-base font-semibold text-slate-900">Vehicles at this garage</h2>
+      <h2 className="text-base font-semibold text-slate-900">Vehicles at this depot</h2>
       <p className="mt-1 text-sm text-slate-500">
-        Agents quoting from this garage see only what is ticked here.
+        Agents quoting from this depot see only what is ticked here.
       </p>
 
       <form action={formAction} className="mt-4 space-y-3">

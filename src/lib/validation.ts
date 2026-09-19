@@ -236,13 +236,13 @@ export const vehicleSchema = z.object({
 });
 
 export const garageSchema = z.object({
-  name: text("Garage name", 80),
+  name: text("Depot name", 80),
   /**
    * Free text, but it is what Google routes from, so vagueness here is not
    * cosmetic — every quote dispatched from this garage inherits whatever
    * place a loose address happens to resolve to.
    */
-  address: text("Garage address", 300),
+  address: text("Depot address", 300),
   active: checkbox,
 });
 
@@ -585,7 +585,7 @@ export const itineraryDaySchema = z.object({
 export const vehicleQuoteSchema = z
   .object({
     vehicleId: z.string().min(1, "Choose a vehicle"),
-    garageId: z.string().min(1, "Choose a garage").optional(),
+    garageId: z.string().min(1, "Choose a depot").optional(),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a start date"),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose an end date"),
     adults: z.coerce
@@ -626,7 +626,7 @@ export const vehicleQuoteSchema = z
     // The garage is what makes the return run billable. An itinerary without
     // one would quietly quote a one-way distance for a round trip.
     if (v.days && v.days.length > 0 && !v.garageId) {
-      ctx.addIssue({ code: "custom", path: ["garageId"], message: "Choose a garage" });
+      ctx.addIssue({ code: "custom", path: ["garageId"], message: "Choose a depot" });
     }
   });
 

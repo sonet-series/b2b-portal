@@ -402,12 +402,12 @@ export async function quoteVehicle(
       where: { id: input.garageId, active: true },
       include: { vehicles: { where: { vehicleId: input.vehicleId, active: true } } },
     });
-    if (!garage) throw new PricingError("That garage is not available.");
+    if (!garage) throw new PricingError("That depot is not available.");
 
     // Checked server-side, not just hidden in the dropdown. The garage list
     // narrows what is offered; this is what makes it true.
     if (garage.vehicles.length === 0) {
-      throw new PricingError(`The ${vehicle.type} is not available from the ${garage.name} garage.`);
+      throw new PricingError(`The ${vehicle.type} is not available from the ${garage.name} depot.`);
     }
 
     const measured = await measureItinerary(garage.address, input.days);
@@ -476,6 +476,9 @@ export async function quoteVehicle(
       const lines: QuoteLineDraft[] = [];
       let usedOverride = false;
       let includedKm = 0;
+      // Kept outside the segment loop: the allowance is a trip-level pool, and
+      // so is the rate charged beyond it.
+      let extraKmRateMinor: number | undefined;
 
       for (const seg of segments) {
         const override = overrides.get(overrideKey(seg.rate.id, "MAIN"));
@@ -517,6 +520,7 @@ export async function quoteVehicle(
           agent, markup, "vehicle", overrides, segments[0].rate.id, "EXTRA_KM",
           segments[0].rate.extraKmCostMinor
         );
+        extraKmRateMinor = extraRate?.minor;
         if (!extraRate) {
           unavailable.push({
             title,
@@ -547,6 +551,10 @@ export async function quoteVehicle(
           lines,
           totalMinor: sumMinor(lines.map((l) => l.totalMinor)),
           usedOverride,
+          terms: {
+            includedKm: includedKm > 0 ? includedKm : undefined,
+            extraKmRateMinor,
+          },
         });
       }
     }

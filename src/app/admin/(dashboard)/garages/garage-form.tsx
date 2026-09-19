@@ -25,12 +25,12 @@ export function GarageForm({
         <FormSuccess message={state.ok ? state.message : undefined} />
 
         <Field
-          label="Garage name"
+          label="Depot name"
           name="name"
           required
           placeholder="Cochin"
           defaultValue={garage?.name}
-          hint="What agents see in the garage list."
+          hint="What agents see in the depot list."
           error={err.name}
         />
 
@@ -40,7 +40,7 @@ export function GarageForm({
           required
           placeholder="Series Tours, NH 66, Edappally, Kochi, Kerala 682024"
           defaultValue={garage?.address}
-          hint="Every hire from this garage is measured from here, so be specific — a bare town name can resolve anywhere in the district."
+          hint="Every hire from this depot is measured from here, so be specific — a bare town name can resolve anywhere in the district."
           error={err.address}
         />
 

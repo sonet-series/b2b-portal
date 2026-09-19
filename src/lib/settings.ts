@@ -27,10 +27,24 @@ export const SETTING_KEYS = {
    * detour an agent knows about and adds on purpose.
    */
   ROAD_MARGIN_BPS: "roadMarginBps",
+
+  /**
+   * GST on the hire, in BASIS POINTS (500 = 5%).
+   *
+   * A setting rather than a constant because statutory rates change, and when
+   * one does it must not need a deploy. 5% is the rate for passenger road
+   * transport in India at the time of writing.
+   *
+   * Applied at DISPLAY time to the quote total, never folded into the line
+   * items: a tax is not a price, and an agent asked to explain the number
+   * needs to see it stated separately.
+   */
+  GST_BPS: "gstBps",
 } as const;
 
 const DEFAULTS: Record<string, number> = {
   [SETTING_KEYS.ROAD_MARGIN_BPS]: 500, // 5%
+  [SETTING_KEYS.GST_BPS]: 500, // 5%
 };
 
 export async function getSetting(key: string): Promise<number> {
@@ -61,3 +75,11 @@ export function marginKm(routedKm: number, bps: number): number {
   if (bps <= 0 || routedKm <= 0) return 0;
   return Math.ceil((routedKm * bps) / 10_000);
 }
+
+
+/** Basis points of GST currently applied to quote totals. */
+export async function gstBps(): Promise<number> {
+  return getSetting(SETTING_KEYS.GST_BPS);
+}
+
+export { withGst, formatBps, type QuoteTotals } from "./settings-shared";

@@ -5,6 +5,7 @@ import {
   Document, Page, Text, View, Image, StyleSheet, Font, renderToBuffer,
 } from "@react-pdf/renderer";
 import { formatMinor } from "./money";
+import { withGst, formatBps } from "./settings-shared";
 import { formatDateDisplay } from "./dates";
 import type { VehicleLeg, ItineraryDay } from "./quote-types";
 
@@ -107,6 +108,10 @@ const s = StyleSheet.create({
 
   groupLabel: { fontSize: 7.5, letterSpacing: 0.8, color: MUTED, fontWeight: "bold", marginTop: 10, marginBottom: 2 },
 
+  termsBox: { marginTop: 14, borderWidth: 1, borderColor: RULE, borderRadius: 3, padding: 9 },
+  termsLabel: { fontSize: 6.5, letterSpacing: 0.9, color: FAINT, fontWeight: "bold", marginBottom: 3 },
+  termsText: { fontSize: 8.5, color: MUTED, lineHeight: 1.45, marginTop: 1 },
+
   foot: { position: "absolute", left: 38, right: 38, bottom: 26, borderTopWidth: 1, borderTopColor: RULE, paddingTop: 7 },
   footText: { fontSize: 7.5, color: MUTED, lineHeight: 1.45 },
   footAgency: { fontSize: 8, color: INK, fontWeight: "bold", marginTop: 4 },
@@ -126,8 +131,11 @@ export type QuotePdfInput = {
   party: string;
   days: ItineraryDay[];
   legs: VehicleLeg[];
-  lines: { id: string; description: string; totalMinor: number; itemIndex: number | null; itemLabel: string | null }[];
   totalMinor: number;
+  /** Basis points of GST to apply to `totalMinor`. */
+  gstBps: number;
+  /** What the price covers, stated rather than itemised. */
+  terms?: { includedKm?: number; extraKmRateMinor?: number };
 };
 
 function Fact({ label, value, last }: { label: string; value: string; last?: boolean }) {
@@ -140,6 +148,7 @@ function Fact({ label, value, last }: { label: string; value: string; last?: boo
 }
 
 function QuoteDocument(q: QuotePdfInput) {
+  const totals = withGst(q.totalMinor, q.gstBps);
   const kmFor = (i: number) =>
     q.legs.filter((l) => l.dayIndex === i).reduce((sum, l) => sum + l.km + l.bufferKm, 0);
   const positioningKm = q.legs
@@ -165,14 +174,6 @@ function QuoteDocument(q: QuotePdfInput) {
   }
   if (q.party) facts.push({ label: "Travellers", value: q.party });
   if (totalKm > 0) facts.push({ label: "Distance", value: `${totalKm.toLocaleString("en-IN")} km` });
-
-  const groups = new Map<number, { label: string; lines: QuotePdfInput["lines"] }>();
-  for (const line of q.lines) {
-    const idx = line.itemIndex ?? 0;
-    const g = groups.get(idx);
-    if (g) g.lines.push(line);
-    else groups.set(idx, { label: line.itemLabel ?? "", lines: [line] });
-  }
 
   return (
     <Document title={`${q.agencyName} — Quotation ${q.reference}`} author={q.agencyName}>
@@ -264,21 +265,43 @@ function QuoteDocument(q: QuotePdfInput) {
         )}
 
         <Text style={s.section}>COST</Text>
-        {[...groups.entries()].map(([idx, g]) => (
-          <View key={idx}>
-            {groups.size > 1 && g.label ? <Text style={s.groupLabel}>{g.label.toUpperCase()}</Text> : null}
-            {g.lines.map((line) => (
-              <View key={line.id} style={s.costRow} wrap={false}>
-                <Text style={s.costDesc}>{line.description}</Text>
-                <Text style={s.costAmt}>{formatMinor(line.totalMinor)}</Text>
-              </View>
-            ))}
-          </View>
-        ))}
-        <View style={s.grand}>
-          <Text style={s.grandLabel}>Total</Text>
-          <Text style={s.grandAmt}>{formatMinor(q.totalMinor)}</Text>
+        {/*
+          No itemisation, by decision: the agent quotes one number to their
+          customer, and a line-by-line build-up only invites being negotiated
+          line by line. What the customer genuinely needs is what the price
+          covers and what happens past it, which is stated below.
+        */}
+        <View style={s.costRow}>
+          <Text style={s.costDesc}>Total</Text>
+          <Text style={s.costAmt}>{formatMinor(totals.netMinor)}</Text>
         </View>
+        <View style={s.costRow}>
+          <Text style={s.costDesc}>GST {formatBps(totals.gstBps)}</Text>
+          <Text style={s.costAmt}>{formatMinor(totals.gstMinor)}</Text>
+        </View>
+        <View style={s.grand}>
+          <Text style={s.grandLabel}>Grand total</Text>
+          <Text style={s.grandAmt}>{formatMinor(totals.grossMinor)}</Text>
+        </View>
+
+        {(q.terms?.includedKm != null || q.terms?.extraKmRateMinor != null) && (
+          <View style={s.termsBox}>
+            <Text style={s.termsLabel}>WHAT THIS INCLUDES</Text>
+            {q.terms.includedKm != null && (
+              <Text style={s.termsText}>
+                {q.terms.includedKm.toLocaleString("en-IN")} km over the hire, depot to depot.
+              </Text>
+            )}
+            {q.terms.extraKmRateMinor != null && (
+              <Text style={s.termsText}>
+                Beyond that, {formatMinor(q.terms.extraKmRateMinor)} per km.
+              </Text>
+            )}
+            <Text style={s.termsText}>
+              Toll, parking and interstate permits are charged at actuals unless stated otherwise.
+            </Text>
+          </View>
+        )}
 
         <View style={s.foot} fixed>
           <Text style={s.footText}>

@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { requireAgent } from "@/lib/auth";
 import { getQuote } from "@/lib/quote-store";
 import { formatMinor } from "@/lib/money";
+import { gstBps } from "@/lib/settings";
+import { withGst, formatBps } from "@/lib/settings-shared";
 import { formatDateDisplay } from "@/lib/dates";
 import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
 import { DeleteQuote } from "./delete-quote";
@@ -33,16 +35,19 @@ export default async function QuoteDetailPage({
   if (!quote) notFound();
 
   const usedOverride = quote.lines.some((l) => l.usedOverride);
+  const totals = withGst(quote.totalMinor, await gstBps());
 
   // The itinerary a vehicle quote's distance was built from. Frozen at save
   // time alongside the rest of the inputs.
   let legs: VehicleLeg[] = [];
   let days: ItineraryDay[] = [];
   let editUrl: string | null = null;
+  let terms: { includedKm?: number; extraKmRateMinor?: number } | undefined;
   try {
     const snapshot = JSON.parse(quote.snapshotJson) as {
       legs?: VehicleLeg[];
       input?: AnyQuoteInput & { days?: ItineraryDay[] };
+      option?: { terms?: { includedKm?: number; extraKmRateMinor?: number } };
     };
     legs = Array.isArray(snapshot.legs) ? snapshot.legs : [];
     // The day plan the agent typed, as opposed to the road segments it was
@@ -53,12 +58,14 @@ export default async function QuoteDetailPage({
     // snapshot from before an input existed. Better no button at all than one
     // that lands on a half-empty form.
     editUrl = snapshot.input ? editUrlFor(snapshot.input, quote.reference) : null;
+    terms = snapshot.option?.terms;
   } catch {
     // A quote saved before legs existed, or malformed JSON — show the priced
     // lines regardless rather than failing the whole page.
     legs = [];
     days = [];
     editUrl = null;
+    terms = undefined;
   }
   const legTotal = legs.reduce((s, l) => s + l.km + l.bufferKm, 0);
 
@@ -179,55 +186,50 @@ export default async function QuoteDetailPage({
         )}
 
         {/*
-          A combined quote's lines are grouped back into the items the agent
-          added; a single-product quote has one group and reads exactly as
-          before.
+          Deliberately no cost breakdown. Confirmed with Sonet, 19 Sept 2026:
+          an agent quotes one number to their customer, and a line-by-line
+          build-up of hire, driver allowance and extra km only invites being
+          negotiated line by line. The LINES ARE STILL STORED — they are what
+          the quote was priced from, and the admin can still read them — they
+          are simply not shown here.
         */}
-        <table className="mt-5 w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-              <th className="pb-2 text-left font-semibold">Item</th>
-              <th className="pb-2 text-right font-semibold">Qty × unit</th>
-              <th className="pb-2 text-right font-semibold">Amount</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {quote.lines.map((line, i) => {
-              const previous = i > 0 ? quote.lines[i - 1] : null;
-              const startsItem = !previous || previous.itemIndex !== line.itemIndex;
-              return (
+        <dl className="mt-5 divide-y divide-slate-100 text-sm">
+          <div className="flex items-baseline justify-between py-2">
+            <dt className="text-slate-600">Total</dt>
+            <dd className="tabular-nums text-slate-900">{formatMinor(totals.netMinor)}</dd>
+          </div>
+          <div className="flex items-baseline justify-between py-2">
+            <dt className="text-slate-600">GST {formatBps(totals.gstBps)}</dt>
+            <dd className="tabular-nums text-slate-900">{formatMinor(totals.gstMinor)}</dd>
+          </div>
+          <div className="flex items-baseline justify-between border-t-2 border-slate-300 py-3">
+            <dt className="text-base font-semibold text-slate-900">Grand total</dt>
+            <dd className="text-xl font-semibold tabular-nums text-slate-900">
+              {formatMinor(totals.grossMinor)}
+            </dd>
+          </div>
+        </dl>
+
+        {(terms?.includedKm != null || terms?.extraKmRateMinor != null) && (
+          <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
+            {terms.includedKm != null && (
               <>
-              {startsItem && line.itemLabel && (
-                <tr key={`${line.id}-head`} className="bg-slate-50">
-                  <td className="px-1 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500" colSpan={3}>
-                    {line.itemLabel}
-                  </td>
-                </tr>
-              )}
-              <tr key={line.id}>
-                <td className="py-2 pr-3 text-slate-700">{line.description}</td>
-                <td className="whitespace-nowrap py-2 pr-3 text-right text-slate-500">
-                  {line.quantity} × {formatMinor(line.unitMinor)}
-                </td>
-                <td className="whitespace-nowrap py-2 text-right font-medium text-slate-900">
-                  {formatMinor(line.totalMinor)}
-                </td>
-              </tr>
+                <strong className="text-slate-900">
+                  {terms.includedKm.toLocaleString("en-IN")} km
+                </strong>{" "}
+                included
               </>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-slate-300">
-              <td className="pt-3 font-semibold text-slate-900" colSpan={2}>
-                Total
-              </td>
-              <td className="whitespace-nowrap pt-3 text-right text-lg font-semibold text-slate-900">
-                {formatMinor(quote.totalMinor)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+            )}
+            {terms.includedKm != null && terms.extraKmRateMinor != null && " · "}
+            {terms.extraKmRateMinor != null && (
+              <>
+                extra km at{" "}
+                <strong className="text-slate-900">{formatMinor(terms.extraKmRateMinor)}</strong> per
+                km
+              </>
+            )}
+          </p>
+        )}
 
         <p className="mt-5 border-t border-slate-100 pt-4 text-xs text-slate-500">
           This is a quotation, not a booking. Prices were frozen when the quote was saved and are

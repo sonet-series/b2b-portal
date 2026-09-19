@@ -677,6 +677,38 @@ quietly inventing room rates would be worse than no feature.
 
 Houseboats and packages can follow the same pattern once hotels are proven.
 
+### "Depot" in the UI, `Garage` in the database (19 Sept 2026)
+Sonet asked for the word "depot". Every user-facing string says Depot; the
+Prisma models are still `Garage` / `GarageVehicle` and the columns still
+`garageId`.
+
+**That mismatch is deliberate.** Renaming a SQLite table means a Prisma table
+REBUILD, and this project has already lost a production evening to exactly
+that (see the P3009 note). The wording is what the user asked for; the table
+name is invisible to them. If it is ever renamed, do it with `@@map` to the
+existing table names so no data moves.
+
+### Agents see a price, not a breakdown (19 Sept 2026)
+Confirmed with Sonet, 19 Sept 2026. The portal and the PDF show **Total, GST,
+Grand total** — no hire/bata/extra-km itemisation. An agent quotes one number
+to their customer, and a line-by-line build-up only invites being negotiated
+line by line.
+
+**The lines are still stored.** They are what the quote was priced from and
+what makes "why is this number what it is" answerable; they are simply not
+rendered to the agent.
+
+What a customer genuinely needs instead is the TERMS, so `QuoteOption.terms`
+carries `includedKm` and `extraKmRateMinor` as numbers rather than as a
+sentence buried in a line description, and both the quote and the PDF state
+them. They are frozen into the snapshot with the option, so a saved quote
+states the allowance it was priced on.
+
+GST is `Setting.gstBps` (default 5%), applied at DISPLAY time and never folded
+into a line: a tax is not a price. `withGst` lives in `settings-shared.ts`,
+which has no server-only import, and the RATE is always passed in — a client
+component must not be able to render a defaulted tax rate.
+
 ### Road margin vs sightseeing buffer — two different numbers (19 Sept 2026)
 Sonet asked why a buffer exists when Google's distances are "ok but need a few
 more km". They answer different problems and both are needed:

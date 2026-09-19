@@ -4,6 +4,7 @@ import { getAgent } from "@/lib/auth";
 import { getQuote } from "@/lib/quote-store";
 import { readUpload, UploadError } from "@/lib/uploads";
 import { renderQuotePdf } from "@/lib/quote-pdf";
+import { gstBps } from "@/lib/settings";
 import type { VehicleLeg, ItineraryDay } from "@/lib/quote-types";
 
 export const dynamic = "force-dynamic";
@@ -40,15 +41,18 @@ export async function GET(
   let days: ItineraryDay[] = [];
   let adults = 0;
   let childAges: number[] = [];
+  let terms: { includedKm?: number; extraKmRateMinor?: number } | undefined;
   try {
     const snap = JSON.parse(quote.snapshotJson) as {
       legs?: VehicleLeg[];
       input?: { days?: ItineraryDay[]; adults?: number; childAges?: number[] };
+      option?: { terms?: { includedKm?: number; extraKmRateMinor?: number } };
     };
     legs = Array.isArray(snap.legs) ? snap.legs : [];
     days = Array.isArray(snap.input?.days) ? snap.input.days : [];
     adults = typeof snap.input?.adults === "number" ? snap.input.adults : 0;
     childAges = Array.isArray(snap.input?.childAges) ? snap.input.childAges : [];
+    terms = snap.option?.terms;
   } catch {
     // A malformed snapshot still produces a costed quote — the priced lines
     // are real rows, not JSON — so the PDF is issued without the itinerary
@@ -84,14 +88,9 @@ export async function GET(
     party: parts.join(", ") || (quote.pax > 0 ? String(quote.pax) : ""),
     days,
     legs,
-    lines: quote.lines.map((l) => ({
-      id: l.id,
-      description: l.description,
-      totalMinor: l.totalMinor,
-      itemIndex: l.itemIndex,
-      itemLabel: l.itemLabel,
-    })),
     totalMinor: quote.totalMinor,
+    gstBps: await gstBps(),
+    terms,
   });
 
   // The filename is what lands in the customer's inbox, so it carries the

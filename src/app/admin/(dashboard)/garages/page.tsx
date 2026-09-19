@@ -12,18 +12,18 @@ export default async function GaragesPage() {
   return (
     <>
       <PageHeader
-        title="Garages"
-        description="Where vehicles are dispatched from. Every hire is measured garage to garage."
-        action={<LinkButton href="/admin/garages/new" tone="primary">Add garage</LinkButton>}
+        title="Depots"
+        description="Where vehicles are dispatched from. Every hire is measured depot to depot."
+        action={<LinkButton href="/admin/garages/new" tone="primary">Add depot</LinkButton>}
       />
 
       {garages.length === 0 ? (
         <EmptyState
-          title="No garages yet"
-          hint="Agents cannot quote a vehicle until at least one garage exists with vehicles at it."
+          title="No depots yet"
+          hint="Agents cannot quote a vehicle until at least one depot exists with vehicles at it."
         />
       ) : (
-        <Table head={["Garage", "Address", "Vehicles", ""]}>
+        <Table head={["Depot", "Address", "Vehicles", ""]}>
           {garages.map((g) => (
             <tr key={g.id} className={g.active ? undefined : "bg-slate-50"}>
               <Td>

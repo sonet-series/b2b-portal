@@ -184,7 +184,7 @@ export function TripForm({
       )}
       <div className="grid gap-4 sm:grid-cols-2">
         <Select
-          label="Garage"
+          label="Depot"
           name="garageId"
           required
           value={garageId}
@@ -203,7 +203,7 @@ export function TripForm({
           value={vehicleId}
           onChange={(e) => setVehicleId(e.target.value)}
           options={[
-            { value: "", label: vehicles.length === 0 ? "No vehicles at this garage" : "Choose a vehicle" },
+            { value: "", label: vehicles.length === 0 ? "No vehicles at this depot" : "Choose a vehicle" },
             ...vehicles.map((v) => ({ value: v.id, label: `${v.type} — up to ${v.capacity} passengers` })),
           ]}
           error={fieldErrors.vehicleId}
@@ -311,7 +311,7 @@ export function TripForm({
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Itinerary</p>
           <p className="text-xs text-slate-500">
-            Distances are calculated for you, from the garage and back again.
+            Distances are calculated for you, from the depot and back again.
           </p>
         </div>
 

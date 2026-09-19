@@ -19,7 +19,7 @@ export async function createGarage(_prev: FormState, formData: FormData): Promis
 
   const existing = await prisma.garage.findUnique({ where: { name: parsed.data.name } });
   if (existing) {
-    return { ok: false, message: "A garage with that name already exists.", errors: { name: "Already in use" } };
+    return { ok: false, message: "A depot with that name already exists.", errors: { name: "Already in use" } };
   }
 
   const garage = await prisma.garage.create({ data: parsed.data });
@@ -36,13 +36,13 @@ export async function updateGarage(id: string, _prev: FormState, formData: FormD
     where: { name: parsed.data.name, NOT: { id } },
   });
   if (clash) {
-    return { ok: false, message: "A garage with that name already exists.", errors: { name: "Already in use" } };
+    return { ok: false, message: "A depot with that name already exists.", errors: { name: "Already in use" } };
   }
 
   await prisma.garage.update({ where: { id }, data: parsed.data });
   revalidatePath("/admin/garages");
   revalidatePath(`/admin/garages/${id}`);
-  return { ok: true, message: "Garage saved." };
+  return { ok: true, message: "Depot saved." };
 }
 
 /**
@@ -77,5 +77,5 @@ export async function setGarageFleet(
 
   revalidatePath(`/admin/garages/${garageId}`);
   revalidatePath("/admin/garages");
-  return { ok: true, message: `Fleet saved — ${wanted.size} vehicle${wanted.size === 1 ? "" : "s"} at this garage.` };
+  return { ok: true, message: `Fleet saved — ${wanted.size} vehicle${wanted.size === 1 ? "" : "s"} at this depot.` };
 }

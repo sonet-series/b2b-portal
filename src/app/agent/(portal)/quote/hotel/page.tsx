@@ -1,4 +1,5 @@
 import { requireAgent } from "@/lib/auth";
+import { gstBps } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { quoteHotel } from "@/lib/quote";
 import { PricingError } from "@/lib/pricing";
@@ -18,6 +19,7 @@ export default async function HotelQuotePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const agent = await requireAgent();
+  const gst = await gstBps();
   const params = await searchParams;
 
   const hotels = await prisma.hotel.findMany({
@@ -117,6 +119,7 @@ export default async function HotelQuotePage({
           {error && <FormError message={error} />}
           {result && <QuoteResults
               result={result}
+              gstBps={gst}
               saveActions={saveActions}
               input={parsed.success ? { productType: "hotel", ...parsed.data } : undefined}
             />}

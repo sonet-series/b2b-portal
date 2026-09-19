@@ -1,4 +1,5 @@
 import { requireAgent } from "@/lib/auth";
+import { gstBps } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { quoteItinerary } from "@/lib/quote";
 import { PricingError } from "@/lib/pricing";
@@ -18,6 +19,7 @@ export default async function PackageQuotePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const agent = await requireAgent();
+  const gst = await gstBps();
   const params = await searchParams;
 
   const packages = await prisma.itinerary.findMany({
@@ -134,6 +136,7 @@ export default async function PackageQuotePage({
           {error && <FormError message={error} />}
           {result && <QuoteResults
               result={result}
+              gstBps={gst}
               saveActions={saveActions}
               input={parsed.success ? { productType: "itinerary", ...parsed.data } : undefined}
             />}

@@ -1,4 +1,5 @@
 import { requireAgent } from "@/lib/auth";
+import { gstBps } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { quoteVehicle } from "@/lib/quote";
 import { PricingError } from "@/lib/pricing";
@@ -27,6 +28,7 @@ export default async function VehicleQuotePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const agent = await requireAgent();
+  const gst = await gstBps();
   const params = await searchParams;
 
   // Only garages that can actually dispatch something: an active vehicle, at
@@ -99,14 +101,14 @@ export default async function VehicleQuotePage({
         description={
           editingReference
             ? "Change anything and save — the quote keeps its reference and is re-priced at today's rates."
-            : "Build the trip day by day. Distances are measured garage to garage."
+            : "Build the trip day by day. Distances are measured depot to depot."
         }
       />
 
       {garageOptions.length === 0 ? (
         <EmptyState
           title="No vehicles available yet"
-          hint="Series Tours has not published a garage with vehicles and rates."
+          hint="Series Tours has not published a depot with vehicles and rates."
         />
       ) : (
         <>
@@ -165,7 +167,7 @@ export default async function VehicleQuotePage({
               </ul>
 
               <p className="mt-3 text-xs text-slate-500">
-                Includes the run out from the garage and back to it after the drop — both are
+                Includes the run out from the depot and back to it after the drop — both are
                 chargeable distance the vehicle actually covers.
                 {itin.marginKm > 0 && (
                   <>
@@ -183,6 +185,7 @@ export default async function VehicleQuotePage({
           {result && (
             <QuoteResults
               result={result}
+              gstBps={gst}
               saveActions={saveActions}
               input={parsed.success ? { productType: "vehicle", ...parsed.data } : undefined}
             />

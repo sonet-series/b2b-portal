@@ -41,6 +41,20 @@ export type QuoteOption = {
   totalMinor: number;
   /** True if any line used an override — surfaced as "your rate" in the UI. */
   usedOverride: boolean;
+  /**
+   * The hire terms a customer asks about, as numbers rather than sentences
+   * buried in a line description.
+   *
+   * Agents are shown a single price, not the cost breakdown, so these are the
+   * only way "how many km, and what after that" survives to the quote. Absent
+   * on options where they do not apply, such as a flat transfer.
+   */
+  terms?: {
+    /** Kilometres included in the price, across the whole hire. */
+    includedKm?: number;
+    /** Charged per km beyond `includedKm`, in paise, already marked up. */
+    extraKmRateMinor?: number;
+  };
 };
 
 /** Why a product could not be quoted, shown instead of silently vanishing. */

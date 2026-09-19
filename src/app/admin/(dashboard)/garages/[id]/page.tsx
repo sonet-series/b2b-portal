@@ -35,13 +35,13 @@ export default async function GaragePage({
     <>
       <PageHeader title={garage.name} description={garage.address} />
 
-      {sp.created === "1" && <FormSuccess message="Garage created. Now tick which vehicles it holds." />}
+      {sp.created === "1" && <FormSuccess message="Depot created. Now tick which vehicles it holds." />}
 
       <div className="space-y-6">
         <GarageForm
           action={updateGarage.bind(null, garage.id)}
           garage={{ name: garage.name, address: garage.address, active: garage.active }}
-          submitLabel="Save garage"
+          submitLabel="Save depot"
         />
 
         <FleetPanel

@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { formatMinor } from "@/lib/money";
+import { withGst, formatBps } from "@/lib/settings-shared";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/validation";
 import { Badge, Button, Card, EmptyState, FormError } from "@/components/ui";
 import { useTripCart } from "@/components/trip-cart";
@@ -32,8 +33,12 @@ export function QuoteResults({
   result,
   saveActions,
   input,
+  gstBps,
 }: {
   result: QuoteResult;
+  /** Passed in rather than read here — this is a client component, and a
+      defaulted tax rate rendered to an agent would be worse than none. */
+  gstBps: number;
   /** One bound save action per option key. */
   saveActions: Record<string, (prev: FormState) => Promise<FormState>>;
   /**
@@ -63,8 +68,9 @@ export function QuoteResults({
             </div>
             <div className="text-right">
               <p className="text-xl font-semibold text-slate-900">
-                {formatMinor(option.totalMinor)}
+                {formatMinor(withGst(option.totalMinor, gstBps).grossMinor)}
               </p>
+              <p className="text-xs text-slate-500">including GST</p>
               {option.usedOverride && (
                 <span className="mt-1 inline-block">
                   <Badge tone="green">Your agency rate</Badge>
@@ -73,21 +79,41 @@ export function QuoteResults({
             </div>
           </div>
 
-          <table className="mt-4 w-full text-sm">
-            <tbody className="divide-y divide-slate-100">
-              {option.lines.map((line, i) => (
-                <tr key={i}>
-                  <td className="py-1.5 pr-3 text-slate-600">{line.description}</td>
-                  <td className="whitespace-nowrap py-1.5 pr-3 text-right text-slate-500">
-                    {line.quantity} × {formatMinor(line.unitMinor)}
-                  </td>
-                  <td className="whitespace-nowrap py-1.5 text-right font-medium text-slate-900">
-                    {formatMinor(line.totalMinor)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <dl className="mt-4 divide-y divide-slate-100 text-sm">
+            <Row label="Total" value={formatMinor(option.totalMinor)} />
+            <Row
+              label={`GST ${formatBps(gstBps)}`}
+              value={formatMinor(withGst(option.totalMinor, gstBps).gstMinor)}
+            />
+            <Row
+              strong
+              label="Grand total"
+              value={formatMinor(withGst(option.totalMinor, gstBps).grossMinor)}
+            />
+          </dl>
+
+          {(option.terms?.includedKm || option.terms?.extraKmRateMinor) && (
+            <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
+              {option.terms.includedKm != null && (
+                <>
+                  <strong className="text-slate-900">
+                    {option.terms.includedKm.toLocaleString("en-IN")} km
+                  </strong>{" "}
+                  included
+                </>
+              )}
+              {option.terms.includedKm != null && option.terms.extraKmRateMinor != null && " · "}
+              {option.terms.extraKmRateMinor != null && (
+                <>
+                  extra km at{" "}
+                  <strong className="text-slate-900">
+                    {formatMinor(option.terms.extraKmRateMinor)}
+                  </strong>{" "}
+                  per km
+                </>
+              )}
+            </p>
+          )}
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
             {saveActions[option.key] && <SaveButton action={saveActions[option.key]} />}
@@ -122,6 +148,24 @@ export function QuoteResults({
           </ul>
         </Card>
       )}
+    </div>
+  );
+}
+
+
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between py-1.5">
+      <dt className={strong ? "font-semibold text-slate-900" : "text-slate-600"}>{label}</dt>
+      <dd
+        className={
+          strong
+            ? "text-lg font-semibold tabular-nums text-slate-900"
+            : "tabular-nums text-slate-900"
+        }
+      >
+        {value}
+      </dd>
     </div>
   );
 }

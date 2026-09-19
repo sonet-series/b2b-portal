@@ -96,7 +96,7 @@ export function buildHops(garageAddress: string, days: readonly ItineraryDay[]):
   hops.push({
     dayIndex: -1,
     bufferKm: 0,
-    label: `Garage → ${chained[0].from}`,
+    label: `Depot → ${chained[0].from}`,
     origin: garageAddress,
     destination: chained[0].from,
   });
@@ -128,7 +128,7 @@ export function buildHops(garageAddress: string, days: readonly ItineraryDay[]):
   hops.push({
     dayIndex: -1,
     bufferKm: 0,
-    label: `${last.to} → garage`,
+    label: `${last.to} → depot`,
     origin: last.to,
     destination: garageAddress,
   });
