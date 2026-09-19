@@ -51,7 +51,7 @@ function travelWindow(input: AnyQuoteInput): { start: Date; end: Date; pax: numb
         // Was hard-coded to 0 when the vehicle screen had no headcount at all.
         // It asks now, and the number belongs on the customer's quote — a
         // party size is the first thing anyone checks on one.
-        pax: totalPax(input.pax),
+        pax: totalPax(input.adults, input.childAges),
       };
     case "itinerary": {
       const d = parseDateOnly(input.startDate);
@@ -305,6 +305,77 @@ export type QuoteOptionForDisplay = QuoteOption;
  * nothing references it, and an agent clearing out a mistaken quote means they
  * want it gone rather than hidden. QuoteLine rows cascade with it.
  */
+/**
+ * Replaces a saved quote in place, keeping its reference.
+ *
+ * Re-prices from the inputs like any save, then swaps the lines and snapshot
+ * inside one transaction — a quote must never be observable with the old
+ * total and the new lines.
+ *
+ * Keeping the reference is the point: an agent who has already given
+ * ST-2609-0003 to a customer and then fixes a date needs it to stay
+ * ST-2609-0003. Freezing a snapshot protects against rates drifting
+ * underneath a quote, which is a different thing from its author
+ * deliberately changing it.
+ */
+export async function replaceQuote(
+  agent: QuotingAgent,
+  reference: string,
+  input: AnyQuoteInput,
+  optionKey: string
+): Promise<string> {
+  const existing = await prisma.quote.findFirst({
+    where: { agentId: agent.id, reference },
+    select: { id: true },
+  });
+  if (!existing) throw new PricingError("That quote no longer exists.");
+
+  const { options, itinerary: measured } = await recompute(agent, input);
+  const option = options.find((o) => o.key === optionKey);
+  if (!option) {
+    throw new PricingError("That option is no longer available at this price. Please requote.");
+  }
+
+  const window = travelWindow(input);
+  const snapshot = {
+    input,
+    legs: input.productType === "vehicle" ? (measured?.legs ?? input.legs) : undefined,
+    itinerary: input.productType === "vehicle" && measured ? measured : undefined,
+    tier: agent.tier,
+    option,
+    quotedAt: new Date().toISOString(),
+    revisedAt: new Date().toISOString(),
+    note: "Frozen at quote time. Catalogue rate changes do not affect this record.",
+  };
+
+  await prisma.$transaction([
+    prisma.quoteLine.deleteMany({ where: { quoteId: existing.id } }),
+    prisma.quote.update({
+      where: { id: existing.id },
+      data: {
+        productType: input.productType,
+        travelStart: window.start,
+        travelEnd: window.end,
+        pax: window.pax,
+        totalMinor: option.totalMinor,
+        snapshotJson: JSON.stringify(snapshot),
+        lines: {
+          create: option.lines.map((line, i) => ({
+            description: line.description,
+            quantity: line.quantity,
+            unitMinor: line.unitMinor,
+            totalMinor: line.totalMinor,
+            usedOverride: line.usedOverride,
+            sortOrder: i,
+          })),
+        },
+      },
+    }),
+  ]);
+
+  return reference;
+}
+
 export async function deleteQuote(agentId: string, reference: string): Promise<boolean> {
   const result = await prisma.quote.deleteMany({ where: { agentId, reference } });
   return result.count > 0;

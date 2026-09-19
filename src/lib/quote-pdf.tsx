@@ -1,4 +1,5 @@
 import path from "node:path";
+import { existsSync } from "node:fs";
 import React from "react";
 import {
   Document, Page, Text, View, Image, StyleSheet, Font, renderToBuffer,
@@ -34,6 +35,18 @@ const FONT_DIR = path.join(process.cwd(), "src", "assets", "fonts");
 let fontsRegistered = false;
 function ensureFonts() {
   if (fontsRegistered) return;
+
+  // Checked explicitly so a missing font directory says so, rather than
+  // surfacing as an unexplained 500 and a blank tab. This has already happened
+  // once: the runtime image did not copy src/, the fonts are read at request
+  // time rather than bundled, and the only symptom was a blank page.
+  if (!existsSync(path.join(FONT_DIR, "NotoSans-Regular.ttf"))) {
+    throw new Error(
+      `PDF fonts are missing from ${FONT_DIR}. They are read at request time, ` +
+        "so they must be copied into the runtime image — see the COPY of src/assets in the Dockerfile."
+    );
+  }
+
   Font.register({
     family: "Noto",
     fonts: [

@@ -58,8 +58,11 @@ export type QuoteUnavailable = {
  */
 export type ItinerarySummary = {
   legs: VehicleLeg[];
-  /** Road distance, garage to garage. km. */
+  /** What Google measured, garage to garage. km. */
   routedKm: number;
+  /** Road margin added on top, and the rate it was applied at. */
+  marginKm: number;
+  marginBps: number;
   /** Sightseeing buffer the agent added. km. */
   bufferKm: number;
   /** What the hire is priced on. km. */
@@ -128,15 +131,17 @@ export type VehicleLeg = {
  * children, which errs toward suggesting a larger vehicle rather than one the
  * party cannot actually fit in.
  */
-export type PaxInput = {
-  adults: number;
-  /** One entry per child, each their age in years at the time of travel. */
-  childAges: number[];
-};
-
-export function totalPax(pax: PaxInput | undefined): number {
-  if (!pax) return 0;
-  return pax.adults + pax.childAges.length;
+/**
+ * Everyone travelling, as a single number.
+ *
+ * Takes the two fields flat rather than a `pax` object: the form submits
+ * `adults` and `childAges`, and the zod schema emits them flat, so a nested
+ * shape was one nothing ever populated. It was declared, typechecked, and
+ * silently always undefined — which is how every vehicle quote came to be
+ * saved with a passenger count of zero.
+ */
+export function totalPax(adults: number | undefined, childAges: number[] | undefined): number {
+  return (adults ?? 0) + (childAges?.length ?? 0);
 }
 
 /**
@@ -193,8 +198,16 @@ export type VehicleQuoteInput = {
    */
   garageId?: string;
 
-  /** Optional for the same backward-compatibility reason as `garageId`. */
-  pax?: PaxInput;
+  /**
+   * Who is travelling. Flat, matching what the form submits and the schema
+   * emits — see totalPax above for why this is not a nested object.
+   *
+   * Optional for the same backward-compatibility reason as `garageId`:
+   * quotes saved before the vehicle screen asked have neither.
+   */
+  adults?: number;
+  /** One entry per child, each their age in years at the time of travel. */
+  childAges?: number[];
 
   /**
    * The day-by-day plan. Absent on quotes saved before this existed, which

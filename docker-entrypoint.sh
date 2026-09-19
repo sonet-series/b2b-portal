@@ -15,6 +15,17 @@ if [ ! -f next.config.ts ]; then
   exit 1
 fi
 
+# Same class of problem, found the same way: a file the running server reads at
+# request time that the build did not carry into the image. The PDF fonts are
+# loaded from disk when a quote is downloaded, so a missing directory shows up
+# as a blank page long after deploy rather than as a failure here.
+if [ ! -f src/assets/fonts/NotoSans-Regular.ttf ]; then
+  echo "FATAL: src/assets/fonts is missing from the image." >&2
+  echo "  The quote PDF loads these at request time. Without them every" >&2
+  echo "  download returns a 500 and the agent sees a blank page." >&2
+  exit 1
+fi
+
 echo "→ applying database migrations"
 npx prisma migrate deploy
 

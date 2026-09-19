@@ -51,7 +51,8 @@ export default async function HotelQuotePage({
       saveActions[option.key] = saveQuoteAction.bind(
         null,
         { productType: "hotel", ...parsed.data },
-        option.key
+        option.key,
+        null
       );
     }
   }

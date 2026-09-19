@@ -3,6 +3,9 @@ import { markupKey } from "@/lib/markup";
 import { PRODUCT_TYPE, AGENT_TIER, AGENT_TIER_LABEL, type ProductType } from "@/lib/enums";
 import { Card, PageHeader } from "@/components/ui";
 import { MarkupRow } from "./markup-row";
+import { MarginPanel } from "./margin-panel";
+import { roadMarginBps } from "@/lib/settings";
+import { saveRoadMargin } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +17,7 @@ const PRODUCT_LABEL: Record<ProductType, string> = {
 };
 
 export default async function SettingsPage() {
+  const bps = await roadMarginBps();
   // Self-heals if a rule is somehow missing, so the screen can never show a
   // blank row that silently falls back to a default nobody can see.
   await ensureMarkupRules();
@@ -62,6 +66,11 @@ export default async function SettingsPage() {
         use their parent product&rsquo;s rule. A hotel&rsquo;s extra bed is marked up by the hotel
         rule.
       </p>
+
+      <MarginPanel
+        action={saveRoadMargin}
+        percent={(bps / 100).toFixed(bps % 100 === 0 ? 0 : 2).replace(/\.00$/, "")}
+      />
     </>
   );
 }

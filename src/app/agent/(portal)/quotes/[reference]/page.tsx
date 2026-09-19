@@ -5,8 +5,9 @@ import { formatMinor } from "@/lib/money";
 import { formatDateDisplay } from "@/lib/dates";
 import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
 import { DeleteQuote } from "./delete-quote";
+import { editUrlFor } from "@/lib/quote-edit";
 import { deleteQuoteAction } from "../actions";
-import type { VehicleLeg, ItineraryDay } from "@/lib/quote-types";
+import type { VehicleLeg, ItineraryDay, AnyQuoteInput } from "@/lib/quote-types";
 
 export const dynamic = "force-dynamic";
 
@@ -37,21 +38,27 @@ export default async function QuoteDetailPage({
   // time alongside the rest of the inputs.
   let legs: VehicleLeg[] = [];
   let days: ItineraryDay[] = [];
+  let editUrl: string | null = null;
   try {
     const snapshot = JSON.parse(quote.snapshotJson) as {
       legs?: VehicleLeg[];
-      input?: { days?: ItineraryDay[] };
+      input?: AnyQuoteInput & { days?: ItineraryDay[] };
     };
     legs = Array.isArray(snapshot.legs) ? snapshot.legs : [];
     // The day plan the agent typed, as opposed to the road segments it was
     // measured into. Absent on quotes saved before the itinerary builder, and
     // on hand-typed leg quotes, both of which still render their legs below.
     days = Array.isArray(snapshot.input?.days) ? snapshot.input.days : [];
+    // Null for shapes the builder cannot reopen — a combined trip, or a
+    // snapshot from before an input existed. Better no button at all than one
+    // that lands on a half-empty form.
+    editUrl = snapshot.input ? editUrlFor(snapshot.input, quote.reference) : null;
   } catch {
     // A quote saved before legs existed, or malformed JSON — show the priced
     // lines regardless rather than failing the whole page.
     legs = [];
     days = [];
+    editUrl = null;
   }
   const legTotal = legs.reduce((s, l) => s + l.km + l.bufferKm, 0);
 
@@ -73,6 +80,7 @@ export default async function QuoteDetailPage({
             >
               Preview
             </a>
+            {editUrl && <LinkButton href={editUrl}>Edit</LinkButton>}
             <LinkButton href="/agent/quotes">All quotes</LinkButton>
             <DeleteQuote
               reference={quote.reference}

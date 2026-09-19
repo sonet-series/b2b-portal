@@ -56,7 +56,8 @@ export default async function PackageQuotePage({
       saveActions[option.key] = saveQuoteAction.bind(
         null,
         { productType: "itinerary", ...parsed.data },
-        option.key
+        option.key,
+        null
       );
     }
   }

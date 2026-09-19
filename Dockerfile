@@ -53,6 +53,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 # document uploads in production, even though the built output carried the
 # 16mb value. A missing config here fails quietly, so the entrypoint asserts it.
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
+# The PDF fonts are read from disk at REQUEST time, not bundled into .next, so
+# they must exist in the runtime image. Without them the quote PDF returns a
+# 500 and the agent sees a blank page — which is exactly what happened, and is
+# the same trap as next.config.ts above: a file the running server needs that
+# the build does not carry over.
+COPY --from=builder --chown=nextjs:nodejs /app/src/assets ./src/assets
+
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh

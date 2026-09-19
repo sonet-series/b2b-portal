@@ -752,3 +752,20 @@ model RoadDistance {
 
   @@unique([origin, destination])
 }
+
+
+/// A small key/value store for operational numbers Sonet tunes.
+///
+/// Deliberately not env vars: these change from the admin screen without a
+/// redeploy. Deliberately not MarkupRule either — a markup turns cost into a
+/// sell price, and these do not.
+///
+/// `value` is an integer whose unit depends on the key, documented in
+/// src/lib/settings.ts. Integers for the same reason money is paise: the
+/// arithmetic has to be exact and reproducible.
+model Setting {
+  key   String @id
+  value Int
+
+  updatedAt DateTime @updatedAt
+}

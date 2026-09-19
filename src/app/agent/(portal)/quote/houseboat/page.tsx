@@ -49,7 +49,8 @@ export default async function HouseboatQuotePage({
       saveActions[option.key] = saveQuoteAction.bind(
         null,
         { productType: "houseboat", ...parsed.data },
-        option.key
+        option.key,
+        null
       );
     }
   }

@@ -1,6 +1,7 @@
 import "server-only";
 import { routeHops, metersToKm, type Hop } from "./distance";
 import { parseDateOnly, formatDateOnly, startOfUtcDay, daysBetween } from "./dates";
+import { roadMarginBps, marginKm } from "./settings";
 import type { VehicleLeg, ItineraryDay } from "./quote-types";
 
 /**
@@ -142,11 +143,19 @@ export function buildHops(garageAddress: string, days: readonly ItineraryDay[]):
 export type MeasuredItinerary = {
   /** The routed legs, in the shape the pricing engine already consumes. */
   legs: VehicleLeg[];
-  /** Distance actually driven, before any sightseeing buffer. km. */
+  /** What Google measured, garage to garage, before anything is added. km. */
   routedKm: number;
+  /**
+   * The road margin added on top of `routedKm` — see ROAD_MARGIN_BPS.
+   * A separate number, not folded into the legs, so each leg still matches
+   * what anyone gets from Google.
+   */
+  marginKm: number;
+  /** The margin in basis points, so screens can say "+5%" rather than a bare number. */
+  marginBps: number;
   /** Sightseeing buffer the agent added across the trip. km. */
   bufferKm: number;
-  /** routedKm + bufferKm — the number the hire is priced on. */
+  /** routedKm + marginKm + bufferKm — the number the hire is priced on. */
   totalKm: number;
   /** Legs that could not be measured. The agent fixes or overrides these. */
   failures: { label: string; origin: string; destination: string; error: string }[];
@@ -229,11 +238,31 @@ export async function measureItinerary(
     push(inbound.label, metersToKm(inbound.meters), inbound.bufferKm, inbound.source === "MANUAL", -1);
   }
 
+  const bps = await roadMarginBps();
+  const margin = marginKm(routedKm, bps);
+
+  /*
+   * The margin rides as its own leg rather than being spread across the real
+   * ones. Two reasons: every routed leg stays exactly what Google says, so
+   * anyone can check it; and the pricing engine consumes legs, so a margin
+   * that is not a leg would be measured and then quietly not charged.
+   */
+  if (margin > 0) {
+    legs.push({
+      label: `Road margin (+${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 1)}%)`,
+      km: margin,
+      bufferKm: 0,
+      dayIndex: -1,
+    });
+  }
+
   return {
     legs,
     routedKm,
+    marginKm: margin,
+    marginBps: bps,
     bufferKm,
-    totalKm: routedKm + bufferKm,
+    totalKm: routedKm + margin + bufferKm,
     failures: failures.map((f) => ({
       label: f.label,
       origin: f.origin,

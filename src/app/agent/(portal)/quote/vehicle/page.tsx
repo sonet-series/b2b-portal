@@ -47,6 +47,10 @@ export default async function VehicleQuotePage({
     .map((g) => ({ id: g.id, name: g.name, vehicles: g.vehicles.map((v) => v.vehicle) }))
     .filter((g) => g.vehicles.length > 0);
 
+  // Present when the agent came here from "Edit" on a saved quote. Saving
+  // then replaces that quote rather than leaving a near-duplicate behind.
+  const editingReference = typeof params.edit === "string" ? params.edit : null;
+
   const dayRows = parseItineraryDays(params);
   const childAges = parseChildAges(params);
   // Quotes bookmarked before the itinerary builder existed carry typed legs.
@@ -80,7 +84,8 @@ export default async function VehicleQuotePage({
       saveActions[option.key] = saveQuoteAction.bind(
         null,
         { productType: "vehicle", ...parsed.data },
-        option.key
+        option.key,
+        editingReference
       );
     }
   }
@@ -90,8 +95,12 @@ export default async function VehicleQuotePage({
   return (
     <>
       <PageHeader
-        title="Vehicle quote"
-        description="Build the trip day by day. Distances are measured garage to garage."
+        title={editingReference ? `Editing ${editingReference}` : "Vehicle quote"}
+        description={
+          editingReference
+            ? "Change anything and save — the quote keeps its reference and is re-priced at today's rates."
+            : "Build the trip day by day. Distances are measured garage to garage."
+        }
       />
 
       {garageOptions.length === 0 ? (
@@ -131,7 +140,10 @@ export default async function VehicleQuotePage({
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="text-base font-semibold text-slate-900">Distance</h2>
                 <p className="text-sm text-slate-600 tabular-nums">
-                  {itin.routedKm.toLocaleString("en-IN")} km on the road
+                  {itin.routedKm.toLocaleString("en-IN")} km measured
+                  {itin.marginKm > 0 && (
+                    <> + {itin.marginKm.toLocaleString("en-IN")} km margin</>
+                  )}
                   {itin.bufferKm > 0 && <> + {itin.bufferKm.toLocaleString("en-IN")} km sightseeing</>}
                   {" = "}
                   <strong className="text-slate-900">{itin.totalKm.toLocaleString("en-IN")} km</strong>
@@ -155,6 +167,14 @@ export default async function VehicleQuotePage({
               <p className="mt-3 text-xs text-slate-500">
                 Includes the run out from the garage and back to it after the drop — both are
                 chargeable distance the vehicle actually covers.
+                {itin.marginKm > 0 && (
+                  <>
+                    {" "}
+                    The {(itin.marginBps / 100).toFixed(itin.marginBps % 100 === 0 ? 0 : 1)}% road
+                    margin covers what a map route does not: diversions, one-ways, the stretch from
+                    the main road to the gate. Each leg above is exactly what Google measured.
+                  </>
+                )}
                 {itin.anyManual && " Some distances were entered by hand rather than measured."}
               </p>
             </Card>

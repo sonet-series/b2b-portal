@@ -677,6 +677,47 @@ quietly inventing room rates would be worse than no feature.
 
 Houseboats and packages can follow the same pattern once hotels are proven.
 
+### Road margin vs sightseeing buffer — two different numbers (19 Sept 2026)
+Sonet asked why a buffer exists when Google's distances are "ok but need a few
+more km". They answer different problems and both are needed:
+
+- **Road margin** (`Setting.roadMarginBps`, default 5%, editable at
+  `/admin/settings`) corrects Google *systematically*. A map route is the
+  shortest practical one; real driving is longer — diversions, one-ways, a
+  wrong turn, the stretch from the main road to a resort gate. Nobody enters
+  it per trip; it applies to every measured distance.
+- **Sightseeing buffer** is per day and entered by the agent, for a specific
+  detour they know about — an afternoon around Munnar, a temple off the route.
+  It is a fact about that itinerary, not a correction to the measurement.
+
+**The margin rides as its own LEG, not spread across the real ones.** Every
+routed leg then still matches exactly what anyone gets from Google, so the
+distance stays checkable — and because pricing consumes legs, a margin that
+was not a leg would be measured and then quietly not charged.
+
+### Editing a saved quote (19 Sept 2026)
+No new storage: the builder already reads its inputs from the query string and
+`snapshotJson` already holds exactly those inputs, so `editUrlFor()` rebuilds
+the URL and "edit" is the same screen reopened.
+
+Saving with `?edit=REF` **replaces that quote and keeps the reference**, rather
+than leaving a near-duplicate. An agent who has already given ST-2609-0003 to a
+customer and then fixes a date needs it to stay ST-2609-0003. That does not
+contradict snapshotting: freezing protects a quote from rates drifting
+underneath it, which is a different thing from its own author changing it.
+
+`editUrlFor` returns null for shapes the builder cannot reopen — a combined
+trip, or a snapshot predating an input — so the button is hidden rather than
+landing on a half-empty form.
+
+### `VehicleQuoteInput` carries adults/childAges FLAT (19 Sept 2026)
+It briefly had `pax?: PaxInput`, a nested object **nothing ever populated** —
+the form submits `adults` and `childAges`, and the zod schema emits them flat.
+It typechecked, and was silently always undefined, so every vehicle quote was
+saved with a passenger count of zero. Found only when an edit URL came out
+missing its passengers. If a field is optional and always absent, suspect the
+shape rather than the data.
+
 ### Agent-side UX (19 Sept 2026)
 Prompted by Sonet pointing at mytourcab.com. That is a B2C site and most of it
 does not transfer — our agents are repeat professionals who want speed and
@@ -706,6 +747,15 @@ does not work.
 `@react-pdf/renderer`. Not a headless browser: the box has 4GB, no swap, and
 runs the ERP too. `?view=1` serves it inline for a preview instead of
 downloading.
+
+**The fonts must be COPIED INTO THE RUNTIME IMAGE.** They are read from disk
+when a PDF is requested, not bundled into `.next`, and the runner stage copies
+only `public`, `.next`, `node_modules`, `next.config.ts` and `prisma`. Without
+`src/assets` the download returns a 500 and the agent sees a blank tab — which
+is exactly what shipped. This is the same trap as `next.config.ts`: a file the
+running server needs that the build does not carry over. `docker-entrypoint.sh`
+now refuses to start without them. Note react-pdf caches a failed font load for
+the process lifetime, so the fix only takes effect after a restart.
 
 **The bundled Noto Sans in `src/assets/fonts` is not decoration.** The built-in
 PDF fonts are WinAnsi and have no rupee sign — and they do not fail on one.
