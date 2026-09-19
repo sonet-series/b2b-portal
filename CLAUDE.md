@@ -688,6 +688,25 @@ that (see the P3009 note). The wording is what the user asked for; the table
 name is invisible to them. If it is ever renamed, do it with `@@map` to the
 existing table names so no data moves.
 
+### "Included km" is what the price COVERS, not the allowance (20 Sept 2026)
+Sonet caught this on a real quote: a 1,189 km trip priced against a 400 km
+allowance printed "400 km included · extra km at ₹24.20 per km". The 789 km
+over the allowance had ALREADY been charged and were in the total, so the
+document was telling the customer they would be billed a second time for
+kilometres they had just paid for.
+
+`terms.includedKm` is now `max(allowance, tripKm)`:
+- **Over the allowance** — the trip distance, because that is what the price
+  bought.
+- **Under it** — the allowance, because four days bought 1,000 km whether or
+  not they were driven.
+
+The option's headline uses the same figure, so it cannot contradict the terms
+two lines below it.
+
+**The allowance is an INPUT to the extra-km calculation, not a customer-facing
+number.** It only ever meant "how far before we start charging per km".
+
 ### The quote may only CLAIM what it charged (20 Sept 2026)
 The printed quote carried a fixed line — "toll, parking and interstate permits
 are charged at actuals unless stated otherwise" — written before those charges

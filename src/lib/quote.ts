@@ -585,18 +585,34 @@ export async function quoteVehicle(
       }
 
       if (lines.length > 0) {
+        // The same figure the terms state, so the headline cannot contradict
+        // the small print two lines below it.
+        const coveredKm = Math.max(includedKm, km ?? 0);
         options.push({
           key: "PER_DAY",
           productType: "vehicle",
           title,
           detail:
             `${days} day${days === 1 ? "" : "s"}` +
-            (includedKm > 0 ? ` · ${includedKm} km included` : ""),
+            (coveredKm > 0 ? ` · ${coveredKm.toLocaleString("en-IN")} km included` : ""),
           lines,
           totalMinor: sumMinor(lines.map((l) => l.totalMinor)),
           usedOverride,
           terms: {
-            includedKm: includedKm > 0 ? includedKm : undefined,
+            /*
+             * What the price COVERS, not the rate card's allowance.
+             *
+             * The allowance (100 km a day, say) is an input to the extra-km
+             * calculation. By the time the quote is priced, any kilometres
+             * over it have ALREADY been charged and are in the total — so a
+             * 1,189 km trip on a 400 km allowance covers 1,189 km.
+             *
+             * Saying "400 km included, extra at ₹24.20" on that quote told the
+             * customer they would be billed again for 789 km they had just
+             * paid for. Under the allowance the answer is the allowance: four
+             * days bought 400 km whether or not they were driven.
+             */
+            includedKm: coveredKm || undefined,
             extraKmRateMinor,
           },
         });
