@@ -18,22 +18,30 @@ const PRODUCTS = [
   {
     href: "/agent/quote/vehicle",
     label: "Cab only",
-    description: "A vehicle for a trip. Build the route day by day and we work out the kilometres.",
+    description: "Build the route day by day. We measure the kilometres.",
+    accent: "from-amber-50 to-white ring-amber-200/70",
+    icon: "M3 13l1.5-4.5A2 2 0 0 1 6.4 7h7.2a2 2 0 0 1 1.9 1.5L17 13m-14 0h14m-14 0v3.5a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5V16m12-3v3.5a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5V16M6 15.5h.01M14 15.5h.01",
   },
   {
     href: "/agent/quote/hotel",
     label: "Hotels only",
     description: "Room rates on your agency's own contracted prices.",
+    accent: "from-sky-50 to-white ring-sky-200/70",
+    icon: "M3 17V6a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v11M3 17h14M3 17v-2h14v2M8 9h4a2 2 0 0 1 2 2v4M11 9V7a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v8",
   },
   {
     href: "/agent/quote/houseboat",
     label: "Houseboat only",
     description: "Day cruises and overnight stays in the backwaters.",
+    accent: "from-emerald-50 to-white ring-emerald-200/70",
+    icon: "M3 15h14l-1.5 3H4.5L3 15Zm2-1V9a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v5M7 8V6h6v2M2 18c1.5 0 1.5 1 3 1s1.5-1 3-1 1.5 1 3 1 1.5-1 3-1 1.5 1 3 1",
   },
   {
     href: "/agent/quote/package",
     label: "Tour package",
-    description: "A ready-made itinerary, priced per person or per group.",
+    description: "A ready-made itinerary, per person or per group.",
+    accent: "from-violet-50 to-white ring-violet-200/70",
+    icon: "M4 7h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Zm4 0V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2M3 11h14",
   },
 ];
 
@@ -50,11 +58,25 @@ export default async function AgentHomePage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         {PRODUCTS.map((p) => (
-          <Link key={p.href} href={p.href} className="block">
-            <Card className="h-full transition-colors hover:border-blue-300 hover:bg-blue-50/40">
-              <p className="font-medium text-slate-900">{p.label}</p>
-              <p className="mt-1 text-sm text-slate-500">{p.description}</p>
-              <p className="mt-3 text-sm text-blue-700">Get a quote →</p>
+          <Link key={p.href} href={p.href} className="group block">
+            <Card
+              className={`h-full bg-gradient-to-br ${p.accent} ring-1 transition-shadow hover:shadow-md`}
+            >
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 rounded-lg bg-white/80 p-2 text-slate-700 ring-1 ring-inset ring-white">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4}
+                       strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+                    <path d={p.icon} />
+                  </svg>
+                </span>
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-900">{p.label}</p>
+                  <p className="mt-1 text-sm text-slate-600">{p.description}</p>
+                  <p className="mt-3 text-sm font-medium text-blue-700 group-hover:underline">
+                    Get a quote &rarr;
+                  </p>
+                </div>
+              </div>
             </Card>
           </Link>
         ))}

@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Button, Select, FormError } from "@/components/ui";
 import { DateField } from "@/components/date-field";
 import { PlaceInput } from "./place-input";
+import { Stepper } from "@/components/stepper";
 
 /**
  * The vehicle trip builder.
@@ -152,8 +153,35 @@ export function TripForm({
 
   const bufferTotal = days.reduce((s, d) => s + (Number(d.bufferKm) || 0), 0);
 
+  const routeSummary = chained
+    .map((c, i) => (i === 0 ? c.from : c.to))
+    .filter((p, i, arr) => p !== "" && (i === 0 || p !== arr[i - 1]));
+
   return (
     <div className="space-y-4">
+      {/* What the agent has built so far. Nine days of form is a long way to
+          scroll to re-check the party size or where the trip ends. */}
+      {(count > 0 || vehicle) && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-md bg-slate-900 px-4 py-2.5 text-sm text-white">
+          {count > 0 && (
+            <span>
+              <strong>{count}</strong> {count === 1 ? "day" : "days"}
+            </span>
+          )}
+          <span>
+            <strong>{pax}</strong> {pax === 1 ? "passenger" : "passengers"}
+          </span>
+          {vehicle && <span className="text-slate-300">{vehicle.type}</span>}
+          {routeSummary.length > 1 && (
+            <span className="min-w-0 flex-1 truncate text-slate-300">
+              {routeSummary.join(" → ")}
+            </span>
+          )}
+          {bufferTotal > 0 && (
+            <span className="text-slate-400">+{bufferTotal} km sightseeing</span>
+          )}
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <Select
           label="Garage"
@@ -212,51 +240,57 @@ export function TripForm({
       <div className="rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Passengers</p>
 
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="w-28">
-            <label htmlFor="adults" className="mb-1 block text-sm font-medium text-slate-700">
-              Adults
-            </label>
-            <input
-              id="adults"
+        <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-slate-700">Adults</span>
+            <Stepper
               name="adults"
-              value={adults}
-              onChange={(e) => setAdults(e.target.value)}
-              inputMode="numeric"
-              className={`${control} tabular-nums`}
+              label="Adults"
+              min={1}
+              max={60}
+              value={Number(adults) || 1}
+              onChange={(n) => setAdults(String(n))}
             />
           </div>
 
-          <div className="flex-1">
-            <span className="mb-1 block text-sm font-medium text-slate-700">Children (age)</span>
-            <div className="flex flex-wrap items-center gap-2">
-              {childAges.map((age, i) => (
-                <span key={i} className="flex items-center gap-1">
-                  <input
-                    name="childAge"
-                    value={age}
-                    onChange={(e) =>
-                      setChildAges((cs) => cs.map((c, j) => (j === i ? e.target.value : c)))
-                    }
-                    inputMode="numeric"
-                    placeholder="age"
-                    aria-label={`Child ${i + 1} age`}
-                    className={`${control} w-20 tabular-nums`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setChildAges((cs) => cs.filter((_, j) => j !== i))}
-                    aria-label={`Remove child ${i + 1}`}
-                    className="rounded px-1 text-sm text-slate-400 hover:text-red-700"
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium text-slate-700">Children</span>
+            {childAges.length === 0 ? (
+              <span className="text-sm text-slate-400">none</span>
+            ) : (
+              <span className="flex flex-wrap items-center gap-2">
+                {childAges.map((age, i) => (
+                  <span
+                    key={i}
+                    className="flex items-center gap-1.5 rounded-md bg-white px-2 py-1 ring-1 ring-inset ring-slate-200"
                   >
-                    ✕
-                  </button>
-                </span>
-              ))}
-              <Button type="button" tone="secondary" onClick={() => setChildAges((cs) => [...cs, ""])}>
-                Add child
-              </Button>
-            </div>
+                    <span className="text-xs text-slate-500">age</span>
+                    <Stepper
+                      compact
+                      name="childAge"
+                      label={`Child ${i + 1} age`}
+                      min={0}
+                      max={17}
+                      value={Number(age) || 0}
+                      onChange={(n) =>
+                        setChildAges((cs) => cs.map((c, j) => (j === i ? String(n) : c)))
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setChildAges((cs) => cs.filter((_, j) => j !== i))}
+                      aria-label={`Remove child ${i + 1}`}
+                      className="rounded px-1 text-sm text-slate-400 hover:text-red-700"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </span>
+            )}
+            <Button type="button" tone="secondary" onClick={() => setChildAges((cs) => [...cs, "6"])}>
+              Add child
+            </Button>
           </div>
         </div>
 
@@ -318,6 +352,7 @@ export function TripForm({
                         onChange={(v) => update(i, { from: v })}
                         placeholder="Cochin International Airport"
                         ariaLabel="Pick-up point"
+                        quickPicks
                       />
                     ) : (
                       <>
@@ -343,6 +378,7 @@ export function TripForm({
                         onChange={(v) => update(i, { to: v })}
                         placeholder="Munnar"
                         ariaLabel={`Day ${i + 1} destination`}
+                        quickPicks
                       />
                     )}
                   </div>

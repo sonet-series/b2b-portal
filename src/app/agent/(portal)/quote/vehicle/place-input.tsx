@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { DESTINATION_GROUPS } from "@/lib/destinations";
 
 /**
  * A place field that suggests real place names as you type.
@@ -31,13 +32,18 @@ export function PlaceInput({
   onChange,
   placeholder,
   ariaLabel,
+  /** Show the one-tap shortcut list. Off for optional fields, to keep the
+      itinerary from becoming a wall of chips. */
+  quickPicks,
 }: {
   name?: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   ariaLabel: string;
+  quickPicks?: boolean;
 }) {
+  const [showPicks, setShowPicks] = useState(false);
   const [items, setItems] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -84,7 +90,10 @@ export function PlaceInput({
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setShowPicks(false);
+      }
     };
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
@@ -135,6 +144,49 @@ export function PlaceInput({
         autoComplete="off"
         className={control}
       />
+
+      {quickPicks && (
+        <div className="mt-1">
+          <button
+            type="button"
+            onClick={() => setShowPicks((v) => !v)}
+            className="text-xs text-blue-700 hover:underline"
+          >
+            {showPicks ? "Hide" : "Pick from our destinations"}
+          </button>
+
+          {showPicks && (
+            <div className="absolute z-20 mt-1 max-h-72 w-72 overflow-auto rounded-md bg-white p-2 shadow-lg ring-1 ring-slate-200">
+              {DESTINATION_GROUPS.map((group) => (
+                <div key={group.label} className="mb-2 last:mb-0">
+                  <p className="px-1 pb-1 text-[0.65rem] font-semibold uppercase tracking-wider text-slate-400">
+                    {group.label}
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {group.places.map((place) => (
+                      <button
+                        key={place}
+                        type="button"
+                        onClick={() => {
+                          // Same guard as choosing a suggestion: setting the
+                          // value must not immediately re-open the dropdown.
+                          justPicked.current = true;
+                          onChange(place);
+                          setShowPicks(false);
+                          setOpen(false);
+                        }}
+                        className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-blue-100 hover:text-blue-900"
+                      >
+                        {place}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {open && visible.length > 0 && (
         <ul

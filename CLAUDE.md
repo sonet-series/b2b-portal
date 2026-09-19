@@ -677,6 +677,22 @@ quietly inventing room rates would be worse than no feature.
 
 Houseboats and packages can follow the same pattern once hotels are proven.
 
+### Agent-side UX (19 Sept 2026)
+Prompted by Sonet pointing at mytourcab.com. That is a B2C site and most of it
+does not transfer — our agents are repeat professionals who want speed and
+precision, not photography and "Book Now". Three things did:
+
+- **`src/lib/destinations.ts` — one-tap destination chips.** The real win is
+  ACCURACY, not speed: a tapped chip is spelled the same way every time, so the
+  same trip measures the same distance whoever quotes it. Typed names are
+  exactly where "Cochin Airport" vs "Cochin International Airport" came from.
+  It also saves a billed Autocomplete request per tap. Free typing still works
+  for anywhere not listed — a shortcut, never a restriction.
+- **Steppers for passenger counts** instead of text boxes. A stepper cannot
+  hold "two" or "2 ", and ±1 is what agents actually do.
+- **A live summary bar** on the quote builder. Nine days of form is a long way
+  to scroll back to check the party size or where the trip ends.
+
 ### The customer document is a real PDF, not browser print (19 Sept 2026)
 Browser printing could never produce a document an agent hands over unedited.
 Browsers stamp the page TITLE and the page URL into the header and footer, no
