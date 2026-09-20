@@ -108,15 +108,27 @@ docker compose logs --tail=60 web 2>&1 | grep -iE "migration|seed|markup rules" 
 # takes the whole box down, not just this portal. Found on 20 Sept 2026 at 85%
 # and climbing.
 #
-# A WEEK is kept, deliberately: the expensive layers are `npm ci` and compiling
-# better-sqlite3 from source, which only re-run when package-lock.json changes.
-# Keeping recent cache means a daily deploy stays at ~25s. Pruning everything
-# would reclaim a little more and make the next deploy several minutes.
+# A SIZE CAP, not an age filter.
+#
+# `--filter until=168h` was tried first and reclaimed 2.7GB of 31GB, because
+# `until` matches on LAST ACCESSED and a day of deploying refreshes almost
+# every layer. Age is the wrong axis: what matters is not how old the cache is
+# but how much disk it occupies.
+#
+# 10GB holds the layers that actually matter — `npm ci` and compiling
+# better-sqlite3 from source, which only re-run when package-lock.json
+# changes — so a routine deploy stays at ~25s. BuildKit evicts least-recently-
+# used beyond the cap.
+#
+# Docker 28 renamed the flag to --max-used-space; the fallback covers both
+# without having to pin a Docker version on a box shared with the ERP.
 #
 # `|| true` because a deploy that has already succeeded must not be reported as
 # failed over housekeeping.
 say "Trimming the build cache"
-docker builder prune -f --filter until=168h 2>&1 | tail -1 || true
+{ docker builder prune -f --keep-storage 10GB 2>/dev/null \
+    || docker builder prune -f --max-used-space 10GB 2>/dev/null \
+    || echo "(could not trim — check 'docker system df')"; } | tail -1
 # Portable field-picking rather than `df --output`, which is GNU-only and so
 # cannot be tested anywhere but the server.
 df -h / | tail -1 | awk '{print "  disk: " $5 " used, " $4 " free"}' || true

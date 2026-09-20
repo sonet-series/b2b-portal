@@ -1418,11 +1418,18 @@ whole box down rather than just this portal.
 while the layers stay pinned by the cache, and reclaims 0B. The command is
 `docker builder prune`.
 
-`deploy/deploy.sh` now trims anything older than **a week** after each
-successful deploy. A week, not everything: the expensive layers are `npm ci`
-and compiling better-sqlite3 from source, which only re-run when
-`package-lock.json` changes. Keeping recent cache is what makes a routine
-deploy ~25s instead of several minutes.
+`deploy/deploy.sh` now caps the cache at **10GB** after each successful
+deploy, letting BuildKit evict least-recently-used beyond that.
+
+**A size cap, not an age filter — and that distinction was learned the hard
+way.** `--filter until=168h` was tried first and reclaimed 2.7GB of 31GB,
+because `until` matches on LAST ACCESSED and a day of deploying refreshes
+almost every layer. Age is simply the wrong axis: what matters is not how old
+the cache is but how much disk it occupies. 10GB is enough to hold `npm ci`
+and the better-sqlite3 build, which is what keeps a routine deploy at ~25s.
+
+Docker 28 renamed `--keep-storage` to `--max-used-space`; the script tries both
+rather than pinning a Docker version on a box shared with the ERP.
 
 **Do not prune volumes on this box.** 184 local volumes with ~2GB
 "reclaimable", but `docker volume prune` removes volumes belonging to STOPPED
