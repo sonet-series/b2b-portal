@@ -1225,6 +1225,41 @@ already met.
 
 Deployment details live in `deploy/DEPLOY-PLAN.md`.
 
+### Deploying is ~50s of work; don't optimise the build (20 Sept 2026)
+Sonet asked why deploying was slow. The first guess — a 4GB box with no swap
+struggling through `next build` — was WRONG, and measuring took one command:
+
+```bash
+cd /opt/b2b-portal && free -h && docker compose build --progress=plain 2>&1 | grep -E "CACHED|DONE"
+```
+
+`docker compose build` is **49 seconds**, and every expensive layer is CACHED.
+`npm ci` and compiling better-sqlite3 from source only re-run when
+`package-lock.json` changes, which is rare. Memory was fine: 1.4Gi available.
+
+The time was in **waiting**, not building. `docker-compose.yml` healthchecks on
+a 30s interval with a 40s start period — right for monitoring a running
+container, wrong for waiting on a starting one. The container answers requests
+seconds after boot, but `docker inspect` cannot say "healthy" until its first
+scheduled check lands, so the script sat for up to 90s in front of a working
+site.
+
+`deploy.sh` now polls `/login` inside the container every 2s and reports as
+soon as it answers. **The healthcheck is unchanged** — it is doing its own job,
+which is noticing a container that has stopped answering, and that job wants a
+long interval.
+
+Two habits came out of this:
+- **Every phase prints its own elapsed time**, and the script prints a total.
+  A deploy that cannot say where its minutes went gets optimised by guess, and
+  the guess was wrong here.
+- **A restarting container fails the deploy immediately** rather than after the
+  full timeout. It is not starting slowly, it is failing — usually a migration,
+  or one of the entrypoint's assertions about next.config.ts and the PDF fonts.
+
+**The box still has no swap** (3.7Gi total). That is insurance worth buying,
+not a fix for anything currently broken — do not let it be sold as a speed-up.
+
 ### Backups (confirmed 26 Aug 2026)
 Nightly `sqlite3 .backup` + `PRAGMA integrity_check`, gzipped, 30 days, on the
 same disk. Also runs before every CI deploy, since migrations apply on
