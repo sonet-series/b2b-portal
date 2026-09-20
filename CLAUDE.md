@@ -1428,8 +1428,11 @@ almost every layer. Age is simply the wrong axis: what matters is not how old
 the cache is but how much disk it occupies. 10GB is enough to hold `npm ci`
 and the better-sqlite3 build, which is what keeps a routine deploy at ~25s.
 
-Docker 28 renamed `--keep-storage` to `--max-used-space`; the script tries both
-rather than pinning a Docker version on a box shared with the ERP.
+The script tries `--max-used-space` first and falls back to `--keep-storage`,
+rather than pinning a Docker version on a box shared with the ERP. They are not
+synonyms: `--max-used-space` caps what the cache may occupy, while
+`--keep-storage` (renamed `--reserved-space` in Docker 28, and deprecated)
+means keep at LEAST that much and merely prunes to about the same place.
 
 **Do not prune volumes on this box.** 184 local volumes with ~2GB
 "reclaimable", but `docker volume prune` removes volumes belonging to STOPPED

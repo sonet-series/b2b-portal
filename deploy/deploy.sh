@@ -120,14 +120,17 @@ docker compose logs --tail=60 web 2>&1 | grep -iE "migration|seed|markup rules" 
 # changes — so a routine deploy stays at ~25s. BuildKit evicts least-recently-
 # used beyond the cap.
 #
-# Docker 28 renamed the flag to --max-used-space; the fallback covers both
-# without having to pin a Docker version on a box shared with the ERP.
+# --max-used-space is tried FIRST and is the semantically correct flag: a cap
+# on what the cache may occupy. The older --keep-storage (renamed
+# --reserved-space in Docker 28, and deprecated) means the opposite — keep at
+# LEAST this much — and merely happens to prune down to about the same place.
+# It is kept only as a fallback for a Docker too old to have the new flag.
 #
-# `|| true` because a deploy that has already succeeded must not be reported as
-# failed over housekeeping.
+# `|| echo` rather than failing: a deploy that has already succeeded must not
+# be reported as failed over housekeeping.
 say "Trimming the build cache"
-{ docker builder prune -f --keep-storage 10GB 2>/dev/null \
-    || docker builder prune -f --max-used-space 10GB 2>/dev/null \
+{ docker builder prune -f --max-used-space 10GB 2>/dev/null \
+    || docker builder prune -f --keep-storage 10GB 2>/dev/null \
     || echo "(could not trim — check 'docker system df')"; } | tail -1
 # Portable field-picking rather than `df --output`, which is GNU-only and so
 # cannot be tested anywhere but the server.
