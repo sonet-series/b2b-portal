@@ -1408,6 +1408,28 @@ Two habits came out of this:
 **The box still has no swap** (3.7Gi total). That is insurance worth buying,
 not a fix for anything currently broken — do not let it be sold as a speed-up.
 
+### The build cache will eat the disk (20 Sept 2026)
+Found at 85% of a 75GB disk and climbing: **BuildKit build cache had reached
+37GB**, 31GB of it reclaimable. Every deploy adds layers and nothing evicts
+them. That disk is shared with the ERP and MariaDB, so filling it takes the
+whole box down rather than just this portal.
+
+`docker image prune` does NOT fix this — it deletes untagged image records
+while the layers stay pinned by the cache, and reclaims 0B. The command is
+`docker builder prune`.
+
+`deploy/deploy.sh` now trims anything older than **a week** after each
+successful deploy. A week, not everything: the expensive layers are `npm ci`
+and compiling better-sqlite3 from source, which only re-run when
+`package-lock.json` changes. Keeping recent cache is what makes a routine
+deploy ~25s instead of several minutes.
+
+**Do not prune volumes on this box.** 184 local volumes with ~2GB
+"reclaimable", but `docker volume prune` removes volumes belonging to STOPPED
+containers and the ERP keeps its data in named volumes. Two gigabytes is not
+worth finding out which ones. The same caution applies to
+`docker image prune -a`.
+
 ### Backups (confirmed 26 Aug 2026)
 Nightly `sqlite3 .backup` + `PRAGMA integrity_check`, gzipped, 30 days, on the
 same disk. Also runs before every CI deploy, since migrations apply on

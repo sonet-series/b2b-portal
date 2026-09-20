@@ -101,6 +101,26 @@ fi
 say "Migrations applied this boot"
 docker compose logs --tail=60 web 2>&1 | grep -iE "migration|seed|markup rules" || echo "(none reported)"
 
+# Clear up after ourselves.
+#
+# Every build adds BuildKit cache layers and nothing evicts them. Left alone it
+# reached 37GB of a 75GB disk — shared with the ERP and MariaDB, so a full disk
+# takes the whole box down, not just this portal. Found on 20 Sept 2026 at 85%
+# and climbing.
+#
+# A WEEK is kept, deliberately: the expensive layers are `npm ci` and compiling
+# better-sqlite3 from source, which only re-run when package-lock.json changes.
+# Keeping recent cache means a daily deploy stays at ~25s. Pruning everything
+# would reclaim a little more and make the next deploy several minutes.
+#
+# `|| true` because a deploy that has already succeeded must not be reported as
+# failed over housekeeping.
+say "Trimming the build cache"
+docker builder prune -f --filter until=168h 2>&1 | tail -1 || true
+# Portable field-picking rather than `df --output`, which is GNU-only and so
+# cannot be tested anywhere but the server.
+df -h / | tail -1 | awk '{print "  disk: " $5 " used, " $4 " free"}' || true
+
 # Reported, never waited on: the container is already serving. This only says
 # whether Docker has caught up yet, which matters for its restart policy.
 say "Deployed"
