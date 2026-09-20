@@ -17,6 +17,7 @@ const NAV = [
   { href: "/agent/quote/package", label: "Packages" },
   { href: "/agent/trip", label: "Current trip" },
   { href: "/agent/quotes", label: "Saved quotes" },
+  { href: "/agent/bookings", label: "Bookings" },
   { href: "/agent/branding", label: "Branding" },
 ];
 

@@ -448,6 +448,7 @@ model Agent {
 
   rateCardEntries AgentRateCard[]
   quotes          Quote[]
+  bookings        Booking[]
   documents       AgentDocument[]
 
   @@index([status, createdAt])
@@ -580,9 +581,103 @@ model Quote {
 
   createdAt DateTime @default(now())
 
-  lines QuoteLine[]
+  lines   QuoteLine[]
+  booking Booking?
 
   @@index([agentId, createdAt])
+}
+
+/// An agent's request to turn a saved quote into a real trip.
+///
+/// v1 is QUOTE-ONLY plus this: a REQUEST and an APPROVAL, never a transaction.
+/// No money moves through the portal. The agent pays Series Tours by whatever
+/// means they already use, then RECORDS that payment here with proof, and
+/// Sonet verifies it. That is a ledger, not a payment rail — see BookingPayment.
+///
+/// Confirmed with Sonet, 20 Sept 2026.
+model Booking {
+  id        String @id @default(uuid())
+  /// "SB-2609-0007" — S for Series, B for booking. Distinct from a quote's
+  /// ST- prefix on purpose: down a phone line nobody should have to ask which
+  /// kind of number they are reading.
+  reference String @unique
+
+  /// ONE booking per quote. A second request against the same quote would be
+  /// two promises about one trip; re-quote instead.
+  quoteId String @unique
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  /// BookingStatus: REQUESTED | CONFIRMED | DECLINED | CANCELLED
+  status String @default("REQUESTED")
+
+  /// What was agreed, NET of GST, in paise.
+  ///
+  /// Starts as the quote's total and Sonet may change it when he approves —
+  /// "on approval final rate might change". Stored on the BOOKING rather than
+  /// written back to the quote: the quote is a frozen record of what was
+  /// priced, and a booking is a separate agreement about what will be paid.
+  agreedTotalMinor Int
+  /// The GST rate at the moment of agreement, basis points. Frozen, because a
+  /// statutory change must not silently restate a confirmed booking.
+  gstBps           Int
+  /// Deposit due, basis points of the GROSS total (2500 = 25%). Frozen for
+  /// the same reason.
+  depositBps       Int
+
+  /// Anything the agent wants Sonet to know when requesting.
+  agentNote String?
+  /// Sonet's reply — REQUIRED in practice when he changes the rate or
+  /// declines, because an unexplained change is the one an agent argues with.
+  adminNote String?
+
+  requestedAt DateTime  @default(now())
+  decidedAt   DateTime?
+
+  payments BookingPayment[]
+
+  @@index([status, requestedAt])
+  @@index([agentId, requestedAt])
+}
+
+/// A payment the agent says they have made, and Sonet's verdict on it.
+///
+/// This records money that moved SOMEWHERE ELSE — a bank transfer, UPI,
+/// whatever the agency already uses. The portal never touches it. The proof is
+/// an image or PDF the agent uploads, stored on disk like every other upload.
+///
+/// NOTHING counts toward the balance until `status` is APPROVED. A submitted
+/// payment is a claim; an approved one is a fact, and the difference is the
+/// whole point of Sonet reviewing them.
+model BookingPayment {
+  id        String  @id @default(uuid())
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  /// What the agent says they paid, in paise.
+  amountMinor Int
+  /// Their bank/UPI reference, so Sonet can find it on a statement.
+  reference   String?
+  /// The day the agent says the money left. Not when they told us.
+  paidOn      DateTime?
+  note        String?
+
+  /// The screenshot or receipt. On disk under UPLOAD_DIR, never in SQLite and
+  /// never under public/ — same rule as agent documents.
+  storedName String
+  mimeType   String
+
+  /// PaymentStatus: SUBMITTED | APPROVED | REJECTED
+  status    String  @default("SUBMITTED")
+  adminNote String?
+
+  submittedAt DateTime  @default(now())
+  decidedAt   DateTime?
+
+  @@index([bookingId, submittedAt])
+  @@index([status, submittedAt])
 }
 
 model QuoteLine {

@@ -503,9 +503,24 @@ export async function replaceQuote(
 ): Promise<string> {
   const existing = await prisma.quote.findFirst({
     where: { agentId: agent.id, reference },
-    select: { id: true },
+    select: { id: true, booking: { select: { reference: true, status: true } } },
   });
   if (!existing) throw new PricingError("That quote no longer exists.");
+
+  /*
+   * A quote with a live booking against it is frozen.
+   *
+   * Editing it would move the ground under an agreement: Sonet approved a
+   * specific trip at a specific price, and the agent would be holding a
+   * different document under the same reference. A cancelled or declined
+   * booking releases it — that trip is over, and re-quoting is the point.
+   */
+  if (existing.booking && existing.booking.status !== "CANCELLED" && existing.booking.status !== "DECLINED") {
+    throw new PricingError(
+      `This quote is booked (${existing.booking.reference}) and can no longer be edited. ` +
+        "Ask Series Tours to cancel the booking first, or save a new quote."
+    );
+  }
 
   const { options, itinerary: measured } = await recompute(agent, input);
   const option = options.find((o) => o.key === optionKey);
@@ -554,6 +569,23 @@ export async function replaceQuote(
 }
 
 export async function deleteQuote(agentId: string, reference: string): Promise<boolean> {
+  // Same rule as editing, and checked BEFORE the delete rather than relying on
+  // the foreign key: Booking cascades from Quote, so deleting the quote would
+  // silently take an agreed booking with it.
+  const quote = await prisma.quote.findFirst({
+    where: { agentId, reference },
+    select: { booking: { select: { reference: true, status: true } } },
+  });
+  if (
+    quote?.booking &&
+    quote.booking.status !== "CANCELLED" &&
+    quote.booking.status !== "DECLINED"
+  ) {
+    throw new PricingError(
+      `This quote is booked (${quote.booking.reference}) and cannot be deleted.`
+    );
+  }
+
   const result = await prisma.quote.deleteMany({ where: { agentId, reference } });
   return result.count > 0;
 }

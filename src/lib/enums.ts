@@ -137,6 +137,39 @@ export const MARKUP_KIND_LABEL: Record<MarkupKind, string> = {
 export const DISTANCE_SOURCE = ["GOOGLE", "MANUAL"] as const;
 export type DistanceSource = (typeof DISTANCE_SOURCE)[number];
 
+/**
+ * Where a booking request has got to.
+ *
+ * REQUESTED is the agent asking. CONFIRMED is Sonet agreeing, at a rate he may
+ * have changed. DECLINED is him saying no. CANCELLED is either side pulling
+ * out after the fact — kept distinct from DECLINED so "we said no" and "it
+ * fell through" do not become the same number in a report.
+ */
+export const BOOKING_STATUS = ["REQUESTED", "CONFIRMED", "DECLINED", "CANCELLED"] as const;
+export type BookingStatus = (typeof BOOKING_STATUS)[number];
+
+export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
+  REQUESTED: "Awaiting approval",
+  CONFIRMED: "Confirmed",
+  DECLINED: "Declined",
+  CANCELLED: "Cancelled",
+};
+
+/**
+ * A recorded payment's standing.
+ *
+ * SUBMITTED is a claim; APPROVED is a fact. Only APPROVED counts toward what
+ * has been paid — that distinction is the reason Sonet reviews them at all.
+ */
+export const PAYMENT_STATUS = ["SUBMITTED", "APPROVED", "REJECTED"] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUS)[number];
+
+export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
+  SUBMITTED: "Awaiting approval",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+};
+
 /** The three documents every agent uploads at registration. */
 export const DOCUMENT_KIND = ["PAN_CARD", "BUSINESS_PROOF", "VISITING_CARD"] as const;
 export type DocumentKind = (typeof DOCUMENT_KIND)[number];
@@ -157,5 +190,7 @@ export const isAgentTier = makeGuard(AGENT_TIER);
 export const isRateCharge = makeGuard(RATE_CHARGE);
 export const isMarkupKind = makeGuard(MARKUP_KIND);
 export const isDistanceSource = makeGuard(DISTANCE_SOURCE);
+export const isBookingStatus = makeGuard(BOOKING_STATUS);
+export const isPaymentStatus = makeGuard(PAYMENT_STATUS);
 export const isHouseboatPricingMode = makeGuard(HOUSEBOAT_PRICING_MODE);
 export const isItineraryPricingMode = makeGuard(ITINERARY_PRICING_MODE);

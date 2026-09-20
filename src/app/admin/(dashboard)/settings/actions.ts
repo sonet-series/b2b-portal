@@ -119,3 +119,29 @@ export async function saveStatePermit(_prev: FormState, formData: FormData): Pro
   revalidatePath("/admin/settings");
   return { ok: true, message: `${state} permit set to ₹${raw} per entry for that vehicle.` };
 }
+
+/**
+ * The deposit an agent pays on a confirmed booking, as a percentage.
+ *
+ * Stored in BASIS POINTS so the arithmetic stays exact — the same reason
+ * markup percentages and GST are. Frozen onto each booking when it is
+ * confirmed, so changing this moves the next booking and never one already
+ * agreed.
+ */
+export async function saveDepositPercent(_prev: FormState, formData: FormData): Promise<FormState> {
+  if (!(await getAdminSession())) throw new Error("Not signed in.");
+
+  const raw = String(formData.get("percent") ?? "").trim();
+  const n = Number(raw);
+  if (!/^\d{1,3}(\.\d{1,2})?$/.test(raw) || !Number.isFinite(n) || n < 0 || n > 100) {
+    return {
+      ok: false,
+      message: "Enter a percentage between 0 and 100, like 25.",
+      errors: { percent: "Not a percentage" },
+    };
+  }
+
+  await setSetting(SETTING_KEYS.DEPOSIT_BPS, Math.round(n * 100));
+  revalidatePath("/admin/settings");
+  return { ok: true, message: `Deposit set to ${raw}% of the grand total.` };
+}

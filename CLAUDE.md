@@ -38,12 +38,16 @@ makes explicitly. It is never a default, and never something to build on spec.
 - Sonet-only admin: catalogue CRUD + agent approval + rate-card assignment.
 
 **Out of scope — do not build**
-- Payment, or any money movement. Still true, and unaffected by the booking
-  work below.
-- ~~Booking~~ — Sonet reversed this on 19 Sept 2026. Agents will be able to
-  submit a booking request against a saved quote, which Sonet approves before
-  it is confirmed. **No money moves through the portal**; it is a request and
-  an approval, not a transaction. Not built yet — see Phase 7.
+- **A payment rail.** No gateway, no card handling, no money moving through
+  this portal. Still true — and NOT contradicted by the payment RECORDS added
+  on 20 Sept 2026. The agent pays Series Tours by their usual means and then
+  files proof here for Sonet to verify; the portal is a ledger of transfers
+  that happened elsewhere. If a future change would let money move through
+  this system, it is out of scope and needs Sonet to say otherwise.
+- ~~Booking~~ — Sonet reversed this on 19 Sept 2026 and specified it on
+  20 Sept. Built: an agent requests a booking against a saved quote, Sonet
+  confirms it at a rate he may change, and the agent then files payments
+  against it for him to verify. See "Bookings" below.
 - Multi-admin, roles, or admin invites. One admin user: Sonet.
 - B2C / consumer booking (that is cochincarrental.com, a separate system).
 - Anything touching the ERP.
@@ -394,9 +398,10 @@ Node lives at `~/.local/node/bin` and is on PATH via `~/.zshrc`.
 - [x] **Phase 4** — agent quote screens for the four product types, price resolution
 - [x] **Phase 5** — polish, deploy to b2b.seriestours.com
 - [x] **Phase 6** — cost + markup rules, AI rate-sheet import, combined quoting
-- [ ] **Phase 7** — garages, measured distances, day-by-day vehicle itineraries
-      (built 19 Sept 2026); branded quote PDF and the customer itinerary
-      (20 Sept 2026); **online booking with admin approval — not started**
+- [x] **Phase 7** — garages, measured distances, day-by-day vehicle itineraries
+      (19 Sept 2026); branded quote PDF, the customer itinerary, catalogue
+      photographs, and booking with admin approval and payment records
+      (20 Sept 2026)
 
 Each phase ends with a checkpoint for Sonet: what was built, what is left, what
 needs a decision. Do not push silently into the next phase.
@@ -1239,6 +1244,68 @@ correct on `main`. `docker-entrypoint.sh` now aborts if the file is absent.
 **Test config-dependent behaviour against a production build, not `next dev`.**
 Dev runs from the project directory where the config is always present, so it
 cannot reproduce this class of bug.
+
+### Bookings (20 Sept 2026)
+Sonet's specification, verbatim in substance: an agent requests; on approval
+*"final rate might change"* so the admin can edit it; then *"25% payment need
+to done by the agent and he has to update that payment details with photo or
+screenshot"*; *"balance payment needs to show him and as well as admin"*;
+*"all the payments needs to be approved by the admin. then only it should be
+accepted"*; and a mail on each new request.
+
+**The load-bearing rule: only an APPROVED payment counts.** `bookingMoney` in
+`src/lib/booking-shared.ts` totals `APPROVED` rows and nothing else. A
+SUBMITTED payment is a CLAIM — a screenshot somebody uploaded — and is reported
+separately as pending so nobody thinks it was ignored. Counting it would let a
+booking read as paid because an agent said so, which is precisely what Sonet
+reviewing them is for. Verified end to end: filing the full deposit left paid
+at ₹0 and the balance untouched until it was approved.
+
+`booking-shared.ts` has no server-only import, so the agent's screen and the
+admin's compute the same balance from the same function. Two places doing this
+arithmetic separately is how an agent and an operator come to disagree about
+money — the worst argument to have in front of a customer.
+
+- **The agreed rate lives on the BOOKING, never written back to the quote.**
+  The quote is a frozen record of what was PRICED; the booking is a separate
+  agreement about what will be PAID. Rewriting the quote would destroy the only
+  evidence of what the agent was originally quoted.
+- **`gstBps` and `depositBps` are frozen at confirmation.** A statutory change
+  or an edited setting must move the next booking, never one already agreed —
+  the same rule markup rules follow.
+- **The deposit is of the GROSS.** "25% up front" means a quarter of what the
+  agent actually pays; computed on the net it is short by the GST every time.
+- **One booking per quote**, enforced by a unique index. Two requests against
+  one quote would be two promises about one trip.
+- **A live booking FREEZES its quote** — no editing, no deleting. Checked in
+  `replaceQuote` and `deleteQuote`, not just hidden in the UI: verified by
+  hand-building an `?edit=` URL, which the server refused. `deleteQuote`
+  checks explicitly rather than relying on the foreign key, because Booking
+  cascades from Quote and a delete would take an agreed booking with it.
+  DECLINED and CANCELLED release the quote; that trip is over.
+- **Proof of payment is required**, and served only through authenticated
+  routes scoped through the booking's own agent — it is a picture of somebody's
+  bank account, so it follows the identity-document rule, not the logo one.
+- **Overpayment is flagged, never clamped silently.** Money received that was
+  not owed is a refund or a credit, and somebody has to decide which.
+
+### Email: ONE message, and it can never fail a booking (20 Sept 2026)
+The standing rule was "do not add a mail provider without Sonet asking". He
+asked, for booking requests only. `src/lib/mailer.ts` sends that one message
+and nothing else — agent approvals and temporary passwords are still handed
+over by WhatsApp exactly as before.
+
+**`notifyBookingRequested` never throws.** The booking is committed before it
+is called. A mail server that is down, misconfigured, or simply has no
+credentials yet must not cost an agent their booking; the admin queue is the
+source of truth and the mail is a convenience on top of it. With no
+configuration it logs once and does nothing — it does not fall back to another
+transport and does not pretend to have sent anything.
+
+Needs in `.env.production`: `SMTP_HOST`, optionally `SMTP_PORT` (587),
+`SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, and `BOOKING_NOTIFY_TO` (falls back to
+`ADMIN_EMAIL`). Timeouts are bounded at 8–12s so a slow SMTP host cannot hold
+a request handler open while an agent watches a spinner.
 
 ### Approval notification — manual, by design (confirmed 25 Aug 2026)
 **No email provider, and none is to be built for v1.** Approving an agent does

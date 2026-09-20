@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { Card, PageHeader, LinkButton, Badge } from "@/components/ui";
+import { pendingCounts } from "@/lib/booking";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,10 @@ export default async function AdminOverviewPage() {
       prisma.agent.count({ where: { status: "approved" } }),
     ]);
 
+  // What is actually waiting on Sonet. There is no email for these beyond the
+  // booking notification, so the overview has to say so.
+  const pending = await pendingCounts();
+
   const catalogue = [
     { label: "Hotels", count: hotels, href: "/admin/hotels" },
     { label: "Houseboats", count: houseboats, href: "/admin/houseboats" },
@@ -27,6 +32,32 @@ export default async function AdminOverviewPage() {
         title="Overview"
         description="Catalogue and agent status at a glance."
       />
+
+      {(pending.bookings > 0 || pending.payments > 0) && (
+        <Card className="mb-6 border-amber-200 bg-amber-50">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-amber-900">
+              {pending.bookings > 0 && (
+                <>
+                  <strong>{pending.bookings}</strong> booking
+                  {pending.bookings === 1 ? "" : "s"} awaiting approval
+                </>
+              )}
+              {pending.bookings > 0 && pending.payments > 0 && " · "}
+              {pending.payments > 0 && (
+                <>
+                  <strong>{pending.payments}</strong> payment
+                  {pending.payments === 1 ? "" : "s"} to verify
+                </>
+              )}
+              .
+            </p>
+            <LinkButton href="/admin/bookings" tone="primary">
+              Open bookings
+            </LinkButton>
+          </div>
+        </Card>
+      )}
 
       {pendingAgents > 0 && (
         <Card className="mb-6 border-amber-200 bg-amber-50">

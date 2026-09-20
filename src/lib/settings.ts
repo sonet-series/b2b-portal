@@ -46,12 +46,26 @@ export const SETTING_KEYS = {
    * it is one number to keep current instead of a matrix nobody maintains.
    */
   TOLL_PARKING_PER_DAY_MINOR: "tollParkingPerDayMinor",
+
+  /**
+   * Deposit due when a booking is confirmed, in BASIS POINTS of the GROSS
+   * total (2500 = 25%).
+   *
+   * Of the gross, not the net: "25% up front" means a quarter of what the
+   * agent actually has to pay, and a deposit computed before tax understates
+   * it by the GST every time.
+   *
+   * FROZEN onto each booking at confirmation. Changing it here moves the next
+   * booking, never one already agreed — the same rule markup rules follow.
+   */
+  DEPOSIT_BPS: "depositBps",
 } as const;
 
 const DEFAULTS: Record<string, number> = {
   [SETTING_KEYS.PER_STOP_KM]: 60,
   [SETTING_KEYS.GST_BPS]: 500, // 5%
   [SETTING_KEYS.TOLL_PARKING_PER_DAY_MINOR]: 30_000, // ₹300/day
+  [SETTING_KEYS.DEPOSIT_BPS]: 2500, // 25%
 };
 
 export async function getSetting(key: string): Promise<number> {
@@ -84,4 +98,9 @@ export { withGst, formatBps, type QuoteTotals } from "./settings-shared";
 /** Toll and parking COST allowed per day of hire, in paise. */
 export async function tollParkingPerDayMinor(): Promise<number> {
   return getSetting(SETTING_KEYS.TOLL_PARKING_PER_DAY_MINOR);
+}
+
+/** Deposit due on a confirmed booking, basis points of the gross. */
+export async function depositBps(): Promise<number> {
+  return getSetting(SETTING_KEYS.DEPOSIT_BPS);
 }

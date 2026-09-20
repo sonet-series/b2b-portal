@@ -11,6 +11,9 @@ import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
 import { ProductGallery } from "@/components/product-photos";
 import { listPhotoIds } from "@/lib/product-photos";
 import { DeleteQuote } from "./delete-quote";
+import { RequestBooking } from "./request-booking";
+import { requestBookingAction } from "../../bookings/actions";
+import { prisma } from "@/lib/db";
 import { editUrlFor } from "@/lib/quote-edit";
 import { deleteQuoteAction } from "../actions";
 
@@ -54,6 +57,19 @@ export default async function QuoteDetailPage({
   // from before an input existed. Better no button at all than one that lands
   // on a half-empty form.
   const editUrl = snapshot.input ? editUrlFor(snapshot.input, quote.reference) : null;
+
+  /*
+   * A quote can be booked once. A live booking also FREEZES the quote — no
+   * editing, no deleting — because Sonet approved a specific trip at a
+   * specific price and the agent must not be holding a different document
+   * under the same reference.
+   */
+  const booking = await prisma.booking.findUnique({
+    where: { quoteId: quote.id },
+    select: { reference: true, status: true },
+  });
+  const bookingIsLive =
+    booking !== null && booking.status !== "CANCELLED" && booking.status !== "DECLINED";
 
   /*
    * The document the agent hands their own customer.
@@ -109,12 +125,14 @@ export default async function QuoteDetailPage({
             >
               Preview
             </a>
-            {editUrl && <LinkButton href={editUrl}>Edit</LinkButton>}
+            {editUrl && !bookingIsLive && <LinkButton href={editUrl}>Edit</LinkButton>}
             <LinkButton href="/agent/quotes">All quotes</LinkButton>
-            <DeleteQuote
-              reference={quote.reference}
-              action={deleteQuoteAction.bind(null, quote.reference)}
-            />
+            {!bookingIsLive && (
+              <DeleteQuote
+                reference={quote.reference}
+                action={deleteQuoteAction.bind(null, quote.reference)}
+              />
+            )}
           </div>
         }
       />
@@ -284,6 +302,28 @@ export default async function QuoteDetailPage({
           not affected by later rate changes. Nothing has been reserved and no payment is due.
         </p>
       </Card>
+
+      {booking ? (
+        <Card className="mt-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">
+                Booking {booking.reference}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {bookingIsLive
+                  ? "This quote is booked, so it can no longer be edited or deleted."
+                  : "That booking is no longer live. You can edit this quote or request again."}
+              </p>
+            </div>
+            <LinkButton href={`/agent/bookings/${booking.reference}`} tone="primary">
+              Open booking
+            </LinkButton>
+          </div>
+        </Card>
+      ) : (
+        <RequestBooking action={requestBookingAction.bind(null, quote.reference)} />
+      )}
     </>
   );
 }

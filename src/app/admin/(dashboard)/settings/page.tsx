@@ -1,15 +1,16 @@
 import { loadMarkupTable, ensureMarkupRules } from "@/lib/markup-store";
+import { DepositPanel } from "./deposit-panel";
 import { markupKey } from "@/lib/markup";
 import { PRODUCT_TYPE, AGENT_TIER, AGENT_TIER_LABEL, type ProductType } from "@/lib/enums";
 import { Card, PageHeader } from "@/components/ui";
 import { MarkupRow } from "./markup-row";
 import { LocalRunningPanel } from "./local-running-panel";
-import { perStopKm, tollParkingPerDayMinor } from "@/lib/settings";
+import { perStopKm, tollParkingPerDayMinor, depositBps } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { toMajor } from "@/lib/money";
 import { allStates } from "@/lib/destinations";
 import { ChargesPanel } from "./charges-panel";
-import { savePerStopKm, saveTollParking, saveStatePermit } from "./actions";
+import { savePerStopKm, saveTollParking, saveStatePermit, saveDepositPercent } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ const PRODUCT_LABEL: Record<ProductType, string> = {
 export default async function SettingsPage() {
   const stopKm = await perStopKm();
   const tollPerDay = await tollParkingPerDayMinor();
+  const deposit = await depositBps();
   const permits = await prisma.statePermit.findMany({
     where: { active: true },
     include: { vehicle: { select: { type: true } } },
@@ -109,6 +111,8 @@ export default async function SettingsPage() {
         knownStates={knownStates}
         vehicles={vehicles}
       />
+
+      <DepositPanel action={saveDepositPercent} percent={String(deposit / 100)} />
     </>
   );
 }
