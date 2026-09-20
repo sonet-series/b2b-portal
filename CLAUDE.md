@@ -341,6 +341,17 @@ Now:
 Changing `ADMIN_EMAIL` creates a *second* account rather than renaming the
 first; the seed warns when it notices, since v1 is deliberately single-admin.
 
+### Adding a NULLABLE column, or a new table, needs no rebuild (20 Sept 2026)
+`ALTER TABLE X ADD COLUMN <nullable>` and `CREATE TABLE` are metadata-only in
+SQLite: no new table, no `INSERT ... SELECT`, and therefore none of the P3009
+failure mode below. Prisma's generated migration will often rebuild anyway,
+re-copying every row for nothing. Hand-write these.
+
+`DROP COLUMN` is the exception worth naming: SQLite has no `DROP COLUMN IF
+EXISTS`, so a migration containing two of them has a window between them that a
+re-run cannot repair. Put every statement that carries DATA before them, so a
+failure there loses nothing and only needs a human to finish the drop.
+
 ### Migrations that add a NOT NULL column (learned the hard way, 27 Aug 2026)
 Prisma's SQLite table rebuild copies rows with `INSERT INTO new_X (...) SELECT
 ... FROM X`, and it does **not** list a newly-added NOT NULL column. That
@@ -773,56 +784,74 @@ route ("Drive from Munnar to Thekkady, visiting Vandiperiyar en route"), so a
 quote is never handed over with empty days. **Activities are the via points**,
 which the agent already enters — no new field to type twice.
 
-### Vehicle photographs — PORTAL ONLY (20 Sept 2026)
-Sonet: *"there is no visual photo to see of the product"*, then, when I began:
-*"no not in pdf but in the login page"* — meaning the portal, not the
-customer's document.
+### Catalogue photographs — PORTAL ONLY (20 Sept 2026)
+Sonet: *"there is no visual photo to see of the product"*, then, as I began:
+*"no not in pdf but in the login page"* — meaning the portal. Then: *"maximum
+5 photos of vehicles and 10 photos of hotels & houseboats"*.
 
 That second message is the important one, and it is right for the same reason
 the branded print exists at all: **the PDF carries the agency's branding and
-nothing of ours.** A supplier's vehicle photograph on their letterhead tells
-their customer exactly who the supplier is. The picture helps the AGENT choose
-and reassures them what they are selling; it has no business on the document
-they hand over.
+nothing of ours.** Our photographs on their letterhead tell their customer
+exactly who the supplier is. The pictures help the AGENT choose and reassure
+them what they are selling; they have no business on the document handed over.
 
 `renderQuotePdf` is therefore never given one. Not passed and not drawn —
 simply not an input, so it cannot be reintroduced by someone later deciding
 the document looks bare. Verified by byte size: the PDF is identical before
 and after this work, with one image in it (the agency's own logo) and no JPEG.
 
-- `Vehicle.photoStoredName` / `photoMimeType`, nullable as a PAIR like
-  `Agent.logoStoredName`: a vehicle with no photograph quotes exactly as
-  before. Bytes on disk under `UPLOAD_DIR`, never in SQLite and never under
-  `public/`.
-- **The migration is two `ALTER TABLE ADD COLUMN` statements, hand-written.**
-  Adding a nullable column to SQLite is metadata-only — no new table, no
-  `INSERT ... SELECT`, so none of the P3009 failure mode. Prisma's generated
-  version would have rebuilt and re-copied every Vehicle row for nothing.
-- Served by TWO route handlers, `/agent/vehicles/[id]/photo` and
-  `/admin/vehicles/[id]/photo`, sharing `vehiclePhotoResponse()`. Two, not one
-  taking either session: the audiences are separate throughout this app, and
-  an "any signed-in user" check is the kind of thing that quietly widens.
-  Unlike an agent's logo the id comes from the URL, which is fine — a vehicle
-  is shared catalogue, and there is nothing to learn by guessing an id the
-  dropdown already lists.
-- **`src/components/vehicle-photo.tsx` hides itself on a 404.** Most vehicles
-  have no photograph until Sonet works through the catalogue, and a bare
-  `<img>` on a 404 draws the browser's broken-image icon. It records WHICH
-  vehicle failed rather than that one did — the same instance is reused as the
-  agent changes the dropdown, and a boolean would hide the next vehicle's
-  photograph too.
-- `QuoteOption.subject.vehicleId` is frozen with the quote, but `resolveSubject`
-  fills it in from the input when an older frozen subject lacks it. The frozen
-  NAME always wins — that is what stops a renamed vehicle rewriting a sent
-  quote — while the id is only a pointer for fetching a picture.
+**`ProductPhoto` is ONE table with three nullable foreign keys**, not a
+polymorphic `referenceId` like `AgentRateCard`. That one is polymorphic because
+it points at four genuinely different rate tables, and it pays for it with
+`assertReferenceExists()` on every write. Here the three parents are
+interchangeable, so real foreign keys cost nothing, the database enforces them,
+and photographs cascade away with the row they belong to.
+
+Exactly one of the three is set. SQLite cannot express that and Prisma will not
+check it, so `src/lib/product-photos.ts` is the ONLY write path and every query
+goes through its `parentWhere()` — the invariant is true by construction rather
+than by everyone remembering. That is the same reasoning as `validation.ts`,
+and adding a second write path breaks it.
+
+- **`PHOTO_LIMIT`** — vehicle 5, hotel 10, houseboat 10. A vehicle is one
+  object from a few angles; a property has rooms, a pool and a view.
+- **A batch over the limit is refused WHOLE.** Taking the first two of four and
+  dropping the rest looks like an upload that worked, and the admin cannot tell
+  which two are missing. The message says how much room is left.
+- **Served by photograph id**, `/agent/photos/[id]` and `/admin/photos/[id]`,
+  which is what lets the response be cached `immutable`: replacing a picture
+  creates a new row with a new id rather than new bytes behind an old URL, so
+  there is nothing to invalidate. Two handlers, not one taking either session —
+  the audiences are separate throughout this app and an "any signed-in user"
+  check is the kind of thing that quietly widens.
+- **Photo ids are resolved at RENDER time and never frozen** into a quote
+  snapshot. A frozen list goes stale the first time the catalogue is edited;
+  `subject.photo` carries only `{ kind, id }` of the product, which is stable.
+- **`src/components/product-photos.tsx` hides a picture that fails to load.**
+  Most of the catalogue has none until Sonet works through it, and a bare
+  `<img>` on a 404 draws the browser's broken-image icon. `ProductGallery`
+  selects by INDEX, not id, so a photograph removed in the admin while an agent
+  has the page open cannot leave it pointing at nothing.
 
 **An upload that fails after the bytes are written must delete them.** The
-first attempt here died on a stale Prisma client and left an orphaned 9KB file
-in `UPLOAD_DIR` with nothing pointing at it and no way to tell which vehicle it
-was for. The write is now wrapped so every path out that does not end with the
-row pointing at the file cleans it up.
+single-photo version shipped that morning died on a stale Prisma client and
+left an orphaned 9KB file in `UPLOAD_DIR` with nothing pointing at it and no
+way to tell which product it was for. `addPhotos` now removes every file AND
+every row the call created if any file in the batch is rejected.
 
-### A quote says WHICH VEHICLE it is for (20 Sept 2026)
+### The single-photo Vehicle columns, and why they were MOVED not dropped
+`Vehicle.photoStoredName` / `photoMimeType` existed for about four hours on
+20 Sept 2026, between shipping one photograph per vehicle and Sonet asking for
+five. The migration **carries their contents into `ProductPhoto`** before
+dropping them. Losing a photograph he had uploaded that morning because the
+feature grew would be the worst possible way to deliver "now allow five".
+
+Quotes frozen in that window carry `subject.vehicleId`; `resolveSubject`
+upgrades them to `subject.photo` on read. The frozen NAME always wins — that is
+what stops a renamed product rewriting a sent quote — while a photo pointer is
+not a claim about the quote, just where to look for pictures.
+
+### A quote says WHICH VEHICLE it is for (20 Sept 2026)### A quote says WHICH VEHICLE it is for (20 Sept 2026)
 It did not, anywhere: not on the saved quote, not on the PDF, not on the option
 card. `QuoteOption.title` is "Per day hire" — how it is PRICED, which is no
 answer at all to the question. Sonet asked it of a real quote.

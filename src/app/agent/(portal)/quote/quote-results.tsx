@@ -7,7 +7,7 @@ import { EMPTY_FORM_STATE, type FormState } from "@/lib/validation";
 import { Badge, Button, Card, EmptyState, FormError } from "@/components/ui";
 import { useTripCart } from "@/components/trip-cart";
 import type { AnyQuoteInput, QuoteOption, QuoteResult } from "@/lib/quote-types";
-import { VehiclePhoto } from "@/components/vehicle-photo";
+import { ProductThumbnail } from "@/components/product-photos";
 
 /**
  * What the price covers, as one sentence.
@@ -80,8 +80,18 @@ export function QuoteResults({
   saveActions,
   input,
   gstBps,
+  photoIds = [],
 }: {
   result: QuoteResult;
+  /**
+   * The photographs of the product being quoted, cover first.
+   *
+   * Resolved by the page at render time and passed in, rather than frozen onto
+   * the option: a picture uploaded after a quote existed should appear on it,
+   * and a removed one should stop. Every option in one result is the same
+   * product, so there is one list, not one per option.
+   */
+  photoIds?: readonly string[];
   /** Passed in rather than read here — this is a client component, and a
       defaulted tax rate rendered to an agent would be worse than none. */
   gstBps: number;
@@ -115,8 +125,8 @@ export function QuoteResults({
                   PRICED, which is no answer to that question. */}
               {option.subject && (
                 <div className="mt-2 flex items-center gap-3">
-                  <VehiclePhoto
-                    vehicleId={option.subject.vehicleId}
+                  <ProductThumbnail
+                    photoIds={photoIds}
                     alt={option.subject.name}
                     className="h-16 w-24 shrink-0 rounded-md object-cover ring-1 ring-inset ring-slate-200"
                   />

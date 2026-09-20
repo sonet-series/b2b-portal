@@ -1,4 +1,7 @@
 import { notFound } from "next/navigation";
+import { PhotosPanel } from "../../_photos/photos-panel";
+import { uploadPhotos, deletePhoto, setCoverPhoto } from "../../_photos/actions";
+import { listPhotoIds, PHOTO_LIMIT } from "@/lib/product-photos";
 import { prisma } from "@/lib/db";
 import { loadMarkupTable } from "@/lib/markup-store";
 import { markupKey } from "@/lib/markup";
@@ -35,6 +38,8 @@ export default async function HouseboatDetailPage({
   });
   if (!boat) notFound();
 
+  const photoIds = await listPhotoIds("houseboat", boat.id);
+
   const table = await loadMarkupTable();
   const markup = {
     kerala: table.get(markupKey("houseboat", "KERALA"))!,
@@ -59,6 +64,22 @@ export default async function HouseboatDetailPage({
         action={updateHouseboat.bind(null, boat.id)}
         houseboat={boat}
         submitLabel="Save houseboat"
+      />
+
+      <PhotosPanel
+        kind="houseboat"
+        photoIds={photoIds}
+        limit={PHOTO_LIMIT.houseboat}
+        alt={boat.name}
+        uploadAction={uploadPhotos.bind(null, "houseboat", boat.id)}
+        deleteAction={async (photoId) => {
+          "use server";
+          await deletePhoto("houseboat", boat.id, photoId);
+        }}
+        coverAction={async (photoId) => {
+          "use server";
+          await setCoverPhoto("houseboat", boat.id, photoId);
+        }}
       />
 
       <RatesPanel

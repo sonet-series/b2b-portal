@@ -1,5 +1,8 @@
 import type { AgentTier, ProductType } from "./enums";
 
+/** Which catalogue table a photograph hangs off. Mirrors src/lib/product-photos.ts. */
+export type PhotoKind = "vehicle" | "hotel" | "houseboat";
+
 /**
  * Who is being quoted. Carries the tier alongside the id so the engine never
  * has to re-derive it — and so a caller cannot accidentally price without one.
@@ -51,11 +54,19 @@ export type QuoteOption = {
     name: string;
     detail?: string;
     /**
-     * Which catalogue row it is, so the portal can show its photograph.
+     * Which catalogue row it is, so the portal can show its photographs.
      *
-     * The ID rather than a URL: ids are stable, and resolving the picture at
-     * render time means a photo uploaded after a quote was saved still appears
-     * on it, while a removed one simply stops showing.
+     * The ID rather than a URL or a list of picture ids: ids are stable, and
+     * resolving the photographs at render time means ones uploaded after a
+     * quote was saved still appear on it, while removed ones simply stop
+     * showing. A frozen list would go stale the first time Sonet edited the
+     * catalogue.
+     */
+    photo?: { kind: PhotoKind; id: string };
+    /**
+     * Superseded by `photo`. Quotes saved on 20 Sept 2026, between shipping a
+     * single vehicle photograph and generalising it, carry this instead —
+     * `resolveSubject` upgrades them on read.
      */
     vehicleId?: string;
   };

@@ -245,6 +245,13 @@ export async function quoteHotel(
       key,
       productType: "hotel",
       title,
+      // What is being sold, and where its photographs hang off. The title is
+      // the room type and meal plan; the property is what an agent pictures.
+      subject: {
+        name: hotel.name,
+        detail: hotel.location,
+        photo: { kind: "hotel", id: hotel.id },
+      },
       detail: `${nights} night${nights === 1 ? "" : "s"} · ${input.rooms} room${input.rooms === 1 ? "" : "s"}`,
       lines,
       totalMinor: sumMinor(lines.map((l) => l.totalMinor)),
@@ -344,6 +351,11 @@ export async function quoteHouseboat(
         key: rate.id,
         productType: "houseboat",
         title: label,
+        subject: {
+          name: boat.name,
+          detail: `${boat.category} · ${boat.bedrooms} bedroom${boat.bedrooms === 1 ? "" : "s"} · ${boat.location}`,
+          photo: { kind: "houseboat", id: boat.id },
+        },
         detail: `${formatDateDisplay(date)} · ${input.pax} pax · ${MEAL_PLAN_LABEL[rate.mealPlan as MealPlan] ?? rate.mealPlan}`,
         lines,
         totalMinor: breakdown.totalMinor,
@@ -397,7 +409,7 @@ export async function quoteVehicle(
   const subject = {
     name: vehicle.type,
     detail: `Up to ${vehicle.capacity} passenger${vehicle.capacity === 1 ? "" : "s"}`,
-    vehicleId: vehicle.id,
+    photo: { kind: "vehicle" as const, id: vehicle.id },
   };
 
   // Fetched once, up front: its state is home for the permit maths, and the

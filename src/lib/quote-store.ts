@@ -310,40 +310,77 @@ export function readSnapshot(snapshotJson: string): QuoteSnapshot {
 }
 
 /**
- * Which vehicle a quote is for.
+ * What a quote is FOR, and where its photographs hang off.
  *
- * Quotes saved from 20 Sept 2026 carry it on the frozen option. Older ones do
- * not, so their vehicle is looked up by id — a fallback for DISPLAY only. The
- * frozen value always wins where it exists, because a renamed vehicle must not
+ * Quotes carry it on the frozen option from 20 Sept 2026. Older ones do not,
+ * so it is rebuilt from the input — a fallback for DISPLAY only. The frozen
+ * value always wins where it exists, because a renamed product must not
  * rewrite a quote that has already been sent.
  */
 export async function resolveSubject(
   snapshot: QuoteSnapshot
 ): Promise<QuoteOption["subject"]> {
+  const input = snapshot.input;
   const frozen = snapshot.option?.subject;
-  if (frozen) {
-    /*
-     * The frozen NAME always wins — that is the whole point. The id is a
-     * different kind of thing: not a claim about the quote, just a pointer for
-     * fetching the photograph, and quotes frozen before photographs existed
-     * carry no id at all. Filling it in from the input lets an older quote
-     * show a picture without changing a word of what it says.
-     */
-    if (frozen.vehicleId || snapshot.input?.productType !== "vehicle") return frozen;
-    return { ...frozen, vehicleId: snapshot.input.vehicleId };
-  }
-  if (snapshot.input?.productType !== "vehicle") return undefined;
 
-  const vehicle = await prisma.vehicle.findUnique({
-    where: { id: snapshot.input.vehicleId },
-    select: { id: true, type: true, capacity: true },
-  });
-  if (!vehicle) return undefined;
-  return {
-    name: vehicle.type,
-    detail: `Up to ${vehicle.capacity} passenger${vehicle.capacity === 1 ? "" : "s"}`,
-    vehicleId: vehicle.id,
-  };
+  if (frozen) {
+    if (frozen.photo) return frozen;
+    /*
+     * The frozen NAME always wins — that is the whole point. A photo pointer
+     * is a different kind of thing: not a claim about the quote, just where to
+     * look for pictures. Quotes saved in the few hours between shipping a
+     * single vehicle photograph and generalising it carry `vehicleId`; ones
+     * from before that carry neither.
+     */
+    if (frozen.vehicleId) {
+      return { ...frozen, photo: { kind: "vehicle", id: frozen.vehicleId } };
+    }
+    if (input?.productType === "vehicle") {
+      return { ...frozen, photo: { kind: "vehicle", id: input.vehicleId } };
+    }
+    return frozen;
+  }
+
+  switch (input?.productType) {
+    case "vehicle": {
+      const vehicle = await prisma.vehicle.findUnique({
+        where: { id: input.vehicleId },
+        select: { id: true, type: true, capacity: true },
+      });
+      if (!vehicle) return undefined;
+      return {
+        name: vehicle.type,
+        detail: `Up to ${vehicle.capacity} passenger${vehicle.capacity === 1 ? "" : "s"}`,
+        photo: { kind: "vehicle", id: vehicle.id },
+      };
+    }
+    case "hotel": {
+      const hotel = await prisma.hotel.findUnique({
+        where: { id: input.hotelId },
+        select: { id: true, name: true, location: true },
+      });
+      if (!hotel) return undefined;
+      return {
+        name: hotel.name,
+        detail: hotel.location,
+        photo: { kind: "hotel", id: hotel.id },
+      };
+    }
+    case "houseboat": {
+      const boat = await prisma.houseboat.findUnique({
+        where: { id: input.houseboatId },
+        select: { id: true, name: true, category: true, bedrooms: true, location: true },
+      });
+      if (!boat) return undefined;
+      return {
+        name: boat.name,
+        detail: `${boat.category} · ${boat.bedrooms} bedroom${boat.bedrooms === 1 ? "" : "s"} · ${boat.location}`,
+        photo: { kind: "houseboat", id: boat.id },
+      };
+    }
+    default:
+      return undefined;
+  }
 }
 
 export type SavedQuoteSummary = {

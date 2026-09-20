@@ -1,4 +1,7 @@
 import { notFound } from "next/navigation";
+import { PhotosPanel } from "../../_photos/photos-panel";
+import { uploadPhotos, deletePhoto, setCoverPhoto } from "../../_photos/actions";
+import { listPhotoIds, PHOTO_LIMIT } from "@/lib/product-photos";
 import { prisma } from "@/lib/db";
 import { loadMarkupTable } from "@/lib/markup-store";
 import { markupKey } from "@/lib/markup";
@@ -30,6 +33,8 @@ export default async function HotelDetailPage({
     include: { rates: { orderBy: [{ active: "desc" }, { roomType: "asc" }, { validFrom: "asc" }] } },
   });
   if (!hotel) notFound();
+
+  const photoIds = await listPhotoIds("hotel", hotel.id);
 
   const table = await loadMarkupTable();
   const markup = {
@@ -65,6 +70,22 @@ export default async function HotelDetailPage({
       )}
 
       <HotelForm action={updateHotel.bind(null, hotel.id)} hotel={hotel} submitLabel="Save hotel" />
+
+      <PhotosPanel
+        kind="hotel"
+        photoIds={photoIds}
+        limit={PHOTO_LIMIT.hotel}
+        alt={hotel.name}
+        uploadAction={uploadPhotos.bind(null, "hotel", hotel.id)}
+        deleteAction={async (photoId) => {
+          "use server";
+          await deletePhoto("hotel", hotel.id, photoId);
+        }}
+        coverAction={async (photoId) => {
+          "use server";
+          await setCoverPhoto("hotel", hotel.id, photoId);
+        }}
+      />
 
       <RatesPanel
         markup={markup}

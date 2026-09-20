@@ -8,7 +8,8 @@ import { withGst, formatBps } from "@/lib/settings-shared";
 import { formatDateDisplay } from "@/lib/dates";
 import { buildItineraryDocument } from "@/lib/itinerary-document";
 import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
-import { VehiclePhoto } from "@/components/vehicle-photo";
+import { ProductGallery } from "@/components/product-photos";
+import { listPhotoIds } from "@/lib/product-photos";
 import { DeleteQuote } from "./delete-quote";
 import { editUrlFor } from "@/lib/quote-edit";
 import { deleteQuoteAction } from "../actions";
@@ -42,6 +43,12 @@ export default async function QuoteDetailPage({
   const snapshot = readSnapshot(quote.snapshotJson);
   const subject = await resolveSubject(snapshot);
   const terms = snapshot.option?.terms;
+
+  // Resolved now, never frozen: a photograph uploaded after this quote was
+  // saved should appear on it, and a removed one should stop.
+  const photoIds = subject?.photo
+    ? await listPhotoIds(subject.photo.kind, subject.photo.id)
+    : [];
 
   // Null for shapes the builder cannot reopen — a combined trip, or a snapshot
   // from before an input existed. Better no button at all than one that lands
@@ -115,16 +122,18 @@ export default async function QuoteDetailPage({
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-4">
           {/*
-            The vehicle, as a picture. Portal only — the customer's PDF carries
-            the agency's branding and nothing of ours, and a supplier's vehicle
-            photograph on their letterhead is what it exists to keep off.
+            The product, as pictures. Portal only — the customer's PDF carries
+            the agency's branding and nothing of ours, and our photographs on
+            their letterhead are what it exists to keep off.
           */}
-          <VehiclePhoto
-            vehicleId={subject?.vehicleId}
-            alt={subject?.name ?? "Vehicle"}
-            className="h-24 w-36 shrink-0 rounded-md object-cover ring-1 ring-inset ring-slate-200"
-          />
-          <div className="flex-1 text-sm text-slate-600">
+          {photoIds.length > 0 && (
+            <ProductGallery
+              photoIds={photoIds}
+              alt={subject?.name ?? "Product"}
+              className="w-full sm:w-72"
+            />
+          )}
+          <div className="min-w-56 flex-1 text-sm text-slate-600">
             <p>
               <span className="text-slate-400">Travel: </span>
               {formatDateDisplay(quote.travelStart) === formatDateDisplay(quote.travelEnd)
@@ -132,13 +141,21 @@ export default async function QuoteDetailPage({
                 : `${formatDateDisplay(quote.travelStart)} → ${formatDateDisplay(quote.travelEnd)}`}
             </p>
             {/*
-              Which vehicle the quote is for. It said nowhere at all until
-              Sonet asked of a saved quote — "Per day hire" is how it was
-              priced, not what it was for.
+              WHAT the quote is for. It said nowhere at all until Sonet asked
+              of a saved quote — "Per day hire" is how it was priced, not what
+              it was for.
             */}
             {subject && (
               <p>
-                <span className="text-slate-400">Vehicle: </span>
+                <span className="text-slate-400">
+                  {quote.productType === "vehicle"
+                    ? "Vehicle: "
+                    : quote.productType === "hotel"
+                      ? "Hotel: "
+                      : quote.productType === "houseboat"
+                        ? "Houseboat: "
+                        : "Product: "}
+                </span>
                 <span className="font-medium text-slate-900">{subject.name}</span>
                 {subject.detail && (
                   <span className="text-slate-500"> · {subject.detail.toLowerCase()}</span>

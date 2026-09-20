@@ -1,4 +1,5 @@
 import { requireAgent } from "@/lib/auth";
+import { listPhotoIds } from "@/lib/product-photos";
 import { gstBps } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { quoteHouseboat } from "@/lib/quote";
@@ -44,6 +45,14 @@ export default async function HouseboatQuotePage({
       error = e instanceof PricingError ? e.message : "Could not price that cruise.";
     }
   }
+
+  /*
+   * The product's photographs, resolved NOW rather than frozen onto the
+   * option — a picture uploaded after a quote existed should appear on it, and
+   * a removed one should stop.
+   */
+  const resultPhotoIds =
+    result && parsed.success ? await listPhotoIds("houseboat", parsed.data.houseboatId) : [];
 
   const saveActions: Record<string, (prev: FormState) => Promise<FormState>> = {};
   if (result && parsed.success) {
@@ -109,6 +118,7 @@ export default async function HouseboatQuotePage({
               gstBps={gst}
               saveActions={saveActions}
               input={parsed.success ? { productType: "houseboat", ...parsed.data } : undefined}
+              photoIds={resultPhotoIds}
             />}
         </>
       )}

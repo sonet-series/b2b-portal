@@ -1,4 +1,5 @@
 import { requireAgent } from "@/lib/auth";
+import { listPhotoIds, listPhotoIdsFor } from "@/lib/product-photos";
 import { gstBps } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { quoteVehicle } from "@/lib/quote";
@@ -45,8 +46,25 @@ export default async function VehicleQuotePage({
     },
   });
 
+  /*
+   * Photographs for every vehicle on offer, in ONE query rather than one per
+   * vehicle: the picker has to know what each has before the agent chooses,
+   * and a depot can dispatch a dozen types.
+   */
+  const vehiclePhotos = await listPhotoIdsFor(
+    "vehicle",
+    [...new Set(garages.flatMap((g) => g.vehicles.map((v) => v.vehicle.id)))]
+  );
+
   const garageOptions: GarageOption[] = garages
-    .map((g) => ({ id: g.id, name: g.name, vehicles: g.vehicles.map((v) => v.vehicle) }))
+    .map((g) => ({
+      id: g.id,
+      name: g.name,
+      vehicles: g.vehicles.map((v) => ({
+        ...v.vehicle,
+        photoIds: vehiclePhotos.get(v.vehicle.id) ?? [],
+      })),
+    }))
     .filter((g) => g.vehicles.length > 0);
 
   // Present when the agent came here from "Edit" on a saved quote. Saving
@@ -79,6 +97,14 @@ export default async function VehicleQuotePage({
       error = e instanceof PricingError ? e.message : "Could not price that hire.";
     }
   }
+
+  /*
+   * The product's photographs, resolved NOW rather than frozen onto the
+   * option — a picture uploaded after a quote existed should appear on it, and
+   * a removed one should stop.
+   */
+  const resultPhotoIds =
+    result && parsed.success ? await listPhotoIds("vehicle", parsed.data.vehicleId) : [];
 
   const saveActions: Record<string, (prev: FormState) => Promise<FormState>> = {};
   if (result && parsed.success) {
@@ -188,6 +214,7 @@ export default async function VehicleQuotePage({
               gstBps={gst}
               saveActions={saveActions}
               input={parsed.success ? { productType: "vehicle", ...parsed.data } : undefined}
+              photoIds={resultPhotoIds}
             />
           )}
         </>

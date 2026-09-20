@@ -1,15 +1,15 @@
 import { notFound } from "next/navigation";
+import { PhotosPanel } from "../../_photos/photos-panel";
+import { uploadPhotos, deletePhoto, setCoverPhoto } from "../../_photos/actions";
+import { listPhotoIds, PHOTO_LIMIT } from "@/lib/product-photos";
 import { prisma } from "@/lib/db";
 import { loadMarkupTable } from "@/lib/markup-store";
 import { markupKey } from "@/lib/markup";
 import { PageHeader, LinkButton, FormSuccess } from "@/components/ui";
 import { VehicleForm } from "../vehicle-form";
 import { RatesPanel } from "./rates-panel";
-import { PhotoPanel } from "./photo-panel";
 import {
   updateVehicle,
-  uploadVehiclePhoto,
-  removeVehiclePhoto,
   createVehicleRate,
   updateVehicleRate,
   archiveVehicleRate,
@@ -34,6 +34,8 @@ export default async function VehicleDetailPage({
   });
   if (!vehicle) notFound();
 
+  const photoIds = await listPhotoIds("vehicle", vehicle.id);
+
   const table = await loadMarkupTable();
   const markup = {
     kerala: table.get(markupKey("vehicle", "KERALA"))!,
@@ -56,17 +58,19 @@ export default async function VehicleDetailPage({
 
       <VehicleForm action={updateVehicle.bind(null, vehicle.id)} vehicle={vehicle} submitLabel="Save vehicle" />
 
-      <PhotoPanel
-        vehicleId={vehicle.id}
-        vehicleType={vehicle.type}
-        hasPhoto={Boolean(vehicle.photoStoredName)}
-        // The stored name changes on every upload, so it busts the browser
-        // cache for a URL whose path never does.
-        photoVersion={vehicle.photoStoredName ?? "none"}
-        uploadAction={uploadVehiclePhoto.bind(null, vehicle.id)}
-        removeAction={async () => {
+      <PhotosPanel
+        kind="vehicle"
+        photoIds={photoIds}
+        limit={PHOTO_LIMIT.vehicle}
+        alt={vehicle.type}
+        uploadAction={uploadPhotos.bind(null, "vehicle", vehicle.id)}
+        deleteAction={async (photoId) => {
           "use server";
-          await removeVehiclePhoto(vehicle.id);
+          await deletePhoto("vehicle", vehicle.id, photoId);
+        }}
+        coverAction={async (photoId) => {
+          "use server";
+          await setCoverPhoto("vehicle", vehicle.id, photoId);
         }}
       />
 

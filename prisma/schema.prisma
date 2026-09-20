@@ -56,6 +56,7 @@ model Hotel {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  photos  ProductPhoto[]
   rates   HotelRate[]
   imports RateSheetImport[]
 
@@ -129,9 +130,54 @@ model Houseboat {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  rates HouseboatRate[]
+  photos ProductPhoto[]
+  rates  HouseboatRate[]
 
   @@index([active, location, category])
+}
+
+/// A photograph of something in the catalogue, shown to AGENTS in the portal.
+///
+/// Deliberately never on the customer's PDF. That document carries the
+/// agency's branding and nothing of ours; our photographs on their letterhead
+/// tell their customer who the supplier is. Confirmed with Sonet, 20 Sept 2026.
+///
+/// ONE table with three nullable foreign keys, rather than a polymorphic
+/// `referenceId` like AgentRateCard. That one is polymorphic because it points
+/// at four genuinely different rate tables, and it pays for it with
+/// `assertReferenceExists()` on every write. Here the three parents are
+/// interchangeable, so real foreign keys cost nothing, the database enforces
+/// them, and photographs cascade away with the row they belong to.
+///
+/// EXACTLY ONE of the three is set. SQLite cannot express that and Prisma will
+/// not check it, so it is enforced in src/lib/product-photos.ts — which, like
+/// validation.ts, is the only write path. Adding a second one breaks that
+/// reasoning.
+model ProductPhoto {
+  id String @id @default(uuid())
+
+  /// Generated name on disk under UPLOAD_DIR. Never the browser's filename.
+  storedName String
+  /// Sniffed from the bytes at upload, never taken from the Content-Type.
+  mimeType   String
+
+  /// Lowest first. The LOWEST is the cover — the one shown wherever a single
+  /// picture fits, such as a priced option card. "Make cover" moves a photo
+  /// below the current minimum rather than renumbering the whole set.
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  vehicleId   String?
+  vehicle     Vehicle?   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  hotelId     String?
+  hotel       Hotel?     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  houseboatId String?
+  houseboat   Houseboat? @relation(fields: [houseboatId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, sortOrder])
+  @@index([hotelId, sortOrder])
+  @@index([houseboatId, sortOrder])
 }
 
 model HouseboatRate {
@@ -202,22 +248,11 @@ model Vehicle {
   notes    String?
   active   Boolean @default(true)
 
-  /// A photograph of this vehicle type, shown to AGENTS inside the portal.
-  ///
-  /// Deliberately not on the customer's PDF. That document carries the
-  /// agency's branding and nothing of ours; a supplier's vehicle photograph on
-  /// their letterhead is exactly the kind of thing it exists to keep off.
-  /// Confirmed with Sonet, 20 Sept 2026.
-  ///
-  /// Nullable as a PAIR, like Agent.logoStoredName: a vehicle with no photo
-  /// quotes exactly as before rather than being unquotable. Stored on disk
-  /// under UPLOAD_DIR, never in the database and never under public/.
-  photoStoredName String?
-  photoMimeType   String?
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// Up to PHOTO_LIMIT.vehicle of them — see src/lib/product-photos.ts.
+  photos     ProductPhoto[]
   rates      VehicleRate[]
   garages    GarageVehicle[]
   tollRate   VehicleTollRate?

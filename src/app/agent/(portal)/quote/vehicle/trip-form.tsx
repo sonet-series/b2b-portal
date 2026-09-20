@@ -5,7 +5,7 @@ import { Button, Select, FormError } from "@/components/ui";
 import { DateField } from "@/components/date-field";
 import { PlaceInput } from "./place-input";
 import { Stepper } from "@/components/stepper";
-import { VehiclePhoto } from "@/components/vehicle-photo";
+import { ProductThumbnail } from "@/components/product-photos";
 
 /**
  * The vehicle trip builder.
@@ -23,7 +23,7 @@ import { VehiclePhoto } from "@/components/vehicle-photo";
 export type GarageOption = {
   id: string;
   name: string;
-  vehicles: { id: string; type: string; capacity: number }[];
+  vehicles: { id: string; type: string; capacity: number; photoIds: string[] }[];
 };
 
 type DayRow = {
@@ -217,8 +217,8 @@ export function TripForm({
             than showing an empty frame.
           */}
           {vehicle && (
-            <VehiclePhoto
-              vehicleId={vehicle.id}
+            <ProductThumbnail
+              photoIds={vehicle.photoIds}
               alt={vehicle.type}
               className="mt-2 h-20 w-32 rounded-md object-cover ring-1 ring-inset ring-slate-200"
             />
