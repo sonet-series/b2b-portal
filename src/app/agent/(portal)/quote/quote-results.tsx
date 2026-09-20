@@ -65,6 +65,16 @@ export function QuoteResults({
             <div>
               <h3 className="font-medium text-slate-900">{option.title}</h3>
               <p className="text-sm text-slate-500">{option.detail}</p>
+              {/* Which vehicle this price is for — `title` is how it is
+                  PRICED, which is no answer to that question. */}
+              {option.subject && (
+                <p className="mt-1 text-sm text-slate-700">
+                  <span className="font-medium">{option.subject.name}</span>
+                  {option.subject.detail && (
+                    <span className="text-slate-500"> · {option.subject.detail.toLowerCase()}</span>
+                  )}
+                </p>
+              )}
             </div>
             <div className="text-right">
               <p className="text-xl font-semibold text-slate-900">
@@ -92,7 +102,17 @@ export function QuoteResults({
             />
           </dl>
 
-          {(option.terms?.includedKm || option.terms?.extraKmRateMinor) && (
+          {/*
+            The same sentence the saved quote and the PDF state. It used to
+            stop at the kilometres, so a hire whose price already covered toll,
+            parking and a state permit said nothing about them here and claimed
+            them two screens later.
+          */}
+          {option.terms &&
+            (option.terms.includedKm ||
+              option.terms.extraKmRateMinor ||
+              option.terms.includesTollParking ||
+              (option.terms.permitStates?.length ?? 0) > 0) && (
             <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
               {option.terms.includedKm != null && (
                 <>
@@ -111,6 +131,10 @@ export function QuoteResults({
                   </strong>{" "}
                   per km
                 </>
+              )}
+              {option.terms.includesTollParking && <> · toll and parking included</>}
+              {(option.terms.permitStates?.length ?? 0) > 0 && (
+                <> · {option.terms.permitStates!.join(" and ")} permit included</>
               )}
             </p>
           )}

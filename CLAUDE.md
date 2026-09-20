@@ -384,8 +384,8 @@ Node lives at `~/.local/node/bin` and is on PATH via `~/.zshrc`.
 - [x] **Phase 5** — polish, deploy to b2b.seriestours.com
 - [x] **Phase 6** — cost + markup rules, AI rate-sheet import, combined quoting
 - [ ] **Phase 7** — garages, measured distances, day-by-day vehicle itineraries
-      (built 19 Sept 2026); then branded quote print, then online booking with
-      admin approval
+      (built 19 Sept 2026); branded quote PDF and the customer itinerary
+      (20 Sept 2026); **online booking with admin approval — not started**
 
 Each phase ends with a checkpoint for Sonet: what was built, what is left, what
 needs a decision. Do not push silently into the next phase.
@@ -729,6 +729,84 @@ The printed quote summed everything at `-1` and reported 120 km of local
 running as "vehicle positioning to and from base" — two different things the
 customer pays for, added into one wrong sentence.
 
+### The agent's document is an ITINERARY; the legs are the admin's (20 Sept 2026)
+Sonet, reading a saved quote: *"we dont need to show our agent the legs and
+there kms. lets that be only for admin view only for understaning and how much
+toll and how much permit is been added."*
+
+He is right, and for the same reason as the price breakdown. "Depot → Cochin
+International Airport, 0 km" and "Local running at 2 stops (60 km each)" are
+how a price was CALCULATED. Put them on a document an agent hands to their
+customer and the customer starts negotiating a 60 km allowance that was never
+a line item.
+
+So the split is now:
+
+- **The agent and the PDF** get a tour: title, overview, day by day with what
+  happens and where they stop, what the price includes, and what it does not.
+  Modelled on a mytourcab.com itinerary Sonet sent as the content he wants —
+  the sections are his brief; the design is ours.
+- **`/admin/quotes`** gets everything else: every measured leg with its
+  kilometres, routed vs local-allowance vs buffer, and the full cost build-up
+  line by line — which is where "how much toll, how much permit" is answered.
+  Read-only: a quote is frozen at save time, and editing one here would
+  silently rewrite a document an agent may already have sent.
+
+**`src/lib/quote-pdf.tsx` no longer RECEIVES the legs at all.** Not rendered-
+but-passed — removed from `QuotePdfInput`. Leaving them in the input and
+choosing not to draw them is a decision the next person has to re-make; taking
+them out means the customer's document cannot leak them however it is edited.
+
+**`buildItineraryDocument` in `src/lib/itinerary-document.ts` is the one
+builder**, with no server-only import, so the portal page and the PDF render
+the same document. Two renderers deriving the same prose separately is how a
+quote comes to claim two different things — which has already happened once
+here, with toll and parking.
+
+Every sentence it produces is DERIVED: from the day plan the agent typed, and
+from what the pricing actually charged. "Driver's allowance included" appears
+only when a bata line was really pushed, which is why `terms` gained
+`includesDriverAllowance` rather than the document asserting it.
+
+Where the agent left a day's notes blank the description is built from the
+route ("Drive from Munnar to Thekkady, visiting Vandiperiyar en route"), so a
+quote is never handed over with empty days. **Activities are the via points**,
+which the agent already enters — no new field to type twice.
+
+### A quote says WHICH VEHICLE it is for (20 Sept 2026)
+It did not, anywhere: not on the saved quote, not on the PDF, not on the option
+card. `QuoteOption.title` is "Per day hire" — how it is PRICED, which is no
+answer at all to the question. Sonet asked it of a real quote.
+
+`QuoteOption.subject` is `{ name, detail }` — "Toyota Crysta", "Up to 7
+passengers" — and is **frozen onto the option** rather than looked up when a
+quote is read, so retiring or renaming a vehicle cannot change what an
+already-sent quote says it was for. `resolveSubject()` falls back to a lookup
+by id for quotes saved before this existed, for DISPLAY only; the frozen value
+always wins.
+
+"Passengers", never "seats" — see `Vehicle.capacity` above.
+
+### One reader for a frozen snapshot (20 Sept 2026)
+`readSnapshot()` in `src/lib/quote-store.ts`. Three screens now read a saved
+quote — the agent's page, the PDF route and the admin view — and three
+hand-rolled `JSON.parse` blocks are three chances to disagree about what a
+quote said. A malformed or older snapshot yields empty fields rather than
+throwing: the priced lines are real rows, so a quote must still render.
+
+### PDF page breaks are not free (20 Sept 2026)
+Two layout faults, both found by rendering a real document rather than reading
+the code:
+
+- **`page.paddingBottom` must exceed the FIXED footer's height.** It was 48
+  against a footer occupying about 60pt from the bottom. Nothing showed until
+  the itinerary grew: "Grand total" then printed straight through the footer
+  text and its amount went to page two alone. Now 74, which clears it on every
+  page. If the footer ever gains a line, this has to grow with it.
+- **A list and a total must be kept whole.** The included/excluded columns
+  split across a page break and page one ended on a bullet with no text beside
+  it. Both blocks are `wrap={false}`.
+
 ### Agents see a price, not a breakdown (19 Sept 2026)
 Confirmed with Sonet, 19 Sept 2026. The portal and the PDF show **Total, GST,
 Grand total** — no hire/bata/extra-km itemisation. An agent quotes one number
@@ -914,10 +992,13 @@ generated PDF's own ToUnicode table, not by eye.
 directly. The PDF says "Madurai Airport to Rameswaram"; an arrow would be a
 blank box. Before adding any symbol to the PDF, check the font actually has it.
 
-**Known, minor:** ligature glyphs ("fi" in "confirmed") get a ToUnicode mapping
-that extracts wrongly, so copy-paste out of the PDF garbles those few words.
-Display appears unaffected. Not worth a workaround unless it turns out to
-render wrong too.
+**Closed, 20 Sept 2026:** ligature glyphs ("fi" in "confirmed") extract wrongly
+from the PDF's ToUnicode table, so a text extractor garbles those few words.
+Sonet confirmed they DISPLAY correctly, so this is a limitation of whatever is
+reading the file, not of the document. Do not spend time on it, and do not
+trust a raw text dump of a generated PDF to tell you what it looks like —
+render it to an image instead (`qlmanage -t -s 1400 -o <dir> <file.pdf>` on a
+Mac renders page one).
 
 ### Branded quote printing (19 Sept 2026)
 The agent prints a saved quote and hands it to THEIR customer, so the page

@@ -5,7 +5,15 @@ import { quoteHotel, quoteHouseboat, quoteVehicle, quoteItinerary } from "./quot
 import { PricingError } from "./pricing";
 import { priceCart, itemLabel } from "./combined-quote";
 import { totalPax } from "./quote-types";
-import type { AnyQuoteInput, CombinedItem, QuoteOption, QuotingAgent } from "./quote-types";
+import type {
+  AnyQuoteInput,
+  CombinedItem,
+  ItineraryDay,
+  ItinerarySummary,
+  QuoteOption,
+  QuotingAgent,
+  VehicleLeg,
+} from "./quote-types";
 
 /**
  * Persisting a quote.
@@ -252,6 +260,80 @@ export async function saveCombinedQuote(
   throw new Error("Could not allocate a quote reference.");
 }
 
+/**
+ * A saved quote's frozen snapshot, read back.
+ *
+ * One reader, because three screens now need it — the agent's quote page, the
+ * PDF, and the admin view — and three hand-rolled `JSON.parse` blocks are
+ * three chances to disagree about what a quote said. A malformed or older
+ * snapshot yields empty fields rather than throwing: the priced lines are real
+ * rows, so a quote must still render even when its snapshot cannot be read.
+ */
+export type QuoteSnapshot = {
+  input?: AnyQuoteInput & { days?: ItineraryDay[] };
+  legs: VehicleLeg[];
+  days: ItineraryDay[];
+  option?: QuoteOption;
+  /**
+   * The measured distance behind a vehicle hire — routed km, the local-running
+   * allowance and which stops earned it. Read by the ADMIN view only: it is
+   * what explains a price, and it is not a number a customer was ever charged
+   * line by line.
+   */
+  itinerary?: ItinerarySummary;
+  /** Present only on quotes that have been edited since they were saved. */
+  revisedAt?: string;
+};
+
+export function readSnapshot(snapshotJson: string): QuoteSnapshot {
+  try {
+    const snap = JSON.parse(snapshotJson) as {
+      input?: AnyQuoteInput & { days?: ItineraryDay[] };
+      legs?: VehicleLeg[];
+      option?: QuoteOption;
+      itinerary?: ItinerarySummary;
+      revisedAt?: string;
+    };
+    return {
+      input: snap.input,
+      legs: Array.isArray(snap.legs) ? snap.legs : [],
+      // The day plan the agent typed, as opposed to the road segments it was
+      // measured into. Absent on quotes saved before the itinerary builder.
+      days: Array.isArray(snap.input?.days) ? snap.input.days : [],
+      option: snap.option,
+      itinerary: snap.itinerary,
+      revisedAt: typeof snap.revisedAt === "string" ? snap.revisedAt : undefined,
+    };
+  } catch {
+    return { legs: [], days: [] };
+  }
+}
+
+/**
+ * Which vehicle a quote is for.
+ *
+ * Quotes saved from 20 Sept 2026 carry it on the frozen option. Older ones do
+ * not, so their vehicle is looked up by id — a fallback for DISPLAY only. The
+ * frozen value always wins where it exists, because a renamed vehicle must not
+ * rewrite a quote that has already been sent.
+ */
+export async function resolveSubject(
+  snapshot: QuoteSnapshot
+): Promise<QuoteOption["subject"]> {
+  if (snapshot.option?.subject) return snapshot.option.subject;
+  if (snapshot.input?.productType !== "vehicle") return undefined;
+
+  const vehicle = await prisma.vehicle.findUnique({
+    where: { id: snapshot.input.vehicleId },
+    select: { type: true, capacity: true },
+  });
+  if (!vehicle) return undefined;
+  return {
+    name: vehicle.type,
+    detail: `Up to ${vehicle.capacity} passenger${vehicle.capacity === 1 ? "" : "s"}`,
+  };
+}
+
 export type SavedQuoteSummary = {
   reference: string;
   productType: string;
@@ -281,6 +363,52 @@ export async function listQuotes(agentId: string): Promise<SavedQuoteSummary[]> 
     travelStart: formatDateDisplay(q.travelStart),
     travelEnd: formatDateDisplay(q.travelEnd),
   }));
+}
+
+/**
+ * Every agency's quotes, for the admin.
+ *
+ * Deliberately UNSCOPED, unlike `listQuotes` — this is Sonet's own view of
+ * what the portal has priced, which is the only place the cost build-up behind
+ * a quote can still be read now that agents see a single number.
+ */
+export async function listAllQuotes(limit = 200) {
+  const quotes = await prisma.quote.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      reference: true,
+      productType: true,
+      travelStart: true,
+      travelEnd: true,
+      totalMinor: true,
+      createdAt: true,
+      agent: { select: { agencyName: true } },
+    },
+  });
+
+  return quotes.map((q) => ({
+    ...q,
+    agencyName: q.agent.agencyName,
+    travelStart: formatDateDisplay(q.travelStart),
+    travelEnd: formatDateDisplay(q.travelEnd),
+  }));
+}
+
+/**
+ * One quote, for the admin — not scoped to an agent.
+ *
+ * Safe only because /admin is gated by its own layout and every server action
+ * re-checks. Nothing on the agent side may call this.
+ */
+export async function getQuoteForAdmin(reference: string) {
+  return prisma.quote.findUnique({
+    where: { reference },
+    include: {
+      lines: { orderBy: { sortOrder: "asc" } },
+      agent: { select: { id: true, agencyName: true, email: true, derivedTier: true, tierOverride: true } },
+    },
+  });
 }
 
 /** Scoped to the agent — a reference from another agency must not resolve. */

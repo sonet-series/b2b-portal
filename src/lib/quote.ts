@@ -383,6 +383,22 @@ export async function quoteVehicle(
   });
   if (!vehicle) throw new PricingError("That vehicle is not available.");
 
+  /*
+   * Which vehicle this quote is FOR.
+   *
+   * Frozen onto every option rather than looked up when a saved quote is read:
+   * the option is the snapshot, and a vehicle that is later renamed or retired
+   * must not change what a quote already sent to a customer says it was for.
+   *
+   * "Passengers", never "seats" — `capacity` is the maximum the vehicle
+   * actually carries with luggage aboard, which for a Fortuner is four of its
+   * seven seats.
+   */
+  const subject = {
+    name: vehicle.type,
+    detail: `Up to ${vehicle.capacity} passenger${vehicle.capacity === 1 ? "" : "s"}`,
+  };
+
   // Fetched once, up front: its state is home for the permit maths, and the
   // itinerary block below needs the same row.
   const depot = input.garageId
@@ -510,6 +526,9 @@ export async function quoteVehicle(
       const lines: QuoteLineDraft[] = [];
       let usedOverride = false;
       let includedKm = 0;
+      // Set where the bata line is actually pushed, so the customer document
+      // can only claim a driver allowance that was really charged.
+      let chargedBata = false;
       // Kept outside the segment loop: the allowance is a trip-level pool, and
       // so is the rate charged beyond it.
       let extraKmRateMinor: number | undefined;
@@ -536,6 +555,7 @@ export async function quoteVehicle(
         );
         if (bata) {
           if (bata.usedOverride) usedOverride = true;
+          chargedBata = true;
           lines.push({
             description: `Driver allowance · ${seasonSpan(seg.from, seg.to)}`,
             quantity: seg.units,
@@ -592,6 +612,7 @@ export async function quoteVehicle(
           key: "PER_DAY",
           productType: "vehicle",
           title,
+          subject,
           detail:
             `${days} day${days === 1 ? "" : "s"}` +
             (coveredKm > 0 ? ` · ${coveredKm.toLocaleString("en-IN")} km included` : ""),
@@ -614,6 +635,7 @@ export async function quoteVehicle(
              */
             includedKm: coveredKm || undefined,
             extraKmRateMinor,
+            includesDriverAllowance: chargedBata || undefined,
           },
         });
       }
@@ -640,6 +662,7 @@ export async function quoteVehicle(
         key: rate.id,
         productType: "vehicle",
         title,
+        subject,
         detail: `${km} km · ${rate.seasonLabel}`,
         lines: [
           {
@@ -658,6 +681,7 @@ export async function quoteVehicle(
         key: rate.id,
         productType: "vehicle",
         title,
+        subject,
         detail: `Point to point · ${rate.seasonLabel}`,
         lines: [
           {

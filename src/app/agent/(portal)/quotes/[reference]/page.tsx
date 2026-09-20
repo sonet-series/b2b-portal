@@ -1,15 +1,15 @@
 import { notFound } from "next/navigation";
 import { requireAgent } from "@/lib/auth";
-import { getQuote } from "@/lib/quote-store";
+import { getQuote, readSnapshot, resolveSubject } from "@/lib/quote-store";
 import { formatMinor } from "@/lib/money";
 import { gstBps } from "@/lib/settings";
 import { withGst, formatBps } from "@/lib/settings-shared";
 import { formatDateDisplay } from "@/lib/dates";
+import { buildItineraryDocument } from "@/lib/itinerary-document";
 import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
 import { DeleteQuote } from "./delete-quote";
 import { editUrlFor } from "@/lib/quote-edit";
 import { deleteQuoteAction } from "../actions";
-import type { VehicleLeg, ItineraryDay, AnyQuoteInput } from "@/lib/quote-types";
 
 export const dynamic = "force-dynamic";
 
@@ -37,46 +37,26 @@ export default async function QuoteDetailPage({
   const usedOverride = quote.lines.some((l) => l.usedOverride);
   const totals = withGst(quote.totalMinor, await gstBps());
 
-  // The itinerary a vehicle quote's distance was built from. Frozen at save
-  // time alongside the rest of the inputs.
-  let legs: VehicleLeg[] = [];
-  let days: ItineraryDay[] = [];
-  let editUrl: string | null = null;
-  let terms:
-    | { includedKm?: number; extraKmRateMinor?: number; includesTollParking?: boolean; permitStates?: string[] }
-    | undefined;
-  try {
-    const snapshot = JSON.parse(quote.snapshotJson) as {
-      legs?: VehicleLeg[];
-      input?: AnyQuoteInput & { days?: ItineraryDay[] };
-      option?: {
-        terms?: {
-          includedKm?: number;
-          extraKmRateMinor?: number;
-          includesTollParking?: boolean;
-          permitStates?: string[];
-        };
-      };
-    };
-    legs = Array.isArray(snapshot.legs) ? snapshot.legs : [];
-    // The day plan the agent typed, as opposed to the road segments it was
-    // measured into. Absent on quotes saved before the itinerary builder, and
-    // on hand-typed leg quotes, both of which still render their legs below.
-    days = Array.isArray(snapshot.input?.days) ? snapshot.input.days : [];
-    // Null for shapes the builder cannot reopen — a combined trip, or a
-    // snapshot from before an input existed. Better no button at all than one
-    // that lands on a half-empty form.
-    editUrl = snapshot.input ? editUrlFor(snapshot.input, quote.reference) : null;
-    terms = snapshot.option?.terms;
-  } catch {
-    // A quote saved before legs existed, or malformed JSON — show the priced
-    // lines regardless rather than failing the whole page.
-    legs = [];
-    days = [];
-    editUrl = null;
-    terms = undefined;
-  }
-  const legTotal = legs.reduce((s, l) => s + l.km + l.bufferKm, 0);
+  const snapshot = readSnapshot(quote.snapshotJson);
+  const subject = await resolveSubject(snapshot);
+  const terms = snapshot.option?.terms;
+
+  // Null for shapes the builder cannot reopen — a combined trip, or a snapshot
+  // from before an input existed. Better no button at all than one that lands
+  // on a half-empty form.
+  const editUrl = snapshot.input ? editUrlFor(snapshot.input, quote.reference) : null;
+
+  /*
+   * The document the agent hands their own customer.
+   *
+   * Deliberately NOT the measured legs. Confirmed with Sonet, 20 Sept 2026:
+   * the road segments, the depot positioning runs and the local-running
+   * allowance are operational figures that explain a price — they belong on
+   * the admin screens, and on a customer's itinerary they only invite an
+   * argument about numbers that were never charges. What the customer needs is
+   * the trip, the included distance, and what happens past it.
+   */
+  const doc = buildItineraryDocument({ days: snapshot.days, subject, terms });
 
   return (
     <>
@@ -115,6 +95,20 @@ export default async function QuoteDetailPage({
                 ? formatDateDisplay(quote.travelStart)
                 : `${formatDateDisplay(quote.travelStart)} → ${formatDateDisplay(quote.travelEnd)}`}
             </p>
+            {/*
+              Which vehicle the quote is for. It said nowhere at all until
+              Sonet asked of a saved quote — "Per day hire" is how it was
+              priced, not what it was for.
+            */}
+            {subject && (
+              <p>
+                <span className="text-slate-400">Vehicle: </span>
+                <span className="font-medium text-slate-900">{subject.name}</span>
+                {subject.detail && (
+                  <span className="text-slate-500"> · {subject.detail.toLowerCase()}</span>
+                )}
+              </p>
+            )}
             <p>
               <span className="text-slate-400">Agency: </span>
               {agent.agencyName}
@@ -123,74 +117,69 @@ export default async function QuoteDetailPage({
           {usedOverride && <Badge tone="green">Your agency rate applied</Badge>}
         </div>
 
-        {days.length > 0 && (
-          <section className="mt-5 rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Day plan
-            </h2>
-            <ol className="mt-2 space-y-1 text-sm">
-              {days.map((d, i) => {
-                const local = d.from === d.to;
-                const via = d.via.filter((v) => v.trim() !== "");
-                return (
-                  <li key={i} className="flex flex-wrap gap-x-2 text-slate-700">
-                    <span className="w-14 shrink-0 text-slate-400">Day {i + 1}</span>
-                    <span className="w-24 shrink-0 tabular-nums text-slate-500">
+        {doc && (
+          <section className="mt-6 rounded-md bg-slate-50 p-5 ring-1 ring-inset ring-slate-200">
+            <h2 className="text-lg font-semibold text-slate-900">{doc.title}</h2>
+            <p className="mt-0.5 text-sm text-slate-500">{doc.subtitle}</p>
+
+            <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Overview
+            </h3>
+            <p className="mt-1 text-sm leading-relaxed text-slate-700">{doc.overview}</p>
+
+            <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Day-by-day itinerary
+            </h3>
+            <ol className="mt-2 divide-y divide-slate-200">
+              {doc.days.map((d) => (
+                <li key={d.label} className="py-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {d.label}
+                    <span className="mx-2 font-normal text-slate-300">—</span>
+                    {d.heading}
+                    <span className="ml-2 text-xs font-normal text-slate-400">
                       {formatDateDisplay(new Date(`${d.date}T00:00:00Z`))}
                     </span>
-                    <span>
-                      {local ? `At ${d.from}` : `${d.from} → ${d.to}`}
-                      {via.length > 0 && (
-                        <span className="text-slate-500">
-                          {local ? ` · excursion to ${via.join(", ")}` : ` · via ${via.join(", ")}`}
-                        </span>
-                      )}
-                      {d.bufferKm > 0 && (
-                        <span className="text-slate-500"> · +{d.bufferKm} km sightseeing</span>
-                      )}
-                      {d.notes && (
-                        <span className="block text-slate-500">{d.notes}</span>
-                      )}
-                    </span>
-                  </li>
-                );
-              })}
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600">{d.description}</p>
+                  {d.activities.length > 0 && (
+                    <p className="mt-1 text-sm text-slate-500">
+                      <span className="font-medium text-slate-600">Sightseeing: </span>
+                      {d.activities.join(" · ")}
+                    </p>
+                  )}
+                </li>
+              ))}
             </ol>
-          </section>
-        )}
 
-        {legs.length > 0 && (
-          <section className="mt-5 rounded-md bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Itinerary
-            </h2>
-            <table className="mt-2 w-full text-sm">
-              <tbody className="divide-y divide-slate-200">
-                {legs.map((leg, i) => (
-                  <tr key={i}>
-                    <td className="py-1.5 pr-3 text-slate-700">
-                      {leg.label || `Leg ${i + 1}`}
-                    </td>
-                    <td className="whitespace-nowrap py-1.5 pr-3 text-right tabular-nums text-slate-600">
-                      {leg.km.toLocaleString("en-IN")} km
-                    </td>
-                    <td className="whitespace-nowrap py-1.5 text-right tabular-nums text-slate-500">
-                      {leg.bufferKm > 0
-                        ? `+ ${leg.bufferKm.toLocaleString("en-IN")} km sightseeing`
-                        : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-slate-300">
-                  <td className="pt-2 font-medium text-slate-900">Total distance</td>
-                  <td className="pt-2 text-right font-semibold tabular-nums text-slate-900" colSpan={2}>
-                    {legTotal.toLocaleString("en-IN")} km
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+            <div className="mt-5 grid gap-5 sm:grid-cols-2">
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  What&rsquo;s included
+                </h3>
+                <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                  {doc.included.map((item) => (
+                    <li key={item} className="flex gap-2">
+                      <span className="text-green-600">✓</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  What&rsquo;s not included
+                </h3>
+                <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                  {doc.excluded.map((item) => (
+                    <li key={item} className="flex gap-2">
+                      <span className="text-slate-300">✕</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </section>
         )}
 
@@ -199,8 +188,8 @@ export default async function QuoteDetailPage({
           an agent quotes one number to their customer, and a line-by-line
           build-up of hire, driver allowance and extra km only invites being
           negotiated line by line. The LINES ARE STILL STORED — they are what
-          the quote was priced from, and the admin can still read them — they
-          are simply not shown here.
+          the quote was priced from, and the admin can read them at
+          /admin/quotes — they are simply not shown here.
         */}
         <dl className="mt-5 divide-y divide-slate-100 text-sm">
           <div className="flex items-baseline justify-between py-2">

@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAgent } from "@/lib/auth";
-import { getQuote } from "@/lib/quote-store";
+import { getQuote, readSnapshot, resolveSubject } from "@/lib/quote-store";
 import { readUpload, UploadError } from "@/lib/uploads";
 import { renderQuotePdf } from "@/lib/quote-pdf";
 import { gstBps } from "@/lib/settings";
-import type { VehicleLeg, ItineraryDay } from "@/lib/quote-types";
 
 export const dynamic = "force-dynamic";
 
@@ -37,36 +36,16 @@ export async function GET(
     select: { logoStoredName: true, logoMimeType: true, address: true, phone: true },
   });
 
-  let legs: VehicleLeg[] = [];
-  let days: ItineraryDay[] = [];
-  let adults = 0;
-  let childAges: number[] = [];
-  let terms:
-    | { includedKm?: number; extraKmRateMinor?: number; includesTollParking?: boolean; permitStates?: string[] }
-    | undefined;
-  try {
-    const snap = JSON.parse(quote.snapshotJson) as {
-      legs?: VehicleLeg[];
-      input?: { days?: ItineraryDay[]; adults?: number; childAges?: number[] };
-      option?: {
-        terms?: {
-          includedKm?: number;
-          extraKmRateMinor?: number;
-          includesTollParking?: boolean;
-          permitStates?: string[];
-        };
-      };
-    };
-    legs = Array.isArray(snap.legs) ? snap.legs : [];
-    days = Array.isArray(snap.input?.days) ? snap.input.days : [];
-    adults = typeof snap.input?.adults === "number" ? snap.input.adults : 0;
-    childAges = Array.isArray(snap.input?.childAges) ? snap.input.childAges : [];
-    terms = snap.option?.terms;
-  } catch {
-    // A malformed snapshot still produces a costed quote — the priced lines
-    // are real rows, not JSON — so the PDF is issued without the itinerary
-    // rather than refused.
-  }
+  // One reader for the frozen snapshot, shared with the portal page and the
+  // admin view, so three screens cannot come to disagree about what a quote
+  // said. A malformed snapshot still produces a costed quote — the priced
+  // lines are real rows — so the PDF is issued without the itinerary rather
+  // than refused.
+  const snapshot = readSnapshot(quote.snapshotJson);
+  const input = snapshot.input as { adults?: number; childAges?: number[] } | undefined;
+  const adults = typeof input?.adults === "number" ? input.adults : 0;
+  const childAges = Array.isArray(input?.childAges) ? input.childAges : [];
+  const subject = await resolveSubject(snapshot);
 
   const parts: string[] = [];
   if (adults > 0) parts.push(`${adults} adult${adults === 1 ? "" : "s"}`);
@@ -95,11 +74,11 @@ export async function GET(
     phone: row?.phone ?? null,
     logo,
     party: parts.join(", ") || (quote.pax > 0 ? String(quote.pax) : ""),
-    days,
-    legs,
+    days: snapshot.days,
+    subject,
     totalMinor: quote.totalMinor,
     gstBps: await gstBps(),
-    terms,
+    terms: snapshot.option?.terms,
   });
 
   // The filename is what lands in the customer's inbox, so it carries the

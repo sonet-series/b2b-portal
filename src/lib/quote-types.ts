@@ -37,6 +37,17 @@ export type QuoteOption = {
   productType: ProductType;
   title: string;
   detail: string;
+  /**
+   * What is actually being sold, in the customer's words — "Toyota Crysta",
+   * "up to 7 passengers".
+   *
+   * `title` is the way it is PRICED ("Per day hire"), which is no answer to
+   * "which vehicle is this quote for" — the question Sonet asked of a saved
+   * quote that did not say. Frozen with the option rather than looked up when
+   * the quote is read, so retiring or renaming a vehicle cannot change what an
+   * already-sent quote says it was for.
+   */
+  subject?: { name: string; detail?: string };
   lines: QuoteLineDraft[];
   totalMinor: number;
   /** True if any line used an override — surfaced as "your rate" in the UI. */
@@ -56,6 +67,15 @@ export type QuoteOption = {
     extraKmRateMinor?: number;
     /** True when toll and parking are in this price rather than extra. */
     includesTollParking?: boolean;
+    /**
+     * True when a driver allowance was actually charged on this option.
+     *
+     * Set where the bata line is created, never asserted by the document.
+     * "Driver's allowance included" is a sentence somebody would otherwise
+     * have to keep in step with the pricing by hand, which is how the old
+     * "toll at actuals" line came to contradict a price that included them.
+     */
+    includesDriverAllowance?: boolean;
     /**
      * States whose interstate permit IS in this price.
      *
