@@ -1307,6 +1307,20 @@ Needs in `.env.production`: `SMTP_HOST`, optionally `SMTP_PORT` (587),
 `ADMIN_EMAIL`). Timeouts are bounded at 8–12s so a slow SMTP host cannot hold
 a request handler open while an agent watches a spinner.
 
+**`/admin/settings` shows whether it is on, and sends a test message.** Added
+20 Sept 2026 after I told Sonet to check by grepping container logs — which was
+wrong twice over: the "notifications are OFF" warning is logged on the first
+booking REQUEST, not at boot, so silence proved nothing either way; and the
+only other way to test was to create a real booking on a live system and then
+clean it up. `sendTestEmail` rebuilds the transport each call, because a cached
+one may hold settings from before the env file was edited and a test that
+passes against stale configuration is worse than none. The failure is returned
+verbatim — whoever is configuring this needs "535 Authentication failed", not
+"could not send".
+
+**Configuration an operator cannot see is configuration nobody trusts.** If
+something else here ever becomes env-only, show its state on a screen too.
+
 ### Approval notification — manual, by design (confirmed 25 Aug 2026)
 **No email provider, and none is to be built for v1.** Approving an agent does
 not send anything. Instead the admin surfaces a copy-ready handover message

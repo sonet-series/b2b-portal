@@ -147,3 +147,80 @@ export async function notifyBookingRequested(reference: string): Promise<void> {
     console.error("[mailer] could not send the booking notification:", e);
   }
 }
+
+/**
+ * Whether booking notifications are switched on, and where they go.
+ *
+ * Exists because the only way to find out used to be to request a real booking
+ * and then read container logs — which on a live system means creating a fake
+ * booking somebody then has to clean up. Configuration an operator cannot see
+ * is configuration nobody trusts.
+ *
+ * NEVER returns the password, only whether one is set.
+ */
+export function mailerStatus(): {
+  configured: boolean;
+  host?: string;
+  port?: number;
+  user?: string;
+  from?: string;
+  to?: string;
+  hasPassword: boolean;
+} {
+  const config = readConfig();
+  if (!config) {
+    return { configured: false, hasPassword: Boolean(process.env.SMTP_PASS) };
+  }
+  return {
+    configured: true,
+    host: config.host,
+    port: config.port,
+    user: config.user,
+    from: config.from,
+    to: config.to,
+    hasPassword: Boolean(config.pass),
+  };
+}
+
+/**
+ * Proves the credentials work, without inventing a booking to do it.
+ *
+ * Returns the failure rather than throwing it: the caller is an admin screen,
+ * and "Invalid login: 535 Authentication failed" is the single most useful
+ * thing it can put in front of whoever is trying to configure this.
+ *
+ * Rebuilds the transport each time. The cached one may hold settings from
+ * before the env file was edited, and a test that passes against stale
+ * configuration is worse than no test.
+ */
+export async function sendTestEmail(): Promise<{ ok: boolean; message: string }> {
+  const config = readConfig();
+  if (!config) {
+    return {
+      ok: false,
+      message:
+        "SMTP_HOST or a recipient is not set in .env.production, so booking emails are off. " +
+        "Bookings still arrive in the Bookings screen.",
+    };
+  }
+
+  transport = null;
+  try {
+    await getTransport(config).sendMail({
+      from: config.from,
+      to: config.to,
+      subject: "Series Tours B2B — test message",
+      text:
+        "This is a test from the B2B portal's settings screen.\n\n" +
+        "If you are reading it, booking notifications will reach you.\n\n" +
+        `Sent to ${config.to} via ${config.host}:${config.port}.`,
+    });
+    return { ok: true, message: `Test message sent to ${config.to}. Check that inbox.` };
+  } catch (e) {
+    transport = null;
+    return {
+      ok: false,
+      message: `${config.host}:${config.port} refused it — ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+}

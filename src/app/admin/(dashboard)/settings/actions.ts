@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { setSetting, SETTING_KEYS } from "@/lib/settings";
+import { sendTestEmail } from "@/lib/mailer";
 import { toMinor } from "@/lib/money";
 import { getAdminSession } from "@/lib/auth";
 import { markupRuleSchema, formObject, toFormState, type FormState } from "@/lib/validation";
@@ -144,4 +145,16 @@ export async function saveDepositPercent(_prev: FormState, formData: FormData): 
   await setSetting(SETTING_KEYS.DEPOSIT_BPS, Math.round(n * 100));
   revalidatePath("/admin/settings");
   return { ok: true, message: `Deposit set to ${raw}% of the grand total.` };
+}
+
+/**
+ * Sends one test message, so credentials can be proved without a fake booking.
+ *
+ * Returns the SMTP failure verbatim rather than a friendly summary: whoever is
+ * configuring this needs "535 Authentication failed", not "could not send".
+ */
+export async function sendTestEmailAction(_prev: FormState): Promise<FormState> {
+  if (!(await getAdminSession())) throw new Error("Not signed in.");
+  const result = await sendTestEmail();
+  return { ok: result.ok, message: result.message };
 }

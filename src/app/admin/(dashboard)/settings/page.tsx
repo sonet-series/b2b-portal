@@ -1,5 +1,7 @@
 import { loadMarkupTable, ensureMarkupRules } from "@/lib/markup-store";
 import { DepositPanel } from "./deposit-panel";
+import { EmailPanel } from "./email-panel";
+import { mailerStatus } from "@/lib/mailer";
 import { markupKey } from "@/lib/markup";
 import { PRODUCT_TYPE, AGENT_TIER, AGENT_TIER_LABEL, type ProductType } from "@/lib/enums";
 import { Card, PageHeader } from "@/components/ui";
@@ -10,7 +12,7 @@ import { prisma } from "@/lib/db";
 import { toMajor } from "@/lib/money";
 import { allStates } from "@/lib/destinations";
 import { ChargesPanel } from "./charges-panel";
-import { savePerStopKm, saveTollParking, saveStatePermit, saveDepositPercent } from "./actions";
+import { savePerStopKm, saveTollParking, saveStatePermit, saveDepositPercent, sendTestEmailAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +115,8 @@ export default async function SettingsPage() {
       />
 
       <DepositPanel action={saveDepositPercent} percent={String(deposit / 100)} />
+
+      <EmailPanel action={sendTestEmailAction} status={mailerStatus()} />
     </>
   );
 }
