@@ -131,6 +131,7 @@ export default async function QuoteDetailPage({
               photoIds={photoIds}
               alt={subject?.name ?? "Product"}
               className="w-full sm:w-72"
+              download={subject?.photo}
             />
           )}
           <div className="min-w-56 flex-1 text-sm text-slate-600">

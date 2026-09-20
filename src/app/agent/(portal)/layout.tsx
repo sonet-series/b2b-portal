@@ -7,6 +7,10 @@ import { TripCartProvider, TripCartBar } from "@/components/trip-cart";
 export const metadata: Metadata = { title: "Series Tours B2B" };
 
 const NAV = [
+  // Browsing comes before quoting: an agent whose customer has just asked
+  // "what have you got for six people" needs to look at the fleet, not open a
+  // quote form. Sonet, 20 Sept 2026.
+  { href: "/agent/fleet", label: "Our fleet" },
   { href: "/agent/quote/vehicle", label: "Vehicles" },
   { href: "/agent/quote/houseboat", label: "Houseboats" },
   { href: "/agent/quote/hotel", label: "Hotels" },

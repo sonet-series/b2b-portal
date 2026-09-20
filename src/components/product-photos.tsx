@@ -53,10 +53,16 @@ export function ProductGallery({
   photoIds,
   alt,
   className,
+  /**
+   * When given, the gallery offers downloads: this one picture, or all of them
+   * as a zip. Agents pass these to their own customers.
+   */
+  download,
 }: {
   photoIds: readonly string[];
   alt: string;
   className?: string;
+  download?: { kind: "vehicle" | "hotel" | "houseboat"; id: string };
 }) {
   const [index, setIndex] = useState(0);
   const [failed, setFailed] = useState<Set<string>>(new Set());
@@ -77,6 +83,27 @@ export function ProductGallery({
         onError={() => markFailed(current)}
         className="h-56 w-full rounded-md object-cover ring-1 ring-inset ring-slate-200"
       />
+
+      {download && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <a
+            href={`${BASE}/${current}?download=1`}
+            download
+            className="text-blue-700 hover:underline"
+          >
+            Download this photo
+          </a>
+          {usable.length > 1 && (
+            <a
+              href={`/agent/photos/bundle/${download.kind}/${download.id}`}
+              download
+              className="text-blue-700 hover:underline"
+            >
+              Download all {usable.length} (.zip)
+            </a>
+          )}
+        </div>
+      )}
 
       {usable.length > 1 && (
         <div className="mt-2 flex flex-wrap gap-2">
@@ -99,7 +126,7 @@ export function ProductGallery({
                 src={`${BASE}/${id}`}
                 alt=""
                 onError={() => markFailed(id)}
-                className="h-14 w-20 object-cover"
+                className="h-12 w-16 object-cover"
               />
             </button>
           ))}

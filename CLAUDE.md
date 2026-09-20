@@ -839,6 +839,46 @@ left an orphaned 9KB file in `UPLOAD_DIR` with nothing pointing at it and no
 way to tell which product it was for. `addPhotos` now removes every file AND
 every row the call created if any file in the batch is rejected.
 
+### The fleet page, and downloading photographs (20 Sept 2026)
+Sonet, seeing the photographs on a saved quote: *"Agents need to see the
+photos of all types of vehicle before quoting and also they need to able to
+download it as they have to give to there customer."*
+
+Two separate things, and the second is **not** a walk-back of keeping our
+photographs off the branded PDF. A file an agent chooses to send their customer
+is a different act from our imagery printed on their letterhead — the objection
+was never to the pictures, it was to whose document they appear on.
+
+- **`/agent/fleet`** lists every quotable vehicle with its gallery, capacity
+  and depots. The picker answers "is this the car I meant" *after* one is
+  chosen; this answers "which car should I sell them", which is the question an
+  agent is actually being asked. Filtered to active vehicles WITH a live rate,
+  the same as the picker: showing a customer a vehicle that cannot then be
+  priced is worse than not showing it.
+- **Downloads** — one photograph, or all of them as a zip. Filenames are the
+  product and an index ("Toyota Crysta 3.jpg"), because a UUID is not something
+  to put in front of an agent's customer.
+
+**`src/lib/zip.ts` is written, not installed.** Everything it bundles is
+already-compressed JPEG/PNG/WEBP, so deflating again spends CPU on a 4GB shared
+box and typically makes the file slightly larger — stored entries lose nothing.
+A dependency days before launch has to be audited, kept current and carried
+into the runtime image; sixty lines of a format unchanged since 1989 is the
+smaller commitment. No ZIP64: the largest caller bundles ten 5MB photographs,
+orders of magnitude inside the limit.
+
+Verified against `unzip -t`, Python's `zipfile`, and by extracting and
+comparing SHA-256 with the originals. `zipSafeName` strips path separators and
+`..` — every name here is generated from catalogue text, but a zip writer that
+relies on its callers being careful is one refactor from not being safe.
+
+### `attempted` means the agent pressed the button (20 Sept 2026)
+The vehicle screen used `Boolean(params.vehicleId)`, which is true of any link
+that PRESELECTS a vehicle — so arriving from the fleet page landed on a form
+already covered in red "required" messages for dates nobody had been asked for
+yet. The form is a GET, so a real submission always carries `startDate` even
+when empty, and a preselecting link carries none. That is the signal.
+
 ### The single-photo Vehicle columns, and why they were MOVED not dropped
 `Vehicle.photoStoredName` / `photoMimeType` existed for about four hours on
 20 Sept 2026, between shipping one photograph per vehicle and Sonet asking for

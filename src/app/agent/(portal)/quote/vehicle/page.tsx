@@ -82,7 +82,17 @@ export default async function VehicleQuotePage({
     ...(dayRows.length > 0 ? { days: dayRows } : {}),
     ...(childAges.length > 0 ? { childAges } : {}),
   });
-  const attempted = Boolean(params.vehicleId);
+  /*
+   * "Attempted" means the agent pressed Get quote, not that a vehicle is named
+   * in the URL.
+   *
+   * It was `Boolean(params.vehicleId)`, which was true of any link that
+   * preselected a vehicle — so arriving from the fleet page landed on a form
+   * already covered in red "required" messages for dates nobody had been asked
+   * for yet. The form is a GET, so a real submission always carries startDate,
+   * even empty; a preselecting link carries none.
+   */
+  const attempted = params.startDate !== undefined;
 
   let result: QuoteResult | null = null;
   let error: string | null = null;

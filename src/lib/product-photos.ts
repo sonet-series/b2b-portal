@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "./db";
 import { storeUpload, discardUploads, isImage, readUpload, UploadError } from "./uploads";
 import type { PhotoKind } from "./quote-types";
+import { zipSafeName } from "./zip";
 
 /**
  * Photographs of catalogue products, shown to AGENTS inside the portal.
@@ -236,6 +237,87 @@ export async function makeCover(photoId: string): Promise<void> {
 }
 
 /**
+ * A product's photographs WITH their bytes and a human filename.
+ *
+ * Used for downloads, where the agent is going to send these on to their own
+ * customer and "0a835346-6192-4105-b94c-b7d08b55ce2f.jpg" is not something to
+ * put in front of one.
+ */
+export async function photosForDownload(
+  kind: PhotoKind,
+  id: string
+): Promise<{ productName: string; files: { name: string; data: Buffer }[] }> {
+  const where = parentWhere(kind, id);
+
+  const [product, photos] = await Promise.all([
+    kind === "vehicle"
+      ? prisma.vehicle.findUnique({ where: { id }, select: { type: true } })
+      : kind === "hotel"
+        ? prisma.hotel.findUnique({ where: { id }, select: { name: true } })
+        : prisma.houseboat.findUnique({ where: { id }, select: { name: true } }),
+    prisma.productPhoto.findMany({
+      where,
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: { storedName: true, mimeType: true },
+    }),
+  ]);
+
+  const productName =
+    (product && ("type" in product ? product.type : product.name)) || "photos";
+
+  const files: { name: string; data: Buffer }[] = [];
+  let n = 0;
+  for (const photo of photos) {
+    n += 1;
+    try {
+      const data = await readUpload(photo.storedName);
+      const ext = EXTENSION[photo.mimeType] ?? ".jpg";
+      files.push({ name: zipSafeName(`${productName} ${n}${ext}`), data });
+    } catch (e) {
+      // A row pointing at a file that is gone must not cost the agent the
+      // other four photographs. Skipped, and the bundle says how many it has.
+      if (!(e instanceof UploadError)) throw e;
+    }
+  }
+
+  return { productName, files };
+}
+
+/** Extension per stored type, so a download opens in the right thing. */
+const EXTENSION: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+};
+
+/** One photograph's filename, for a single download. */
+export async function photoDownloadName(photoId: string): Promise<string | null> {
+  const photo = await prisma.productPhoto.findUnique({
+    where: { id: photoId },
+    select: {
+      mimeType: true,
+      sortOrder: true,
+      vehicle: { select: { id: true, type: true } },
+      hotel: { select: { id: true, name: true } },
+      houseboat: { select: { id: true, name: true } },
+    },
+  });
+  if (!photo) return null;
+
+  const parent = photo.vehicle ?? photo.hotel ?? photo.houseboat;
+  if (!parent) return null;
+  const name = "type" in parent ? parent.type : parent.name;
+
+  // Its position among its siblings, so a set downloaded one at a time does
+  // not arrive as five files with the same name.
+  const kind: PhotoKind = photo.vehicle ? "vehicle" : photo.hotel ? "hotel" : "houseboat";
+  const siblings = await listPhotos(kind, parent.id);
+  const index = siblings.findIndex((s) => s.sortOrder === photo.sortOrder) + 1;
+
+  return zipSafeName(`${name} ${index || 1}${EXTENSION[photo.mimeType] ?? ".jpg"}`);
+}
+
+/**
  * Serves one photograph's bytes.
  *
  * Does NOT check a session — it is the file-reading half, shared by the agent
@@ -243,7 +325,11 @@ export async function makeCover(photoId: string): Promise<void> {
  * is stored. Each handler decides who may ask, because a route handler is its
  * own entry point and no layout runs for it.
  */
-export async function photoResponse(photoId: string): Promise<NextResponse> {
+export async function photoResponse(
+  photoId: string,
+  /** True serves it as a download — the agent sends these on to a customer. */
+  download = false
+): Promise<NextResponse> {
   const photo = await prisma.productPhoto.findUnique({
     where: { id: photoId },
     select: { storedName: true, mimeType: true },
@@ -260,10 +346,15 @@ export async function photoResponse(photoId: string): Promise<NextResponse> {
     throw e;
   }
 
+  const filename = download ? await photoDownloadName(photoId) : null;
+
   return new NextResponse(new Uint8Array(bytes), {
     headers: {
       "Content-Type": photo.mimeType,
       "Content-Length": String(bytes.byteLength),
+      ...(filename
+        ? { "Content-Disposition": `attachment; filename="${filename}"` }
+        : {}),
       /*
        * Immutable: the URL is the photograph's own id, and replacing a picture
        * creates a new row with a new id rather than new bytes behind an old

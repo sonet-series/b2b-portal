@@ -16,10 +16,13 @@ export const dynamic = "force-dynamic";
  * new id rather than new bytes behind an old URL, so there is nothing to
  * invalidate.
  */
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const agent = await getAgent();
   if (!agent) return new NextResponse("Not authorised", { status: 401 });
 
   const { id } = await params;
-  return photoResponse(id);
+  // ?download=1 sends it as a file with the product's name on it. Agents pass
+  // these to their own customers, and a UUID is not a filename to hand over.
+  const download = new URL(request.url).searchParams.get("download") === "1";
+  return photoResponse(id, download);
 }
