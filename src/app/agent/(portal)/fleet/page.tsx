@@ -32,7 +32,9 @@ export default async function FleetPage() {
    */
   const vehicles = await prisma.vehicle.findMany({
     where: { active: true, rates: { some: { active: true } } },
-    orderBy: { capacity: "asc" },
+    // Sonet's order, set in the admin. Tie-breakers match the admin list, so
+    // what he arranges there is exactly what an agent sees here.
+    orderBy: [{ sortOrder: "asc" }, { capacity: "asc" }, { type: "asc" }],
     select: {
       id: true,
       type: true,

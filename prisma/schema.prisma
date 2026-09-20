@@ -248,6 +248,18 @@ model Vehicle {
   notes    String?
   active   Boolean @default(true)
 
+  /// Where this sits in the fleet, lowest first. Sonet's order, not ours.
+  ///
+  /// The list is a sales order — what he wants put in front of an agent first
+  /// — and that is not the same as cheapest, largest, or alphabetical. Seeded
+  /// from the old capacity ordering so the first view after deploying matches
+  /// what was there before.
+  ///
+  /// Kept CONTIGUOUS by `reorderVehicle`, which renumbers the whole list on
+  /// every move. With a dozen vehicles that costs nothing and makes ties —
+  /// and the ordering bugs that come with them — impossible.
+  sortOrder Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

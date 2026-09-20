@@ -839,6 +839,33 @@ left an orphaned 9KB file in `UPLOAD_DIR` with nothing pointing at it and no
 way to tell which product it was for. `addPhotos` now removes every file AND
 every row the call created if any file in the batch is rejected.
 
+### The fleet order is Sonet's, and it is ONE order (20 Sept 2026)
+*"lets me have the option to rearrange the position of the fleets"*.
+
+`Vehicle.sortOrder`, arranged with arrows on `/admin/vehicles`. The list is a
+SALES order — what he wants put in front of an agent first — and that is not
+cheapest, largest or alphabetical, so it cannot be derived.
+
+**The same order in all three places**: the admin list, `/agent/fleet`, and the
+vehicle picker in the quote builder, with identical tie-breakers. An agent who
+browses the fleet and then opens the picker must not have to hunt for what was
+third a moment ago. If a fourth place ever lists vehicles, it uses this too.
+
+- **The admin list is no longer active-first.** The arrows move a row within
+  the list, so the list has to be the thing being ordered; sorting archived
+  rows to the bottom would make them jump under the cursor.
+- **`reorderVehicle` renumbers the WHOLE list**, rather than swapping two rows.
+  Swapping is fewer writes and is wrong the moment two rows share a
+  `sortOrder` — which happens the first time anything is added or restored.
+  Renumbering makes ties impossible instead of merely unlikely, and a dozen
+  rows cost nothing.
+- **New vehicles go to the END.** The column defaults to 0, which would put
+  every new vehicle first AND tie it with whatever is already there, so
+  `createVehicle` sets `max + 1`.
+- The migration **seeds the existing capacity ordering**, so the first view
+  after deploying is what was on screen before. Nobody signs in to find their
+  fleet shuffled.
+
 ### The fleet page, and downloading photographs (20 Sept 2026)
 Sonet, seeing the photographs on a saved quote: *"Agents need to see the
 photos of all types of vehicle before quoting and also they need to able to

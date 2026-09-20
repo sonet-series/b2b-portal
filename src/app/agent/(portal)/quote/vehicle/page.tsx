@@ -41,6 +41,14 @@ export default async function VehicleQuotePage({
     include: {
       vehicles: {
         where: { active: true, vehicle: { active: true, rates: { some: { active: true } } } },
+        // The same fleet order as /agent/fleet and the admin list. One order
+        // for the catalogue: an agent who browses the fleet and then opens the
+        // picker should not have to hunt for what was third a moment ago.
+        orderBy: [
+          { vehicle: { sortOrder: "asc" } },
+          { vehicle: { capacity: "asc" } },
+          { vehicle: { type: "asc" } },
+        ],
         include: { vehicle: { select: { id: true, type: true, capacity: true } } },
       },
     },
