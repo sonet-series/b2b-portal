@@ -202,6 +202,19 @@ model Vehicle {
   notes    String?
   active   Boolean @default(true)
 
+  /// A photograph of this vehicle type, shown to AGENTS inside the portal.
+  ///
+  /// Deliberately not on the customer's PDF. That document carries the
+  /// agency's branding and nothing of ours; a supplier's vehicle photograph on
+  /// their letterhead is exactly the kind of thing it exists to keep off.
+  /// Confirmed with Sonet, 20 Sept 2026.
+  ///
+  /// Nullable as a PAIR, like Agent.logoStoredName: a vehicle with no photo
+  /// quotes exactly as before rather than being unquotable. Stored on disk
+  /// under UPLOAD_DIR, never in the database and never under public/.
+  photoStoredName String?
+  photoMimeType   String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

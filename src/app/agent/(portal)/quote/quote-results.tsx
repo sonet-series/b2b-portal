@@ -1,12 +1,58 @@
 "use client";
 
-import { useActionState } from "react";
+import { Fragment, useActionState, type ReactNode } from "react";
 import { formatMinor } from "@/lib/money";
 import { withGst, formatBps } from "@/lib/settings-shared";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/validation";
 import { Badge, Button, Card, EmptyState, FormError } from "@/components/ui";
 import { useTripCart } from "@/components/trip-cart";
-import type { AnyQuoteInput, QuoteResult } from "@/lib/quote-types";
+import type { AnyQuoteInput, QuoteOption, QuoteResult } from "@/lib/quote-types";
+import { VehiclePhoto } from "@/components/vehicle-photo";
+
+/**
+ * What the price covers, as one sentence.
+ *
+ * Each clause is pushed only when the pricing actually charged for it, then
+ * they are joined — so no combination of absent clauses can produce a stray
+ * separator.
+ */
+function TermsLine({ terms }: { terms: QuoteOption["terms"] }) {
+  if (!terms) return null;
+
+  const parts: ReactNode[] = [];
+  if (terms.includedKm != null) {
+    parts.push(
+      <>
+        <strong className="text-slate-900">{terms.includedKm.toLocaleString("en-IN")} km</strong>{" "}
+        included
+      </>
+    );
+  }
+  if (terms.extraKmRateMinor != null) {
+    parts.push(
+      <>
+        extra km at{" "}
+        <strong className="text-slate-900">{formatMinor(terms.extraKmRateMinor)}</strong> per km
+      </>
+    );
+  }
+  if (terms.includesTollParking) parts.push(<>toll and parking included</>);
+  if ((terms.permitStates?.length ?? 0) > 0) {
+    parts.push(<>{terms.permitStates!.join(" and ")} permit included</>);
+  }
+  if (parts.length === 0) return null;
+
+  return (
+    <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 && " · "}
+          {part}
+        </Fragment>
+      ))}
+    </p>
+  );
+}
 
 function SaveButton({ action }: { action: (prev: FormState) => Promise<FormState> }) {
   const [state, formAction, pending] = useActionState(
@@ -68,12 +114,19 @@ export function QuoteResults({
               {/* Which vehicle this price is for — `title` is how it is
                   PRICED, which is no answer to that question. */}
               {option.subject && (
-                <p className="mt-1 text-sm text-slate-700">
-                  <span className="font-medium">{option.subject.name}</span>
-                  {option.subject.detail && (
-                    <span className="text-slate-500"> · {option.subject.detail.toLowerCase()}</span>
-                  )}
-                </p>
+                <div className="mt-2 flex items-center gap-3">
+                  <VehiclePhoto
+                    vehicleId={option.subject.vehicleId}
+                    alt={option.subject.name}
+                    className="h-16 w-24 shrink-0 rounded-md object-cover ring-1 ring-inset ring-slate-200"
+                  />
+                  <p className="text-sm text-slate-700">
+                    <span className="font-medium">{option.subject.name}</span>
+                    {option.subject.detail && (
+                      <span className="block text-slate-500">{option.subject.detail}</span>
+                    )}
+                  </p>
+                </div>
               )}
             </div>
             <div className="text-right">
@@ -107,37 +160,13 @@ export function QuoteResults({
             stop at the kilometres, so a hire whose price already covered toll,
             parking and a state permit said nothing about them here and claimed
             them two screens later.
+
+            Assembled as a LIST and joined, never as conditional separators.
+            Hand-placed bullets left a flat transfer — which has no kilometre
+            allowance — reading "· toll and parking included", starting on a
+            separator with nothing before it.
           */}
-          {option.terms &&
-            (option.terms.includedKm ||
-              option.terms.extraKmRateMinor ||
-              option.terms.includesTollParking ||
-              (option.terms.permitStates?.length ?? 0) > 0) && (
-            <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
-              {option.terms.includedKm != null && (
-                <>
-                  <strong className="text-slate-900">
-                    {option.terms.includedKm.toLocaleString("en-IN")} km
-                  </strong>{" "}
-                  included
-                </>
-              )}
-              {option.terms.includedKm != null && option.terms.extraKmRateMinor != null && " · "}
-              {option.terms.extraKmRateMinor != null && (
-                <>
-                  extra km at{" "}
-                  <strong className="text-slate-900">
-                    {formatMinor(option.terms.extraKmRateMinor)}
-                  </strong>{" "}
-                  per km
-                </>
-              )}
-              {option.terms.includesTollParking && <> · toll and parking included</>}
-              {(option.terms.permitStates?.length ?? 0) > 0 && (
-                <> · {option.terms.permitStates!.join(" and ")} permit included</>
-              )}
-            </p>
-          )}
+          <TermsLine terms={option.terms} />
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
             {saveActions[option.key] && <SaveButton action={saveActions[option.key]} />}

@@ -5,8 +5,11 @@ import { markupKey } from "@/lib/markup";
 import { PageHeader, LinkButton, FormSuccess } from "@/components/ui";
 import { VehicleForm } from "../vehicle-form";
 import { RatesPanel } from "./rates-panel";
+import { PhotoPanel } from "./photo-panel";
 import {
   updateVehicle,
+  uploadVehiclePhoto,
+  removeVehiclePhoto,
   createVehicleRate,
   updateVehicleRate,
   archiveVehicleRate,
@@ -52,6 +55,20 @@ export default async function VehicleDetailPage({
       )}
 
       <VehicleForm action={updateVehicle.bind(null, vehicle.id)} vehicle={vehicle} submitLabel="Save vehicle" />
+
+      <PhotoPanel
+        vehicleId={vehicle.id}
+        vehicleType={vehicle.type}
+        hasPhoto={Boolean(vehicle.photoStoredName)}
+        // The stored name changes on every upload, so it busts the browser
+        // cache for a URL whose path never does.
+        photoVersion={vehicle.photoStoredName ?? "none"}
+        uploadAction={uploadVehiclePhoto.bind(null, vehicle.id)}
+        removeAction={async () => {
+          "use server";
+          await removeVehiclePhoto(vehicle.id);
+        }}
+      />
 
       <RatesPanel
         markup={markup}

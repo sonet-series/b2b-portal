@@ -47,7 +47,18 @@ export type QuoteOption = {
    * the quote is read, so retiring or renaming a vehicle cannot change what an
    * already-sent quote says it was for.
    */
-  subject?: { name: string; detail?: string };
+  subject?: {
+    name: string;
+    detail?: string;
+    /**
+     * Which catalogue row it is, so the portal can show its photograph.
+     *
+     * The ID rather than a URL: ids are stable, and resolving the picture at
+     * render time means a photo uploaded after a quote was saved still appears
+     * on it, while a removed one simply stops showing.
+     */
+    vehicleId?: string;
+  };
   lines: QuoteLineDraft[];
   totalMinor: number;
   /** True if any line used an override — surfaced as "your rate" in the UI. */

@@ -5,6 +5,7 @@ import { Button, Select, FormError } from "@/components/ui";
 import { DateField } from "@/components/date-field";
 import { PlaceInput } from "./place-input";
 import { Stepper } from "@/components/stepper";
+import { VehiclePhoto } from "@/components/vehicle-photo";
 
 /**
  * The vehicle trip builder.
@@ -196,18 +197,33 @@ export function TripForm({
           hint="The hire is measured from here and back to here."
           error={fieldErrors.garageId}
         />
-        <Select
-          label="Vehicle"
-          name="vehicleId"
-          required
-          value={vehicleId}
-          onChange={(e) => setVehicleId(e.target.value)}
-          options={[
-            { value: "", label: vehicles.length === 0 ? "No vehicles at this depot" : "Choose a vehicle" },
-            ...vehicles.map((v) => ({ value: v.id, label: `${v.type} — up to ${v.capacity} passengers` })),
-          ]}
-          error={fieldErrors.vehicleId}
-        />
+        <div>
+          <Select
+            label="Vehicle"
+            name="vehicleId"
+            required
+            value={vehicleId}
+            onChange={(e) => setVehicleId(e.target.value)}
+            options={[
+              { value: "", label: vehicles.length === 0 ? "No vehicles at this depot" : "Choose a vehicle" },
+              ...vehicles.map((v) => ({ value: v.id, label: `${v.type} — up to ${v.capacity} passengers` })),
+            ]}
+            error={fieldErrors.vehicleId}
+          />
+          {/*
+            Beneath the vehicle it depicts, not off under the depot column.
+            Renders nothing until one is chosen, and nothing for a vehicle with
+            no photograph uploaded — so the form looks exactly as it did rather
+            than showing an empty frame.
+          */}
+          {vehicle && (
+            <VehiclePhoto
+              vehicleId={vehicle.id}
+              alt={vehicle.type}
+              className="mt-2 h-20 w-32 rounded-md object-cover ring-1 ring-inset ring-slate-200"
+            />
+          )}
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

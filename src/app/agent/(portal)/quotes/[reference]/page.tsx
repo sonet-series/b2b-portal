@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { requireAgent } from "@/lib/auth";
 import { getQuote, readSnapshot, resolveSubject } from "@/lib/quote-store";
@@ -7,6 +8,7 @@ import { withGst, formatBps } from "@/lib/settings-shared";
 import { formatDateDisplay } from "@/lib/dates";
 import { buildItineraryDocument } from "@/lib/itinerary-document";
 import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
+import { VehiclePhoto } from "@/components/vehicle-photo";
 import { DeleteQuote } from "./delete-quote";
 import { editUrlFor } from "@/lib/quote-edit";
 import { deleteQuoteAction } from "../actions";
@@ -58,6 +60,30 @@ export default async function QuoteDetailPage({
    */
   const doc = buildItineraryDocument({ days: snapshot.days, subject, terms });
 
+  // Only what the pricing actually charged, so the clauses can be joined with
+  // no combination able to produce a stray separator.
+  const termsParts: ReactNode[] = [];
+  if (terms?.includedKm != null) {
+    termsParts.push(
+      <>
+        <strong className="text-slate-900">{terms.includedKm.toLocaleString("en-IN")} km</strong>{" "}
+        included
+      </>
+    );
+  }
+  if (terms?.extraKmRateMinor != null) {
+    termsParts.push(
+      <>
+        extra km at{" "}
+        <strong className="text-slate-900">{formatMinor(terms.extraKmRateMinor)}</strong> per km
+      </>
+    );
+  }
+  if (terms?.includesTollParking) termsParts.push(<>toll and parking included</>);
+  if ((terms?.permitStates?.length ?? 0) > 0) {
+    termsParts.push(<>{terms!.permitStates!.join(" and ")} permit included</>);
+  }
+
   return (
     <>
       <PageHeader
@@ -88,7 +114,17 @@ export default async function QuoteDetailPage({
 
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="text-sm text-slate-600">
+          {/*
+            The vehicle, as a picture. Portal only — the customer's PDF carries
+            the agency's branding and nothing of ours, and a supplier's vehicle
+            photograph on their letterhead is what it exists to keep off.
+          */}
+          <VehiclePhoto
+            vehicleId={subject?.vehicleId}
+            alt={subject?.name ?? "Vehicle"}
+            className="h-24 w-36 shrink-0 rounded-md object-cover ring-1 ring-inset ring-slate-200"
+          />
+          <div className="flex-1 text-sm text-slate-600">
             <p>
               <span className="text-slate-400">Travel: </span>
               {formatDateDisplay(quote.travelStart) === formatDateDisplay(quote.travelEnd)
@@ -208,31 +244,20 @@ export default async function QuoteDetailPage({
           </div>
         </dl>
 
-        {(terms?.includedKm != null ||
-          terms?.extraKmRateMinor != null ||
-          terms?.includesTollParking ||
-          (terms?.permitStates?.length ?? 0) > 0) && (
+        {/*
+          Assembled as a LIST and joined, never as conditional separators —
+          the same rule as the quote builder. Hand-placed bullets left a flat
+          transfer, which has no kilometre allowance, reading "· toll and
+          parking included" and starting on a separator.
+        */}
+        {termsParts.length > 0 && (
           <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
-            {terms?.includedKm != null && (
-              <>
-                <strong className="text-slate-900">
-                  {terms!.includedKm!.toLocaleString("en-IN")} km
-                </strong>{" "}
-                included
-              </>
-            )}
-            {terms?.includedKm != null && terms?.extraKmRateMinor != null && " · "}
-            {terms?.extraKmRateMinor != null && (
-              <>
-                extra km at{" "}
-                <strong className="text-slate-900">{formatMinor(terms!.extraKmRateMinor!)}</strong> per
-                km
-              </>
-            )}
-            {terms?.includesTollParking && <> · toll and parking included</>}
-            {(terms?.permitStates?.length ?? 0) > 0 && (
-              <> · {terms!.permitStates!.join(" and ")} permit included</>
-            )}
+            {termsParts.map((part, i) => (
+              <Fragment key={i}>
+                {i > 0 && " · "}
+                {part}
+              </Fragment>
+            ))}
           </p>
         )}
 

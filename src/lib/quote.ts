@@ -397,6 +397,7 @@ export async function quoteVehicle(
   const subject = {
     name: vehicle.type,
     detail: `Up to ${vehicle.capacity} passenger${vehicle.capacity === 1 ? "" : "s"}`,
+    vehicleId: vehicle.id,
   };
 
   // Fetched once, up front: its state is home for the permit maths, and the

@@ -773,6 +773,55 @@ route ("Drive from Munnar to Thekkady, visiting Vandiperiyar en route"), so a
 quote is never handed over with empty days. **Activities are the via points**,
 which the agent already enters — no new field to type twice.
 
+### Vehicle photographs — PORTAL ONLY (20 Sept 2026)
+Sonet: *"there is no visual photo to see of the product"*, then, when I began:
+*"no not in pdf but in the login page"* — meaning the portal, not the
+customer's document.
+
+That second message is the important one, and it is right for the same reason
+the branded print exists at all: **the PDF carries the agency's branding and
+nothing of ours.** A supplier's vehicle photograph on their letterhead tells
+their customer exactly who the supplier is. The picture helps the AGENT choose
+and reassures them what they are selling; it has no business on the document
+they hand over.
+
+`renderQuotePdf` is therefore never given one. Not passed and not drawn —
+simply not an input, so it cannot be reintroduced by someone later deciding
+the document looks bare. Verified by byte size: the PDF is identical before
+and after this work, with one image in it (the agency's own logo) and no JPEG.
+
+- `Vehicle.photoStoredName` / `photoMimeType`, nullable as a PAIR like
+  `Agent.logoStoredName`: a vehicle with no photograph quotes exactly as
+  before. Bytes on disk under `UPLOAD_DIR`, never in SQLite and never under
+  `public/`.
+- **The migration is two `ALTER TABLE ADD COLUMN` statements, hand-written.**
+  Adding a nullable column to SQLite is metadata-only — no new table, no
+  `INSERT ... SELECT`, so none of the P3009 failure mode. Prisma's generated
+  version would have rebuilt and re-copied every Vehicle row for nothing.
+- Served by TWO route handlers, `/agent/vehicles/[id]/photo` and
+  `/admin/vehicles/[id]/photo`, sharing `vehiclePhotoResponse()`. Two, not one
+  taking either session: the audiences are separate throughout this app, and
+  an "any signed-in user" check is the kind of thing that quietly widens.
+  Unlike an agent's logo the id comes from the URL, which is fine — a vehicle
+  is shared catalogue, and there is nothing to learn by guessing an id the
+  dropdown already lists.
+- **`src/components/vehicle-photo.tsx` hides itself on a 404.** Most vehicles
+  have no photograph until Sonet works through the catalogue, and a bare
+  `<img>` on a 404 draws the browser's broken-image icon. It records WHICH
+  vehicle failed rather than that one did — the same instance is reused as the
+  agent changes the dropdown, and a boolean would hide the next vehicle's
+  photograph too.
+- `QuoteOption.subject.vehicleId` is frozen with the quote, but `resolveSubject`
+  fills it in from the input when an older frozen subject lacks it. The frozen
+  NAME always wins — that is what stops a renamed vehicle rewriting a sent
+  quote — while the id is only a pointer for fetching a picture.
+
+**An upload that fails after the bytes are written must delete them.** The
+first attempt here died on a stale Prisma client and left an orphaned 9KB file
+in `UPLOAD_DIR` with nothing pointing at it and no way to tell which vehicle it
+was for. The write is now wrapped so every path out that does not end with the
+row pointing at the file cleans it up.
+
 ### A quote says WHICH VEHICLE it is for (20 Sept 2026)
 It did not, anywhere: not on the saved quote, not on the PDF, not on the option
 card. `QuoteOption.title` is "Per day hire" — how it is PRICED, which is no
@@ -942,6 +991,17 @@ It typechecked, and was silently always undefined, so every vehicle quote was
 saved with a passenger count of zero. Found only when an edit URL came out
 missing its passengers. If a field is optional and always absent, suspect the
 shape rather than the data.
+
+### A sentence built from clauses is JOINED, never separated by hand
+(20 Sept 2026). The "what this includes" line placed its own " · " between
+clauses. Widening it to mention toll and permits meant a flat transfer — which
+has no kilometre allowance — rendered as "· toll and parking included",
+starting on a separator with nothing before it.
+
+Both the option card and the saved quote now push each clause onto a list only
+when the pricing charged for it, and join the list. No combination of absent
+clauses can produce a stray separator, which is not true of any arrangement of
+conditional punctuation.
 
 ### Agent-side UX (19 Sept 2026)
 Prompted by Sonet pointing at mytourcab.com. That is a B2C site and most of it

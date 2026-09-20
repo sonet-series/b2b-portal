@@ -320,17 +320,29 @@ export function readSnapshot(snapshotJson: string): QuoteSnapshot {
 export async function resolveSubject(
   snapshot: QuoteSnapshot
 ): Promise<QuoteOption["subject"]> {
-  if (snapshot.option?.subject) return snapshot.option.subject;
+  const frozen = snapshot.option?.subject;
+  if (frozen) {
+    /*
+     * The frozen NAME always wins — that is the whole point. The id is a
+     * different kind of thing: not a claim about the quote, just a pointer for
+     * fetching the photograph, and quotes frozen before photographs existed
+     * carry no id at all. Filling it in from the input lets an older quote
+     * show a picture without changing a word of what it says.
+     */
+    if (frozen.vehicleId || snapshot.input?.productType !== "vehicle") return frozen;
+    return { ...frozen, vehicleId: snapshot.input.vehicleId };
+  }
   if (snapshot.input?.productType !== "vehicle") return undefined;
 
   const vehicle = await prisma.vehicle.findUnique({
     where: { id: snapshot.input.vehicleId },
-    select: { type: true, capacity: true },
+    select: { id: true, type: true, capacity: true },
   });
   if (!vehicle) return undefined;
   return {
     name: vehicle.type,
     detail: `Up to ${vehicle.capacity} passenger${vehicle.capacity === 1 ? "" : "s"}`,
+    vehicleId: vehicle.id,
   };
 }
 
