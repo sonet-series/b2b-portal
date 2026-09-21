@@ -27,6 +27,13 @@ containers, it is forbidden by default.
 If a future phase genuinely needs ERP data, that is a deliberate decision Sonet
 makes explicitly. It is never a default, and never something to build on spec.
 
+**He made exactly that decision on 21 Sept 2026** — a confirmed, deposit-paid
+booking should land in the ERP automatically. It is **not built**, and the
+mechanism is not agreed: the isolation is currently enforced by Docker network
+topology, not by a firewall rule, so building this means deciding how that
+changes. See item 2 in `TODO.md` before writing any code against it. Until then
+every sentence above still holds.
+
 ---
 
 ## v1 scope
@@ -407,6 +414,13 @@ Each phase ends with a checkpoint for Sonet: what was built, what is left, what
 needs a decision. Do not push silently into the next phase.
 
 ---
+
+## Asked for and NOT built — see `TODO.md`
+
+`TODO.md` in the repo root is Sonet's running list of work he has asked for.
+He adds to it by saying "to do list", and the items are meant to be completed,
+not merely recorded. Read it alongside this file: it holds the two things
+outstanding as of 21 Sept 2026, one of which reverses the ERP rule above.
 
 ## Still open — ask Sonet, do not assume
 
