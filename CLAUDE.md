@@ -1133,11 +1133,37 @@ What made it confusing was not the number of fields alone:
 - **The rule is stated once at the top** rather than left to be inferred from
   a row of greyed-out boxes.
 
-**Consequence worth knowing:** every day description on the customer's
-itinerary is now DERIVED — "Drive from Munnar to Thekkady", "Day excursion
-from Munnar to Top Station, returning to Munnar for the night". The Via field
-is what carries sightseeing detail now, and it also becomes the "Sightseeing:"
-line. Verified after the change: a three-day quote still reads properly.
+### The day description is OURS (21 Sept 2026)
+*"day description needs to be derived from our side. not the agent."*
+
+An agent writing their own gets it different on every quote, or leaves it
+blank. Series Tours knows these places, so `src/lib/destinations.ts` carries
+the content and every quote that visits Munnar says the same thing about it.
+
+Each destination may have a **`blurb`** — a phrase that follows a comma, "the
+tea country of the high ranges" — and **`highlights`**, the named sights.
+Airports and stations are marked **`gateway`** and get "Arrive at" and "in time
+for the departure flight" rather than a description of what to see.
+
+- **Deliberately generic and durable.** What a place is known for, never
+  opening times, prices or anything that goes stale unnoticed on a document a
+  customer reads months later.
+- **A place NOT on the list gets a plain sentence**, never an invented one.
+  `describe()` returns null and the day reads "Drive from A to B." An made-up
+  description on a customer's document is worse than a plain one.
+- **Highlights only appear on a day SPENT somewhere.** A transfer day arrives
+  in the evening, and listing four sights on it promises an afternoon nobody
+  has.
+- **The blurb becomes its OWN sentence when a via point is named.** Appended as
+  an apposition it lands after the wrong noun: "drive on to Mysore by way of
+  Kabini, the old seat of the Wadiyar kings" reads as though Kabini were the
+  Wadiyar seat.
+- **`notes` still WINS where present.** Quotes saved while the form collected
+  it read exactly as they were sent; it is simply no longer asked for.
+
+**Do not pass `KL`/`TN`/`KA` to `.map()`.** They take a second argument now and
+`map` supplies the INDEX as it, which would silently give one place `{}` and
+the next `1` as its content. The list is written out one call at a time.
 
 ### Agent-side UX (19 Sept 2026)
 Prompted by Sonet pointing at mytourcab.com. That is a B2C site and most of it

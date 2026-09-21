@@ -1,4 +1,5 @@
 import { formatMinor } from "./money";
+import { describe } from "./destinations";
 import type { ItineraryDay, QuoteOption } from "./quote-types";
 
 /**
@@ -99,6 +100,62 @@ function stayPlaces(days: readonly ItineraryDay[]): string[] {
   return seen;
 }
 
+/**
+ * A driving day.
+ *
+ * The first and last days are named for what they are — people arrive and
+ * depart, they do not "drive from an airport". A gateway reached on the last
+ * day gets the flight or the onward journey, never a description of what to
+ * see there.
+ */
+function describeTransfer(
+  from: string,
+  to: string,
+  via: readonly string[],
+  at: { first: boolean; last: boolean }
+): string {
+  const fromPlace = describe(from);
+  const toPlace = describe(to);
+  const byRoad = via.length > 0 ? ` by way of ${list(via)}` : "";
+
+  if (at.last && toPlace?.gateway) {
+    const purpose = /airport/i.test(to) ? "the departure flight" : "the onward journey";
+    return `Drive from ${from} to ${to}${byRoad}, in time for ${purpose}.`;
+  }
+
+  const lead =
+    at.first && fromPlace?.gateway
+      ? `Arrive at ${from} and drive on to ${to}${byRoad}.`
+      : `Drive from ${from} to ${to}${byRoad}.`;
+
+  if (!toPlace?.blurb) return lead;
+
+  /*
+   * With a via point the blurb becomes its OWN sentence.
+   *
+   * Appended as an apposition it lands after the wrong noun: "drive on to
+   * Mysore by way of Kabini, the old seat of the Wadiyar kings" reads as
+   * though Kabini were the Wadiyar seat. Naming the destination again costs a
+   * word and removes the ambiguity.
+   */
+  return byRoad === ""
+    ? lead.replace(/\.$/, `, ${toPlace.blurb}.`)
+    : `${lead} ${to} is ${toPlace.blurb}.`;
+}
+
+/** A day spent in one place, with or without an excursion. */
+function describeLocalDay(place: string, via: readonly string[]): string {
+  const known = describe(place);
+
+  if (via.length > 0) {
+    return `A day out from ${place} to ${list(via)}, back to ${place} for the night.`;
+  }
+  if (known?.blurb) {
+    return `A full day at ${place}, ${known.blurb}.`;
+  }
+  return `A full day at ${place}.`;
+}
+
 export function buildItineraryDocument(input: ItineraryDocumentInput): ItineraryDocument | null {
   const days = input.days;
   if (days.length === 0) return null;
@@ -130,6 +187,8 @@ export function buildItineraryDocument(input: ItineraryDocumentInput): Itinerary
     const to = day.to.trim();
     const via = clean(day.via);
     const local = from === to;
+    const first = i === 0;
+    const last = i === days.length - 1;
 
     const heading = local
       ? via.length > 0 || day.bufferKm > 0
@@ -137,21 +196,36 @@ export function buildItineraryDocument(input: ItineraryDocumentInput): Itinerary
         : `At ${from}`
       : `${from} to ${to}`;
 
+    /*
+     * The description is OURS, not the agent's.
+     *
+     * Sonet, 21 Sept 2026: *"day description needs to be derived from our
+     * side. not the agent."* An agent writing their own gets it different
+     * every time or leaves it blank; Series Tours knows these places, so the
+     * same thing is said about them on every quote that visits them.
+     *
+     * `notes` still WINS where present — quotes saved while the form asked for
+     * it keep reading exactly as they were sent. It is simply no longer
+     * collected.
+     */
     let description = (day.notes ?? "").trim();
     if (description === "") {
-      if (!local) {
-        description =
-          `Drive from ${from} to ${to}` +
-          (via.length > 0 ? `, visiting ${list(via)} en route` : "") +
-          ".";
-      } else if (via.length > 0) {
-        description = `Day excursion from ${from} to ${list(via)}, returning to ${from} for the night.`;
-      } else {
-        description = `At leisure in ${from}.`;
-      }
+      description = local
+        ? describeLocalDay(from, via)
+        : describeTransfer(from, to, via, { first, last });
     }
 
-    return { label: `Day ${i + 1}`, date: day.date, heading, description, activities: via };
+    /*
+     * The Sightseeing line: the agent's via points where they gave any, and
+     * otherwise what the place is known for — but only on a day SPENT there.
+     * A transfer day arrives in the evening, and listing four sights on it
+     * promises an afternoon nobody has.
+     */
+    const place = describe(from);
+    const activities =
+      via.length > 0 ? via : local ? (place?.highlights ?? []).slice(0, 4) : [];
+
+    return { label: `Day ${i + 1}`, date: day.date, heading, description, activities };
   });
 
   // --- what the price covers --------------------------------------------
