@@ -923,7 +923,7 @@ upgrades them to `subject.photo` on read. The frozen NAME always wins — that i
 what stops a renamed product rewriting a sent quote — while a photo pointer is
 not a claim about the quote, just where to look for pictures.
 
-### A quote says WHICH VEHICLE it is for (20 Sept 2026)### A quote says WHICH VEHICLE it is for (20 Sept 2026)
+### A quote says WHICH VEHICLE it is for (20 Sept 2026)
 It did not, anywhere: not on the saved quote, not on the PDF, not on the option
 card. `QuoteOption.title` is "Per day hire" — how it is PRICED, which is no
 answer at all to the question. Sonet asked it of a real quote.
@@ -1103,6 +1103,41 @@ Both the option card and the saved quote now push each clause onto a list only
 when the pricing charged for it, and join the list. No combination of absent
 clauses can produce a stray separator, which is not true of any arrangement of
 conditional punctuation.
+
+### The itinerary asks for THREE things (21 Sept 2026)
+Sonet: *"inside the itinerary box, we dont need the field what happens this
+day. also remove the buffer km option also ... make the field more hightlight
+as people are confused what to enter and where to enter the details"*.
+
+Each day now asks only: where it starts, where it drives to, and an optional
+via point. "What happens this day" and "Buffer km" are gone from the form.
+
+**The DATA keeps both fields.** `ItineraryDay.notes` and `bufferKm` still
+exist, quotes saved when the form asked for them still price on those values,
+and `parseItineraryDays` already defaulted both when absent — so removing the
+inputs needed no schema change and breaks no saved quote. Reopening an older
+quote with "Edit" still carries its buffer km through the URL, which is why
+`bufferTotal` survives in the summary bar.
+
+**Local running is still charged**, automatically: `Setting.perStopKm` adds an
+allowance for each place the party overnights at. The buffer was the agent's
+chance to add more, and it was the thing they got wrong.
+
+What made it confusing was not the number of fields alone:
+- **Placeholders read as values.** A grey "Cochin International Airport" in an
+  empty box looks filled in. Every placeholder now starts "e.g.".
+- **The chained start looked broken.** Day 2's From was a bare "—". It now
+  reads "Wherever day 1 ends", with "Carried over from day 1" beneath it.
+- **Nothing said which fields were required.** To is marked; Via says
+  "(optional)".
+- **The rule is stated once at the top** rather than left to be inferred from
+  a row of greyed-out boxes.
+
+**Consequence worth knowing:** every day description on the customer's
+itinerary is now DERIVED — "Drive from Munnar to Thekkady", "Day excursion
+from Munnar to Top Station, returning to Munnar for the night". The Via field
+is what carries sightseeing detail now, and it also becomes the "Sightseeing:"
+line. Verified after the change: a three-day quote still reads properly.
 
 ### Agent-side UX (19 Sept 2026)
 Prompted by Sonet pointing at mytourcab.com. That is a B2C site and most of it
