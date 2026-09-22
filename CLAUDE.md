@@ -27,12 +27,20 @@ containers, it is forbidden by default.
 If a future phase genuinely needs ERP data, that is a deliberate decision Sonet
 makes explicitly. It is never a default, and never something to build on spec.
 
-**He made exactly that decision on 21 Sept 2026** — a confirmed, deposit-paid
-booking should land in the ERP automatically. It is **not built**, and the
-mechanism is not agreed: the isolation is currently enforced by Docker network
-topology, not by a firewall rule, so building this means deciding how that
-changes. See item 2 in `TODO.md` before writing any code against it. Until then
-every sentence above still holds.
+**He made exactly that decision on 21 Sept 2026**, and it was built on the
+22nd: a confirmed booking whose deposit has been APPROVED is posted to the ERP.
+
+**Every sentence above still holds except one.** `src/lib/erp.ts` makes an
+OUTBOUND HTTPS call to the ERP's own public REST API — the same thing any
+third party integrating with it would do. There is still no shared database,
+no sync in either direction, no import tooling, and **no Docker network path**:
+the portal stays on `edge`, resolves the ERP by public hostname, and is refused
+by the same authentication as anyone on the internet. The ERP holds no
+credentials here and never calls back.
+
+Moving this container onto `frappe_default` remains forbidden. It would have
+been simpler and would have thrown the isolation away for a feature that did
+not need it.
 
 ---
 
@@ -1319,6 +1327,51 @@ correct on `main`. `docker-entrypoint.sh` now aborts if the file is absent.
 **Test config-dependent behaviour against a production build, not `next dev`.**
 Dev runs from the project directory where the config is always present, so it
 cannot reproduce this class of bug.
+
+### Trip details, and the ERP hand-off (22 Sept 2026)
+Two things from `TODO.md`, both now built.
+
+**Guest, arrival/departure and nightly accommodation.** All on the BOOKING, not
+the quote — a quote is a price and none of this changes one. Three separate
+forms, because the details arrive over days from different people and a single
+Save button would mean holding all of it until the last piece turns up.
+
+- **Times are `"HH:MM"` STRINGS.** A flight lands at 06:40 local. Storing that
+  as a DateTime means choosing a timezone, and the first time anything renders
+  it in another one a driver is sent at the wrong hour. `25:99` is refused
+  rather than stored half-read.
+- **One stay row per NIGHT**, seeded from the day plan the first time the page
+  is opened — lazily, so bookings made before this existed get theirs without a
+  migration that would have had to re-read every snapshot. The unique index on
+  `(bookingId, dayIndex)` is what makes re-seeding safe, not a check that could
+  race. `skipDuplicates` would say it more plainly but Prisma does not offer it
+  on SQLite.
+- **Accommodation is FREE TEXT.** Agents book properties Series Tours does not
+  carry, and a catalogue picker would be unusable exactly when it matters.
+- **Repeated rows use raw inputs, not `<Field>`**, which sets `id={name}` —
+  that would put several elements under one id and point every label at the
+  first of them.
+
+**The ERP push** — `src/lib/erp.ts`. See the rule at the top of this file for
+why an outbound call to the public API is the mechanism.
+
+- **Trigger: a payment APPROVED that covers the deposit.** Approved, not filed
+  — `bookingMoney` counts only approved rows, so "confirmed and 25% paid" holds
+  for free rather than being re-derived here.
+- **`Booking.erpReference` makes it idempotent.** Set once, and a booking that
+  has one is never sent again. Verified by approving the balance payment
+  afterwards: nothing was sent, and `erpAttempts` stayed at 1.
+- **It never throws at the caller.** Sonet has just approved real money; an
+  unreachable ERP must not turn that into a failed action he repeats. The
+  failure lands on the booking and the admin screen shows the ERP's verbatim
+  error — "403 Forbidden — Invalid API key" is the whole diagnosis — with a
+  retry.
+- **Posts NET of GST.** ERPNext applies its own tax template; posting the gross
+  would tax the tax. `toMajor` is the one boundary where paise stop.
+
+Needs `ERP_URL`, `ERP_API_KEY`, `ERP_API_SECRET`, `ERP_COMPANY`,
+`ERP_ITEM_CODE`. Unset, it says "not configured" on the booking and does
+nothing — the same rule the mailer follows.
 
 ### Bookings (20 Sept 2026)
 Sonet's specification, verbatim in substance: an agent requests; on approval

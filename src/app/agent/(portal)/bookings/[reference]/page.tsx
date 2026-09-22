@@ -1,14 +1,21 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
-import { getBooking } from "@/lib/booking";
+import { getBooking, ensureStays, bookingStub } from "@/lib/booking";
 import { formatMinor } from "@/lib/money";
 import { formatBps } from "@/lib/settings-shared";
 import { formatDateDisplay } from "@/lib/dates";
 import { BOOKING_STATUS_LABEL, PAYMENT_STATUS_LABEL, type BookingStatus, type PaymentStatus } from "@/lib/enums";
 import { Badge, Card, LinkButton, PageHeader, FormSuccess } from "@/components/ui";
 import { PaymentForm } from "./payment-form";
-import { submitPaymentAction } from "../actions";
+import { GuestDetails, GuestList, StayRow } from "./trip-details";
+import {
+  submitPaymentAction,
+  saveTripDetailsAction,
+  saveGuestsAction,
+  saveStayAction,
+} from "../actions";
+import { formatDateOnly } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +42,18 @@ export default async function AgentBookingPage({
   const { reference } = await params;
   const { requested } = await searchParams;
   const agent = await requireAgent();
+
+  /*
+   * Seeded here rather than when the booking is created, so bookings made
+   * before this feature existed get their nights too — without a migration
+   * that would have had to re-read every snapshot. Safe to run on every view:
+   * it returns immediately once rows exist.
+   */
+  const stub = await bookingStub(reference, agent.id);
+  if (!stub) notFound();
+  if (stub.status !== "DECLINED" && stub.status !== "CANCELLED") {
+    await ensureStays(stub.id);
+  }
 
   // Scoped to this agent — another agency's booking must not resolve.
   const booking = await getBooking(reference, agent.id);
@@ -136,6 +155,60 @@ export default async function AgentBookingPage({
           </p>
         )}
       </Card>
+
+      {status !== "DECLINED" && status !== "CANCELLED" && (
+        <>
+          <GuestDetails
+            action={saveTripDetailsAction.bind(null, booking.reference)}
+            leadName={booking.leadGuestName ?? ""}
+            leadPhone={booking.leadGuestPhone ?? ""}
+            leadEmail={booking.leadGuestEmail ?? ""}
+            arrival={{
+              date: booking.arrivalDate ? formatDateOnly(booking.arrivalDate) : "",
+              time: booking.arrivalTime ?? "",
+              flight: booking.arrivalFlight ?? "",
+              from: booking.arrivalFrom ?? "",
+            }}
+            departure={{
+              date: booking.departureDate ? formatDateOnly(booking.departureDate) : "",
+              time: booking.departureTime ?? "",
+              flight: booking.departureFlight ?? "",
+              to: booking.departureTo ?? "",
+            }}
+          />
+
+          <GuestList
+            action={saveGuestsAction.bind(null, booking.reference)}
+            guests={booking.guests.map((g) => ({ name: g.name, age: g.age }))}
+            expected={booking.quote.pax}
+          />
+
+          {booking.stays.length > 0 && (
+            <Card className="mt-6">
+              <h2 className="text-sm font-semibold text-slate-900">Where they stay</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                One row per night, taken from the itinerary. Each saves on its own.
+              </p>
+              <div className="mt-3">
+                {booking.stays.map((stay) => (
+                  <StayRow
+                    key={stay.id}
+                    action={saveStayAction.bind(null, booking.reference, stay.dayIndex)}
+                    stay={{
+                      dayIndex: stay.dayIndex,
+                      place: stay.place,
+                      property: stay.property ?? "",
+                      confirmationRef: stay.confirmationRef ?? "",
+                      notes: stay.notes ?? "",
+                    }}
+                    formatted={formatDateDisplay(stay.date)}
+                  />
+                ))}
+              </div>
+            </Card>
+          )}
+        </>
+      )}
 
       {status === "CONFIRMED" && !money.settled && (
         <Card className="mt-6">

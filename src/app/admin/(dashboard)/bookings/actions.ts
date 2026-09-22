@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth";
 import { decideBooking, cancelBooking, decidePayment, BookingError } from "@/lib/booking";
 import { toMinor } from "@/lib/money";
+import { pushBookingToErpQuietly, pushBookingToErp } from "@/lib/erp";
 import type { FormState } from "@/lib/validation";
 
 // Server actions are their own entry point — the dashboard layout does not run
@@ -128,9 +129,44 @@ export async function decidePaymentAction(
     throw e;
   }
 
+  /*
+   * The moment the deposit is genuinely paid, the ERP gets the booking.
+   *
+   * Here rather than on confirmation, because Sonet asked for "confirmed AND
+   * advance 25% paid" — and paid means HE approved it, not that the agent
+   * filed a screenshot. `pushBookingToErp` re-checks both conditions itself
+   * and does nothing when they are not met, so approving a later balance
+   * payment cannot send a second order.
+   *
+   * Quietly: he has just approved real money, and an unreachable ERP must not
+   * turn that into a failed action he repeats. Failures land on the booking
+   * with a retry button.
+   */
+  if (decision === "APPROVED") await pushBookingToErpQuietly(reference);
+
   refresh(reference);
   return {
     ok: true,
     message: decision === "APPROVED" ? "Payment approved." : "Payment rejected.",
   };
+}
+
+/** Sonet's manual retry, when a push failed or the ERP was configured later. */
+export async function retryErpPushAction(
+  reference: string,
+  _prev: FormState
+): Promise<FormState> {
+  await requireAdmin();
+  const result = await pushBookingToErp(reference);
+  refresh(reference);
+
+  if (result.ok) {
+    return {
+      ok: true,
+      message: result.alreadySent
+        ? `Already in the ERP as ${result.reference}.`
+        : `Sent to the ERP as ${result.reference}.`,
+    };
+  }
+  return { ok: false, message: result.reason };
 }

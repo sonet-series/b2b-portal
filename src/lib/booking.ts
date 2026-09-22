@@ -4,6 +4,9 @@ import { gstBps, depositBps } from "./settings";
 import { bookingMoney } from "./booking-shared";
 import { storeUpload, discardUploads, isImage, UploadError } from "./uploads";
 import { notifyBookingRequested } from "./mailer";
+import { readSnapshot } from "./quote-store";
+import { parseDateOnly } from "./dates";
+import type { ItineraryDay } from "./quote-types";
 import type { BookingStatus, PaymentStatus } from "./enums";
 
 /**
@@ -268,6 +271,8 @@ export async function decidePayment(
 
 const BOOKING_INCLUDE = {
   payments: { orderBy: { submittedAt: "asc" } },
+  guests: { orderBy: { sortOrder: "asc" } },
+  stays: { orderBy: { dayIndex: "asc" } },
   quote: {
     select: {
       reference: true,
@@ -276,9 +281,27 @@ const BOOKING_INCLUDE = {
       travelEnd: true,
       totalMinor: true,
       snapshotJson: true,
+      // The party size, so the guest list can say "2 of 4 named". Read
+      // Quote.pax carefully — it means different things per product type,
+      // and for a vehicle it is the headcount. See the comment on the column.
+      pax: true,
     },
   },
 } as const;
+
+/**
+ * Just enough to decide whether to seed the nights — id and status.
+ *
+ * A separate query because `getBooking` pulls payments, guests, stays and the
+ * quote snapshot, and running all that twice per page view to learn two fields
+ * is work nobody asked for.
+ */
+export async function bookingStub(reference: string, agentId?: string) {
+  return prisma.booking.findFirst({
+    where: { reference, ...(agentId ? { agentId } : {}) },
+    select: { id: true, status: true },
+  });
+}
 
 /** One booking with its money worked out. Scoped when an agentId is given. */
 export async function getBooking(reference: string, agentId?: string) {
@@ -338,4 +361,157 @@ export async function pendingCounts(): Promise<{ bookings: number; payments: num
     prisma.bookingPayment.count({ where: { status: "SUBMITTED" } }),
   ]);
   return { bookings, payments };
+}
+
+// ---------------------------------------------------------------------------
+// Trip details — who travels, how they arrive, where they sleep
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates one stay row per NIGHT from the quote's day plan.
+ *
+ * Seeded rather than left empty, and seeded LAZILY the first time the details
+ * screen is opened — so bookings made before this existed get their rows too,
+ * without a migration that would have had to re-read every snapshot.
+ *
+ * Nights, not days: a five-day trip has four nights, and the last day is a
+ * departure. The final day's row is deliberately absent rather than present
+ * and blank, which would invite somebody to fill it in.
+ *
+ * Safe to call repeatedly — the unique index on (bookingId, dayIndex) is what
+ * makes that true, not a check that could race.
+ */
+export async function ensureStays(bookingId: string): Promise<void> {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { quote: { select: { snapshotJson: true } }, stays: { select: { id: true } } },
+  });
+  if (!booking || booking.stays.length > 0) return;
+
+  const days: ItineraryDay[] = readSnapshot(booking.quote.snapshotJson).days;
+  if (days.length < 2) return;
+
+  try {
+    await prisma.bookingStay.createMany({
+      data: days.slice(0, -1).map((day, i) => ({
+        bookingId,
+        dayIndex: i,
+        date: parseDateOnly(day.date),
+        // Where they END the day is where they sleep.
+        place: day.to.trim() || day.from.trim() || "—",
+      })),
+    });
+  } catch (e) {
+    /*
+     * A unique violation means another request seeded these first — two tabs,
+     * or a double-click. That is the outcome we wanted, so it is not an error.
+     *
+     * `skipDuplicates` would say this more plainly but Prisma does not offer
+     * it on SQLite. The UNIQUE INDEX is what guarantees no double list either
+     * way; this only decides whether the loser of the race sees a stack trace.
+     */
+    const isUnique =
+      typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "P2002";
+    if (!isUnique) throw e;
+  }
+}
+
+export type TripDetailsInput = {
+  leadGuestName?: string | null;
+  leadGuestPhone?: string | null;
+  leadGuestEmail?: string | null;
+  arrivalDate?: Date | null;
+  arrivalTime?: string | null;
+  arrivalFlight?: string | null;
+  arrivalFrom?: string | null;
+  departureDate?: Date | null;
+  departureTime?: string | null;
+  departureFlight?: string | null;
+  departureTo?: string | null;
+};
+
+/** "06:40", or null. Anything else is refused rather than stored half-read. */
+export function parseClockTime(raw: string): string | null {
+  const value = raw.trim();
+  if (value === "") return null;
+  const m = /^(\d{1,2}):?(\d{2})$/.exec(value);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+
+/**
+ * The agent fills these in whenever they have them.
+ *
+ * Allowed on a REQUESTED booking as well as a confirmed one: flight numbers
+ * arrive days after a request and the driver needs them regardless. Refused
+ * once a booking is declined or cancelled — there is no trip to detail.
+ */
+export async function saveTripDetails(
+  agentId: string,
+  reference: string,
+  input: TripDetailsInput
+): Promise<void> {
+  const booking = await prisma.booking.findFirst({
+    where: { reference, agentId },
+    select: { id: true, status: true },
+  });
+  if (!booking) throw new BookingError("That booking no longer exists.");
+  if (booking.status === "DECLINED" || booking.status === "CANCELLED") {
+    throw new BookingError(`This booking is ${booking.status.toLowerCase()} — there is no trip to detail.`);
+  }
+
+  await prisma.booking.update({ where: { id: booking.id }, data: input });
+}
+
+/** Replaces the guest list wholesale — the form posts all of it every time. */
+export async function saveGuests(
+  agentId: string,
+  reference: string,
+  guests: readonly { name: string; age: number | null }[]
+): Promise<void> {
+  const booking = await prisma.booking.findFirst({
+    where: { reference, agentId },
+    select: { id: true },
+  });
+  if (!booking) throw new BookingError("That booking no longer exists.");
+
+  const rows = guests
+    .map((g) => ({ name: g.name.trim(), age: g.age }))
+    .filter((g) => g.name !== "");
+
+  /*
+   * Replaced in ONE transaction. A delete that commits without its insert
+   * leaves a booking with no guests at all, which reads as "the agent removed
+   * them" rather than "the write failed".
+   */
+  await prisma.$transaction([
+    prisma.bookingGuest.deleteMany({ where: { bookingId: booking.id } }),
+    prisma.bookingGuest.createMany({
+      data: rows.map((g, i) => ({ bookingId: booking.id, name: g.name, age: g.age, sortOrder: i })),
+    }),
+  ]);
+}
+
+/** One night's accommodation. */
+export async function saveStay(
+  agentId: string,
+  reference: string,
+  dayIndex: number,
+  input: { property: string | null; confirmationRef: string | null; notes: string | null }
+): Promise<void> {
+  const booking = await prisma.booking.findFirst({
+    where: { reference, agentId },
+    select: { id: true },
+  });
+  if (!booking) throw new BookingError("That booking no longer exists.");
+
+  // Scoped by bookingId as well as dayIndex, so a hand-edited form cannot
+  // write a night onto somebody else's booking.
+  await prisma.bookingStay.updateMany({
+    where: { bookingId: booking.id, dayIndex },
+    data: input,
+  });
 }

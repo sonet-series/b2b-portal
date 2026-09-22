@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getBooking } from "@/lib/booking";
+import { erpStatus } from "@/lib/erp";
 import { formatMinor } from "@/lib/money";
 import { formatBps } from "@/lib/settings-shared";
 import { formatDateDisplay } from "@/lib/dates";
@@ -11,12 +12,13 @@ import {
   type PaymentStatus,
 } from "@/lib/enums";
 import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
-import { ConfirmForm, NoteForm, PaymentDecision } from "./decide";
+import { ConfirmForm, NoteForm, PaymentDecision, ErpPanel } from "./decide";
 import {
   confirmBookingAction,
   declineBookingAction,
   cancelBookingAction,
   decidePaymentAction,
+  retryErpPushAction,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -174,6 +176,115 @@ export default async function AdminBookingPage({
             />
           </div>
         </Card>
+      )}
+
+      {(booking.leadGuestName ||
+        booking.arrivalDate ||
+        booking.departureDate ||
+        booking.guests.length > 0 ||
+        booking.stays.some((s) => s.property)) && (
+        <Card className="mt-6">
+          <h2 className="text-sm font-semibold text-slate-900">Trip details</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Entered by the agency. Read-only here — it is theirs to keep current.
+          </p>
+
+          <dl className="mt-4 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-3">
+            {booking.leadGuestName && (
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-400">Lead guest</dt>
+                <dd className="text-slate-900">
+                  {booking.leadGuestName}
+                  <span className="block text-xs text-slate-500">
+                    {[booking.leadGuestPhone, booking.leadGuestEmail].filter(Boolean).join(" · ")}
+                  </span>
+                </dd>
+              </div>
+            )}
+            {booking.arrivalDate && (
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-400">Arrives</dt>
+                <dd className="text-slate-900">
+                  {formatDateDisplay(booking.arrivalDate)}
+                  {booking.arrivalTime && ` at ${booking.arrivalTime}`}
+                  <span className="block text-xs text-slate-500">
+                    {[booking.arrivalFlight, booking.arrivalFrom && `from ${booking.arrivalFrom}`]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </dd>
+              </div>
+            )}
+            {booking.departureDate && (
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-400">Departs</dt>
+                <dd className="text-slate-900">
+                  {formatDateDisplay(booking.departureDate)}
+                  {booking.departureTime && ` at ${booking.departureTime}`}
+                  <span className="block text-xs text-slate-500">
+                    {[booking.departureFlight, booking.departureTo && `to ${booking.departureTo}`]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </dd>
+              </div>
+            )}
+          </dl>
+
+          {booking.guests.length > 0 && (
+            <div className="mt-5">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Guests ({booking.guests.length} of {booking.quote.pax})
+              </h3>
+              <ul className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-700">
+                {booking.guests.map((g) => (
+                  <li key={g.id}>
+                    {g.name}
+                    {g.age != null && <span className="text-slate-500"> ({g.age})</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {booking.stays.length > 0 && (
+            <div className="mt-5">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Accommodation
+              </h3>
+              <ul className="mt-2 divide-y divide-slate-100 text-sm">
+                {booking.stays.map((stay) => (
+                  <li key={stay.id} className="flex flex-wrap gap-x-3 py-1.5">
+                    <span className="w-16 shrink-0 text-slate-400">Night {stay.dayIndex + 1}</span>
+                    <span className="w-24 shrink-0 text-slate-500">
+                      {formatDateDisplay(stay.date)}
+                    </span>
+                    <span className="w-28 shrink-0 text-slate-600">{stay.place}</span>
+                    <span className="flex-1 text-slate-900">
+                      {stay.property || <span className="text-slate-400">not booked yet</span>}
+                      {stay.confirmationRef && (
+                        <span className="text-slate-500"> · {stay.confirmationRef}</span>
+                      )}
+                      {stay.notes && <span className="block text-xs text-slate-500">{stay.notes}</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {status === "CONFIRMED" && (
+        <ErpPanel
+          action={retryErpPushAction.bind(null, booking.reference)}
+          status={erpStatus()}
+          reference={booking.erpReference}
+          pushedAt={booking.erpPushedAt ? formatDateDisplay(booking.erpPushedAt) : null}
+          error={booking.erpError}
+          attempts={booking.erpAttempts}
+          depositSettled={money.depositSettled}
+        />
       )}
 
       {booking.payments.length > 0 && (

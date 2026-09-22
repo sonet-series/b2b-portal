@@ -636,10 +636,96 @@ model Booking {
   requestedAt DateTime  @default(now())
   decidedAt   DateTime?
 
+  // --- who is travelling, and how they arrive -------------------------------
+  // Asked for 21 Sept 2026. All nullable: an agent rarely has flight numbers
+  // at the moment they request a booking, and refusing the request until they
+  // do would push the whole conversation back onto WhatsApp.
+  leadGuestName  String?
+  leadGuestPhone String?
+  leadGuestEmail String?
+
+  /// Wall-clock times as "HH:MM" STRINGS, not DateTimes.
+  ///
+  /// A flight lands at 06:40 local time. Storing that as an instant means
+  /// choosing a timezone, and the first time anything renders it in another
+  /// one the driver is sent at the wrong hour. The date beside it is a real
+  /// calendar day, like every other date here.
+  arrivalDate     DateTime?
+  arrivalTime     String?
+  arrivalFlight   String?
+  arrivalFrom     String?
+
+  departureDate   DateTime?
+  departureTime   String?
+  departureFlight String?
+  departureTo     String?
+
+  // --- the ERP push ---------------------------------------------------------
+  // See TODO.md item 2 and src/lib/erp.ts. The portal never reads from the
+  // ERP; these columns only record what it sent and whether that worked.
+  /// The document name the ERP gave back, e.g. "SAL-ORD-2026-00123".
+  /// Its PRESENCE is what makes the push idempotent — set, and we never send
+  /// this booking again.
+  erpReference String?
+  erpPushedAt  DateTime?
+  /// The last failure, verbatim. Kept so a retry is an informed decision.
+  erpError     String?
+  erpAttempts  Int       @default(0)
+
   payments BookingPayment[]
+  guests   BookingGuest[]
+  stays    BookingStay[]
 
   @@index([status, requestedAt])
   @@index([agentId, requestedAt])
+}
+
+/// A person travelling on a booking.
+///
+/// Separate rows rather than one free-text box: hotels ask for names one at a
+/// time, and a list that can be read back is worth more than a paragraph
+/// somebody has to parse. The party SIZE already lives on the quote; this is
+/// the names, which nothing else knows.
+model BookingGuest {
+  id        String  @id @default(uuid())
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  name String
+  /// Years at the time of travel. Optional — an adult's age is nobody's
+  /// business, a child's decides a hotel's policy.
+  age  Int?
+
+  sortOrder Int @default(0)
+
+  @@index([bookingId, sortOrder])
+}
+
+/// Where the party sleeps on one night of the trip.
+///
+/// One row per NIGHT, keyed by the itinerary day it follows, so it lines up
+/// with the day plan the quote was priced on rather than floating free of it.
+model BookingStay {
+  id        String  @id @default(uuid())
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  /// 0-based, matching ItineraryDay. Unique per booking so seeding the rows
+  /// from the day plan is safe to repeat.
+  dayIndex Int
+  date     DateTime
+  /// The town they are in that night, seeded from the itinerary.
+  place    String
+
+  /// The hotel or resort. FREE TEXT on purpose: agents book plenty of
+  /// properties Series Tours does not carry, and forcing a catalogue pick
+  /// would make the field unusable exactly when it matters.
+  property        String?
+  confirmationRef String?
+  notes           String?
+
+  @@unique([bookingId, dayIndex])
+  @@index([bookingId, dayIndex])
 }
 
 /// A payment the agent says they have made, and Sonet's verdict on it.

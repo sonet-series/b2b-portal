@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/validation";
-import { Button, FormError, FormSuccess, MoneyField, TextArea } from "@/components/ui";
+import { Badge, Button, Card, FormError, FormSuccess, MoneyField, TextArea } from "@/components/ui";
 import { toMajor, formatMinor } from "@/lib/money";
 import { withGst, formatBps } from "@/lib/settings-shared";
 import { depositOf } from "@/lib/booking-shared";
@@ -141,5 +141,104 @@ export function PaymentDecision({
         </Button>
       </form>
     </div>
+  );
+}
+
+/**
+ * Whether this booking reached the ERP, and a button to send it again.
+ *
+ * The push happens by itself the moment a deposit is approved. This exists for
+ * the times it did not: the ERP was down, the credentials were wrong, or it
+ * was not configured yet when the money came in. A failure that only appears
+ * in container logs is a sales order nobody knows is missing.
+ */
+export function ErpPanel({
+  action,
+  status,
+  reference,
+  pushedAt,
+  error,
+  attempts,
+  depositSettled,
+}: {
+  action: (prev: FormState) => Promise<FormState>;
+  status: {
+    configured: boolean;
+    url?: string;
+    company?: string;
+    itemCode?: string;
+    hasSecret: boolean;
+  };
+  reference: string | null;
+  pushedAt: string | null;
+  error: string | null;
+  attempts: number;
+  depositSettled: boolean;
+}) {
+  const [state, formAction, pending] = useActionState(
+    async (prev: FormState) => action(prev),
+    EMPTY_FORM_STATE
+  );
+
+  const tone = reference ? "green" : error ? "red" : depositSettled ? "amber" : "slate";
+  const label = reference
+    ? "In the ERP"
+    : error
+      ? "Failed"
+      : depositSettled
+        ? "Not sent yet"
+        : "Waiting on the deposit";
+
+  return (
+    <Card className="mt-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-slate-900">ERP</h2>
+        <Badge tone={tone}>{label}</Badge>
+      </div>
+
+      {reference ? (
+        <p className="mt-2 text-sm text-slate-600">
+          Sent as <span className="font-mono text-slate-900">{reference}</span>
+          {pushedAt && ` on ${pushedAt}`}. It will not be sent again.
+        </p>
+      ) : !status.configured ? (
+        <p className="mt-2 text-sm text-slate-500">
+          No ERP connection is configured, so nothing is sent. Set <code>ERP_URL</code>,{" "}
+          <code>ERP_API_KEY</code>, <code>ERP_API_SECRET</code>, <code>ERP_COMPANY</code> and{" "}
+          <code>ERP_ITEM_CODE</code> in <code>.env.production</code> and redeploy.
+        </p>
+      ) : !depositSettled ? (
+        <p className="mt-2 text-sm text-slate-500">
+          Goes across automatically once you approve a payment that covers the deposit.
+        </p>
+      ) : (
+        <p className="mt-2 text-sm text-slate-500">
+          The deposit is settled but this has not reached the ERP. Send it below.
+        </p>
+      )}
+
+      {error && (
+        <p className="mt-3 break-words rounded-md bg-red-50 px-3 py-2 text-xs text-red-800 ring-1 ring-inset ring-red-200">
+          <span className="font-medium">Last attempt ({attempts}): </span>
+          {error}
+        </p>
+      )}
+
+      {status.configured && (
+        <p className="mt-3 text-xs text-slate-400">
+          {status.url} · {status.company} · item {status.itemCode}
+        </p>
+      )}
+
+      {!reference && (
+        <form action={formAction} className="mt-4 space-y-3">
+          <FormError message={state.ok ? undefined : state.message} />
+          <FormSuccess message={state.ok ? state.message : undefined} />
+          <Button type="submit" disabled={pending || !status.configured}>
+            {pending ? "Sending…" : "Send to the ERP"}
+          </Button>
+        </form>
+      )}
+    </Card>
   );
 }
