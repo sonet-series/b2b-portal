@@ -1155,6 +1155,53 @@ What made it confusing was not the number of fields alone:
 - **The rule is stated once at the top** rather than left to be inferred from
   a row of greyed-out boxes.
 
+### Five things the run-through found (24 Sept 2026)
+Sonet worked the whole flow on production and found five. Four were places a
+decision had been applied in one screen and missed in another — worth noting as
+a pattern, not five unrelated bugs.
+
+1. **The Distance box on the quote builder.** *"this box is not required to
+   show to the agents in the get quote area."* The measured legs were taken off
+   the saved quote and the PDF on 20 Sept and left here. Removed.
+2. **The line breakdown on `/agent/trip`.** *"extra km charge and per day
+   charges are not required to show them."* "Agents see a price, not a
+   breakdown" dates from 19 Sept; this page was simply never updated. Now shows
+   the option's `detail` and the subtotal.
+3. **A combined quote's PDF was bare** — letterhead, dates, total, nothing
+   else. See below; this was a real bug, not a preference.
+4. **"Review trip" linked to the page you were standing on.** The cart bar is
+   now hidden on `/agent/trip`. A control that appears to do nothing makes
+   somebody doubt the rest of the screen.
+5. **The approval screen showed a rate and a vehicle, no programme.** Sonet is
+   agreeing a price for a specific trip; the trip was one click away on the
+   quote, which is one click too many when the decision is whether the rate
+   covers the driving. The day plan is now on the booking itself.
+
+### A COMBINED quote is shaped differently — read it that way (24 Sept 2026)
+*"pdf is too plain why?"*
+
+`saveCombinedQuote` writes `{ combined: true, items: [...] }` with **no
+top-level `input` and no top-level `option`**, while `saveQuote` writes both.
+`readSnapshot` only understood the second shape, so for a trip saved from the
+cart every day, every term and the vehicle itself came back empty and
+`buildItineraryDocument` returned null. The document fell back to a letterhead
+and a number.
+
+- **The VEHICLE item supplies the itinerary.** It is the only one carrying a
+  day plan, so `readSnapshot` finds it and uses its `input`.
+- **The other items are named**, through `alsoIncluded`, or the document
+  describes a trip the customer is not buying. The exclusion line switches from
+  "Hotels, meals and anything not listed above" to "Anything not listed above"
+  once hotels ARE listed — otherwise it contradicts itself two lines apart.
+- **`PricedItem.option` now carries the whole priced option**, and
+  `saveCombinedQuote` freezes it per item. Storing only an `optionKey` was what
+  left a combined quote with no terms at all: no included km, no toll, no
+  permits. Older combined quotes have no frozen option and simply show no
+  terms — they cannot be recovered, because the option was never written down.
+
+**Two save paths must freeze the same things.** They did not, and the
+difference only showed on a customer's document.
+
 ### The day description is OURS (21 Sept 2026)
 *"day description needs to be derived from our side. not the agent."*
 

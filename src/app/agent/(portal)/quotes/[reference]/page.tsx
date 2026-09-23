@@ -81,7 +81,12 @@ export default async function QuoteDetailPage({
    * argument about numbers that were never charges. What the customer needs is
    * the trip, the included distance, and what happens past it.
    */
-  const doc = buildItineraryDocument({ days: snapshot.days, subject, terms });
+  const doc = buildItineraryDocument({
+    days: snapshot.days,
+    alsoIncluded: snapshot.combinedItems.map((i) => i.label),
+    subject,
+    terms,
+  });
 
   // Only what the pricing actually charged, so the clauses can be joined with
   // no combination able to produce a stray separator.

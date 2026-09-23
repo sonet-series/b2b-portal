@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getBooking } from "@/lib/booking";
+import { readSnapshot } from "@/lib/quote-store";
 import { erpStatus } from "@/lib/erp";
 import { formatMinor } from "@/lib/money";
 import { formatBps } from "@/lib/settings-shared";
@@ -48,6 +49,17 @@ export default async function AdminBookingPage({
 
   const status = booking.status as BookingStatus;
   const { money } = booking;
+
+  /*
+   * The day-by-day programme, on the approval screen itself.
+   *
+   * Sonet, 24 Sept 2026: "when i open a booking for approval it only shows the
+   * rate and vehicle type, why is it not showing the daywise program". He is
+   * agreeing a price for a specific trip, and the trip was a click away on the
+   * quote — which is a click too many when the decision is whether the rate
+   * covers the driving.
+   */
+  const snapshot = readSnapshot(booking.quote.snapshotJson);
 
   return (
     <>
@@ -104,6 +116,66 @@ export default async function AdminBookingPage({
           </p>
         )}
       </Card>
+
+      {snapshot.days.length > 0 && (
+        <Card className="mt-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-900">Day-by-day programme</h2>
+            <p className="text-xs text-slate-500">
+              {snapshot.days.length} days · as quoted
+            </p>
+          </div>
+          <ol className="mt-3 divide-y divide-slate-100 text-sm">
+            {snapshot.days.map((day, i) => {
+              const local = day.from === day.to;
+              const via = day.via.filter((v) => v.trim() !== "");
+              return (
+                <li key={i} className="flex flex-wrap gap-x-3 py-2 text-slate-700">
+                  <span className="w-12 shrink-0 text-slate-400">Day {i + 1}</span>
+                  <span className="w-24 shrink-0 tabular-nums text-slate-500">
+                    {formatDateDisplay(new Date(`${day.date}T00:00:00Z`))}
+                  </span>
+                  <span className="flex-1">
+                    {local ? `At ${day.from}` : `${day.from} → ${day.to}`}
+                    {via.length > 0 && (
+                      <span className="text-slate-500">
+                        {local
+                          ? ` · excursion to ${via.join(", ")}`
+                          : ` · via ${via.join(", ")}`}
+                      </span>
+                    )}
+                    {day.notes && <span className="block text-slate-500">{day.notes}</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+
+          {snapshot.combinedItems.length > 0 && (
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Also in this trip
+              </p>
+              <ul className="mt-1 text-sm text-slate-700">
+                {snapshot.combinedItems.map((item) => (
+                  <li key={item.label}>{item.label}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <p className="mt-3 text-xs text-slate-500">
+            The measured legs and the full cost build-up are on{" "}
+            <Link
+              href={`/admin/quotes/${booking.quote.reference}`}
+              className="text-blue-700 hover:underline"
+            >
+              quote {booking.quote.reference}
+            </Link>
+            .
+          </p>
+        </Card>
+      )}
 
       {status === "REQUESTED" && (
         <>

@@ -345,6 +345,16 @@ export type PricedItem = {
   lines: QuoteLineDraft[];
   subtotalMinor: number;
   usedOverride: boolean;
+  /**
+   * The whole priced option, so `saveCombinedQuote` can freeze it exactly as
+   * a single-product save freezes its own.
+   *
+   * Without it a combined quote stored only an option KEY, so its terms — the
+   * included kilometres, the toll, the permits — were simply absent, and the
+   * customer's PDF said less about a bigger trip than it did about a smaller
+   * one. Found by Sonet on 24 Sept 2026: "pdf is too plain why?"
+   */
+  option: QuoteOption;
 };
 
 export type PricedCart = {

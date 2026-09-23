@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { AnyQuoteInput } from "@/lib/quote-types";
 
 /**
@@ -92,10 +93,19 @@ export function useTripCart(): TripContext {
   return ctx;
 }
 
-/** Persistent bar, so the trip is visible from every quote screen. */
+/**
+ * Persistent bar, so the trip is visible from every quote screen.
+ *
+ * HIDDEN on /agent/trip itself. Sonet, 24 Sept 2026: *"what is review trip
+ * button for?"* — asked while standing on the trip page, where the button
+ * linked to the page he was already looking at. A control that appears to do
+ * nothing is worse than no control: it makes someone doubt the rest of the
+ * screen.
+ */
 export function TripCartBar() {
   const { items, ready } = useTripCart();
-  if (!ready || items.length === 0) return null;
+  const pathname = usePathname();
+  if (!ready || items.length === 0 || pathname === "/agent/trip") return null;
 
   return (
     <div className="sticky bottom-0 z-10 border-t border-slate-200 bg-white/95 backdrop-blur">

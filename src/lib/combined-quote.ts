@@ -90,6 +90,7 @@ export async function priceCart(
         lines: option.lines,
         subtotalMinor: option.totalMinor,
         usedOverride: option.usedOverride,
+        option,
       });
 
       const window = itemWindow(item.input);

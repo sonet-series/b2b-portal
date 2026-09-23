@@ -146,6 +146,8 @@ export type QuotePdfInput = {
   logo?: { data: Buffer; mime: string };
   party: string;
   days: ItineraryDay[];
+  /** The rest of a combined trip — hotels, a houseboat — by their labels. */
+  alsoIncluded?: string[];
   /** Which vehicle the hire is for. Absent on non-vehicle quotes. */
   subject?: QuoteOption["subject"];
   totalMinor: number;
@@ -189,7 +191,12 @@ function QuoteDocument(q: QuotePdfInput) {
    * not rendering them, is what makes it impossible to leak them back onto a
    * customer's document later.
    */
-  const doc = buildItineraryDocument({ days: q.days, subject: q.subject, terms: q.terms });
+  const doc = buildItineraryDocument({
+    days: q.days,
+    alsoIncluded: q.alsoIncluded,
+    subject: q.subject,
+    terms: q.terms,
+  });
 
   const facts: { label: string; value: string }[] = [
     {

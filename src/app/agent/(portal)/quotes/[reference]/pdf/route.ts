@@ -75,6 +75,7 @@ export async function GET(
     logo,
     party: parts.join(", ") || (quote.pax > 0 ? String(quote.pax) : ""),
     days: snapshot.days,
+    alsoIncluded: snapshot.combinedItems.map((i) => i.label),
     subject,
     totalMinor: quote.totalMinor,
     gstBps: await gstBps(),

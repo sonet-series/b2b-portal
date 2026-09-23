@@ -12,7 +12,7 @@ import {
   parseChildAges,
   type FormState,
 } from "@/lib/validation";
-import { FormError, PageHeader, EmptyState, Card } from "@/components/ui";
+import { FormError, PageHeader, EmptyState } from "@/components/ui";
 import { TripForm, type GarageOption } from "./trip-form";
 import { SearchForm } from "../search-form";
 import { QuoteResults } from "../quote-results";
@@ -136,7 +136,6 @@ export default async function VehicleQuotePage({
     }
   }
 
-  const itin = result?.itinerary;
 
   return (
     <>
@@ -181,50 +180,16 @@ export default async function VehicleQuotePage({
 
           {error && <FormError message={error} />}
 
-          {itin && (
-            <Card className="mb-6">
-              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-base font-semibold text-slate-900">Distance</h2>
-                <p className="text-sm text-slate-600 tabular-nums">
-                  {itin.routedKm.toLocaleString("en-IN")} km measured
-                  {itin.localKm > 0 && (
-                    <> + {itin.localKm.toLocaleString("en-IN")} km local running</>
-                  )}
-                  {itin.bufferKm > 0 && <> + {itin.bufferKm.toLocaleString("en-IN")} km sightseeing</>}
-                  {" = "}
-                  <strong className="text-slate-900">{itin.totalKm.toLocaleString("en-IN")} km</strong>
-                </p>
-              </div>
-
-              <ul className="divide-y divide-slate-100 text-sm">
-                {itin.legs.map((leg, i) => (
-                  <li key={i} className="flex items-baseline gap-3 py-1.5">
-                    <span className="flex-1 text-slate-700">{leg.label}</span>
-                    <span className="tabular-nums text-slate-900">{leg.km.toLocaleString("en-IN")} km</span>
-                    {leg.bufferKm > 0 && (
-                      <span className="tabular-nums text-slate-500">
-                        +{leg.bufferKm.toLocaleString("en-IN")} km
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-
-              <p className="mt-3 text-xs text-slate-500">
-                Includes the run out from the depot and back to it after the drop — both are
-                chargeable distance the vehicle actually covers.
-                {itin.localKm > 0 && (
-                  <>
-                    {" "}
-                    Local running covers driving around each place they stay —{" "}
-                    {itin.stops.join(", ")} — on top of the transfers. Each leg above is exactly
-                    what Google measured.
-                  </>
-                )}
-                {itin.anyManual && " Some distances were entered by hand rather than measured."}
-              </p>
-            </Card>
-          )}
+          {/*
+            The measured legs are NOT shown here.
+            Sonet, 24 Sept 2026: "this box is not required to show to the
+            agents in the get quote area." Same reasoning as removing them from
+            the saved quote and the PDF on 20 Sept — "Depot to Cochin, 0 km"
+            and a 60 km local-running allowance are how a price was CALCULATED.
+            An agent who can see them starts explaining them to a customer.
+            They are on /admin/quotes, where they explain a price to the person
+            who set it.
+          */}
 
           {result && (
             <QuoteResults

@@ -111,22 +111,18 @@ export function TripView() {
                 </div>
               </div>
 
-              {pricedItem && (
-                <table className="mt-3 w-full text-sm">
-                  <tbody className="divide-y divide-slate-100">
-                    {pricedItem.lines.map((line, i) => (
-                      <tr key={i}>
-                        <td className="py-1.5 pr-3 text-slate-600">{line.description}</td>
-                        <td className="whitespace-nowrap py-1.5 pr-3 text-right tabular-nums text-slate-500">
-                          {line.quantity} × {formatMinor(line.unitMinor)}
-                        </td>
-                        <td className="whitespace-nowrap py-1.5 text-right tabular-nums font-medium text-slate-900">
-                          {formatMinor(line.totalMinor)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/*
+                No line breakdown. Sonet, 24 Sept 2026: "extra km charge and per
+                day charges are not required to show them."
+
+                The same rule the quote screens have followed since 19 Sept —
+                an agent quotes ONE number to their customer, and a build-up of
+                hire, extra km and toll only invites being negotiated line by
+                line. This page was simply missed when that was applied.
+                The lines are still priced and still saved; they are not shown.
+              */}
+              {pricedItem?.detail && (
+                <p className="mt-2 text-sm text-slate-500">{pricedItem.detail}</p>
               )}
 
               <button

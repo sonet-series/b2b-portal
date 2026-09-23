@@ -211,7 +211,14 @@ export async function saveCombinedQuote(
   const productTypes = new Set(cart.items.map((i) => i.productType));
   const snapshot = {
     combined: true,
-    items: items.map((it, i) => ({ input: it.input, optionKey: it.optionKey, label: itemLabel(cart.items[i]) })),
+    // The whole priced OPTION per item, not just its key. A key alone left a
+    // combined quote with no terms at all — see PricedItem.option.
+    items: items.map((it, i) => ({
+      input: it.input,
+      optionKey: it.optionKey,
+      label: itemLabel(cart.items[i]),
+      option: cart.items[i].option,
+    })),
     quotedAt: new Date().toISOString(),
     note: "Frozen at quote time. Catalogue rate and markup changes do not affect this record.",
   };
@@ -275,6 +282,13 @@ export type QuoteSnapshot = {
   days: ItineraryDay[];
   option?: QuoteOption;
   /**
+   * Everything ELSE a combined trip holds — the hotel stays, the houseboat —
+   * as the labels the agent chose them by. The vehicle item supplies `days`
+   * and the itinerary; these have to be named too, or the document describes a
+   * trip the customer is not buying.
+   */
+  combinedItems: { label: string; productType: string }[];
+  /**
    * The measured distance behind a vehicle hire — routed km, the local-running
    * allowance and which stops earned it. Read by the ADMIN view only: it is
    * what explains a price, and it is not a number a customer was ever charged
@@ -293,19 +307,48 @@ export function readSnapshot(snapshotJson: string): QuoteSnapshot {
       option?: QuoteOption;
       itinerary?: ItinerarySummary;
       revisedAt?: string;
+      combined?: boolean;
+      items?: {
+        input?: AnyQuoteInput & { days?: ItineraryDay[] };
+        label?: string;
+        option?: QuoteOption;
+      }[];
     };
+
+    /*
+     * A COMBINED quote is shaped differently, and reading it as a single one
+     * is how a saved trip came out as a bare letterhead and a total.
+     *
+     * `saveCombinedQuote` writes `{ combined: true, items: [...] }` with no
+     * top-level `input` — so the days, the terms and the vehicle all came back
+     * empty and `buildItineraryDocument` returned null. Sonet, 24 Sept 2026:
+     * "pdf is too plain why?"
+     *
+     * The VEHICLE item is the one carrying a day plan, so it supplies the
+     * itinerary; the rest are listed as what else the trip includes.
+     */
+    const items = Array.isArray(snap.items) ? snap.items : [];
+    const vehicleItem = items.find((i) => i.input?.productType === "vehicle");
+    const input = snap.input ?? vehicleItem?.input;
+
     return {
-      input: snap.input,
+      input,
       legs: Array.isArray(snap.legs) ? snap.legs : [],
       // The day plan the agent typed, as opposed to the road segments it was
       // measured into. Absent on quotes saved before the itinerary builder.
-      days: Array.isArray(snap.input?.days) ? snap.input.days : [],
-      option: snap.option,
+      days: Array.isArray(input?.days) ? input.days : [],
+      // The vehicle item's frozen option carries the hire terms for a combined
+      // trip, exactly as the top-level one does for a single-product quote.
+      option: snap.option ?? vehicleItem?.option,
+      combinedItems: items
+        .filter((i) => i.input?.productType !== "vehicle")
+        .map((i) => ({ label: i.label ?? "", productType: i.input?.productType ?? "" }))
+        .filter((i) => i.label !== ""),
       itinerary: snap.itinerary,
       revisedAt: typeof snap.revisedAt === "string" ? snap.revisedAt : undefined,
     };
   } catch {
-    return { legs: [], days: [] };
+    return { legs: [], days: [], combinedItems: [] };
   }
 }
 

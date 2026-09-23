@@ -49,6 +49,15 @@ export type ItineraryDocument = {
 
 export type ItineraryDocumentInput = {
   days: readonly ItineraryDay[];
+  /**
+   * The rest of a combined trip — hotel stays, a houseboat — as the labels the
+   * agent chose them by.
+   *
+   * Named in WHAT'S INCLUDED, because a document that describes the driving
+   * and says nothing about four nights of hotels is describing a trip the
+   * customer is not buying.
+   */
+  alsoIncluded?: readonly string[];
   /** What is being hired, frozen with the option. Absent on older quotes. */
   subject?: QuoteOption["subject"];
   terms?: QuoteOption["terms"];
@@ -243,6 +252,7 @@ export function buildItineraryDocument(input: ItineraryDocumentInput): Itinerary
       (input.subject?.detail ? ` (${input.subject.detail.toLowerCase()})` : "")
   );
   included.push("All transfers and sightseeing as set out in the day-by-day plan above");
+  for (const item of input.alsoIncluded ?? []) included.push(item);
   if (terms?.includedKm != null) {
     included.push(
       `${terms.includedKm.toLocaleString("en-IN")} km of running over the hire, depot to depot`
@@ -257,7 +267,16 @@ export function buildItineraryDocument(input: ItineraryDocumentInput): Itinerary
   }
 
   const excluded: string[] = [];
-  excluded.push("Hotels, meals and anything not listed above");
+  /*
+   * Worded from what the trip actually holds. "Hotels ... not listed above" is
+   * correct on a cab-only quote and flatly wrong on a combined one that just
+   * listed four nights of them two lines earlier.
+   */
+  excluded.push(
+    (input.alsoIncluded?.length ?? 0) > 0
+      ? "Anything not listed above"
+      : "Hotels, meals and anything not listed above"
+  );
   excluded.push("Entry tickets, guide fees and activity charges");
   if (terms?.extraKmRateMinor != null) {
     excluded.push(
