@@ -94,6 +94,7 @@ export async function priceAncillaries(
       unitMinor: unit,
       totalMinor: unit * hireDays,
       usedOverride: false,
+      costTotalMinor: perDayCost * hireDays,
     });
   }
 
@@ -135,6 +136,7 @@ export async function priceAncillaries(
         unitMinor: unit,
         totalMinor: unit,
         usedOverride: false,
+        costTotalMinor: permit.costMinor,
       });
     }
   }

@@ -126,14 +126,47 @@ function resolveCharge(
   referenceId: string,
   charge: RateCharge,
   costMinor: number | null
-): { minor: number; usedOverride: boolean } | null {
+): { minor: number; usedOverride: boolean; costMinor: number } | null {
   const override = overrides.get(overrideKey(referenceId, charge));
-  if (override !== undefined) return { minor: override, usedOverride: true };
+  /*
+   * The cost comes back WITH the price, including on the override path.
+   *
+   * An override replaces what we charge, never what the thing cost us — so
+   * the override branch is precisely where the cost matters most. It is the
+   * only branch that can sell below cost, because it bypasses the markup
+   * rules entirely, and nothing anywhere compared the two until now.
+   */
+  if (override !== undefined) {
+    return { minor: override, usedOverride: true, costMinor: costMinor ?? 0 };
+  }
 
   // Ancillary charges inherit the PARENT PRODUCT's markup — an extra bed is
   // marked up by the hotel rule, not one of its own.
   const marked = sellPriceOptional(markup, productType, agent.tier, costMinor);
-  return marked === null ? null : { minor: marked, usedOverride: false };
+  return marked === null ? null : { minor: marked, usedOverride: false, costMinor: costMinor ?? 0 };
+}
+
+/**
+ * The MAIN charge on a rate row, resolved the same way and reporting the same
+ * three things.
+ *
+ * This existed inline as `override ?? tierDefault(...)` at five call sites,
+ * which is five places that each had the cost in hand and dropped it on the
+ * floor. One helper means a product added later cannot quietly forget to
+ * record what it cost.
+ */
+function resolveMain(
+  agent: QuotingAgent,
+  markup: MarkupTable,
+  productType: ProductType,
+  overrides: Map<string, number>,
+  referenceId: string,
+  costMinor: number
+): { minor: number; usedOverride: boolean; costMinor: number } {
+  const override = overrides.get(overrideKey(referenceId, "MAIN"));
+  return override !== undefined
+    ? { minor: override, usedOverride: true, costMinor }
+    : { minor: tierDefault(markup, productType, agent.tier, costMinor), usedOverride: false, costMinor };
 }
 
 function seasonSpan(from: Date, to: Date): string {
@@ -197,10 +230,11 @@ export async function quoteHotel(
     let usedOverride = false;
 
     for (const seg of segments) {
-      const override = overrides.get(overrideKey(seg.rate.id, "MAIN"));
-      const unitMinor =
-        override ?? tierDefault(markup, "hotel", agent.tier, seg.rate.costPerNightMinor);
-      if (override !== undefined) usedOverride = true;
+      const main = resolveMain(
+        agent, markup, "hotel", overrides, seg.rate.id, seg.rate.costPerNightMinor
+      );
+      const unitMinor = main.minor;
+      if (main.usedOverride) usedOverride = true;
 
       const quantity = seg.units * input.rooms;
       lines.push({
@@ -210,7 +244,8 @@ export async function quoteHotel(
         quantity,
         unitMinor,
         totalMinor: unitMinor * quantity,
-        usedOverride: override !== undefined,
+        usedOverride: main.usedOverride,
+        costTotalMinor: main.costMinor * quantity,
       });
     }
 
@@ -238,6 +273,7 @@ export async function quoteHotel(
         unitMinor: extraBed.minor,
         totalMinor: extraBed.minor * quantity,
         usedOverride: extraBed.usedOverride,
+        costTotalMinor: extraBed.costMinor * quantity,
       });
     }
 
@@ -295,8 +331,8 @@ export async function quoteHouseboat(
 
     if (!isWithin(date, rate.validFrom, rate.validTo)) continue;
 
-    const override = overrides.get(overrideKey(rate.id, "MAIN"));
-    const unitMinor = override ?? tierDefault(markup, "houseboat", agent.tier, rate.costMinor);
+    const main = resolveMain(agent, markup, "houseboat", overrides, rate.id, rate.costMinor);
+    const unitMinor = main.minor;
 
     const extraPax = resolveCharge(
       agent, markup, "houseboat", overrides, rate.id, "EXTRA_PAX", rate.extraPaxCostMinor
@@ -323,7 +359,12 @@ export async function quoteHouseboat(
                 quantity: breakdown.chargedPax,
                 unitMinor,
                 totalMinor: breakdown.totalMinor,
-                usedOverride: override !== undefined,
+                usedOverride: main.usedOverride,
+                // Per person: the boat's cost is a per-person cost here, so it
+                // scales with the pax actually charged — the same number the
+                // price was multiplied by, never the party size, which may be
+                // below minPax.
+                costTotalMinor: main.costMinor * breakdown.chargedPax,
               },
             ]
           : [
@@ -332,7 +373,8 @@ export async function quoteHouseboat(
                 quantity: 1,
                 unitMinor,
                 totalMinor: unitMinor,
-                usedOverride: override !== undefined,
+                usedOverride: main.usedOverride,
+                costTotalMinor: main.costMinor,
               },
               ...(breakdown.totalMinor > unitMinor
                 ? [
@@ -342,6 +384,8 @@ export async function quoteHouseboat(
                       unitMinor: extraPax?.minor ?? 0,
                       totalMinor: breakdown.totalMinor - unitMinor,
                       usedOverride: extraPax?.usedOverride ?? false,
+                      costTotalMinor:
+                        (extraPax?.costMinor ?? 0) * (input.pax - (rate.includedPax ?? 0)),
                     },
                   ]
                 : []),
@@ -359,7 +403,7 @@ export async function quoteHouseboat(
         detail: `${formatDateDisplay(date)} · ${input.pax} pax · ${MEAL_PLAN_LABEL[rate.mealPlan as MealPlan] ?? rate.mealPlan}`,
         lines,
         totalMinor: breakdown.totalMinor,
-        usedOverride: override !== undefined || (extraPax?.usedOverride ?? false),
+        usedOverride: main.usedOverride || (extraPax?.usedOverride ?? false),
       });
     } catch (e) {
       // A capacity or minimum-pax failure is information the agent needs, not
@@ -547,10 +591,11 @@ export async function quoteVehicle(
       let extraKmRateMinor: number | undefined;
 
       for (const seg of segments) {
-        const override = overrides.get(overrideKey(seg.rate.id, "MAIN"));
-        const unitMinor =
-          override ?? tierDefault(markup, "vehicle", agent.tier, seg.rate.costMinor);
-        if (override !== undefined) usedOverride = true;
+        const main = resolveMain(
+          agent, markup, "vehicle", overrides, seg.rate.id, seg.rate.costMinor
+        );
+        const unitMinor = main.minor;
+        if (main.usedOverride) usedOverride = true;
 
         includedKm += (seg.rate.includedKmPerDay ?? 0) * seg.units;
 
@@ -559,7 +604,8 @@ export async function quoteVehicle(
           quantity: seg.units,
           unitMinor,
           totalMinor: unitMinor * seg.units,
-          usedOverride: override !== undefined,
+          usedOverride: main.usedOverride,
+          costTotalMinor: main.costMinor * seg.units,
         });
 
         const bata = resolveCharge(
@@ -575,6 +621,7 @@ export async function quoteVehicle(
             unitMinor: bata.minor,
             totalMinor: bata.minor * seg.units,
             usedOverride: bata.usedOverride,
+            costTotalMinor: bata.costMinor * seg.units,
           });
         }
       }
@@ -613,6 +660,7 @@ export async function quoteVehicle(
             unitMinor: extraRate.minor,
             totalMinor: extraRate.minor * extraKm,
             usedOverride: extraRate.usedOverride,
+            costTotalMinor: extraRate.costMinor * extraKm,
           });
         }
       }
@@ -660,8 +708,8 @@ export async function quoteVehicle(
     const title = VEHICLE_RATE_TYPE_LABEL[rate.rateType as VehicleRateType] ?? rate.rateType;
     if (!isWithin(start, rate.validFrom, rate.validTo)) continue;
 
-    const override = overrides.get(overrideKey(rate.id, "MAIN"));
-    const unitMinor = override ?? tierDefault(markup, "vehicle", agent.tier, rate.costMinor);
+    const main = resolveMain(agent, markup, "vehicle", overrides, rate.id, rate.costMinor);
+    const unitMinor = main.minor;
 
     if (rate.rateType === "PER_KM") {
       if (km == null || km < 1) {
@@ -683,11 +731,12 @@ export async function quoteVehicle(
             quantity: km,
             unitMinor,
             totalMinor: unitMinor * km,
-            usedOverride: override !== undefined,
+            usedOverride: main.usedOverride,
+            costTotalMinor: main.costMinor * km,
           },
         ],
         totalMinor: unitMinor * km,
-        usedOverride: override !== undefined,
+        usedOverride: main.usedOverride,
       });
     } else {
       options.push({
@@ -702,11 +751,12 @@ export async function quoteVehicle(
             quantity: 1,
             unitMinor,
             totalMinor: unitMinor,
-            usedOverride: override !== undefined,
+            usedOverride: main.usedOverride,
+            costTotalMinor: main.costMinor,
           },
         ],
         totalMinor: unitMinor,
-        usedOverride: override !== undefined,
+        usedOverride: main.usedOverride,
       });
     }
   }
@@ -796,8 +846,8 @@ export async function quoteItinerary(
       ITINERARY_PRICING_MODE_LABEL[rate.pricingMode as ItineraryPricingMode] ?? rate.pricingMode;
     if (!isWithin(start, rate.validFrom, rate.validTo)) continue;
 
-    const override = overrides.get(overrideKey(rate.id, "MAIN"));
-    const unitMinor = override ?? tierDefault(markup, "itinerary", agent.tier, rate.costMinor);
+    const main = resolveMain(agent, markup, "itinerary", overrides, rate.id, rate.costMinor);
+    const unitMinor = main.minor;
 
     const supplement = resolveCharge(
       agent, markup, "itinerary", overrides, rate.id, "SINGLE_SUPPLEMENT",
@@ -824,7 +874,8 @@ export async function quoteItinerary(
           quantity: perPerson ? input.pax : 1,
           unitMinor,
           totalMinor: baseTotal,
-          usedOverride: override !== undefined,
+          usedOverride: main.usedOverride,
+          costTotalMinor: main.costMinor * (perPerson ? input.pax : 1),
         },
       ];
 
@@ -835,6 +886,7 @@ export async function quoteItinerary(
           unitMinor: breakdown.totalMinor - baseTotal,
           totalMinor: breakdown.totalMinor - baseTotal,
           usedOverride: supplement?.usedOverride ?? false,
+          costTotalMinor: supplement?.costMinor ?? 0,
         });
       }
 
@@ -845,7 +897,7 @@ export async function quoteItinerary(
         detail: `${itinerary.durationNights} night${itinerary.durationNights === 1 ? "" : "s"} from ${formatDateDisplay(start)} · ${input.pax} pax`,
         lines,
         totalMinor: breakdown.totalMinor,
-        usedOverride: override !== undefined || (supplement?.usedOverride ?? false),
+        usedOverride: main.usedOverride || (supplement?.usedOverride ?? false),
       });
     } catch (e) {
       unavailable.push({

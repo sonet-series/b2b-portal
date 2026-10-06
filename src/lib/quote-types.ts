@@ -26,6 +26,26 @@ export type QuoteLineDraft = {
   totalMinor: number;
   /** True when an agent rate-card override supplied unitMinor. */
   usedOverride: boolean;
+  /**
+   * What this line COST, in total, in paise — the catalogue's stored cost for
+   * whatever was sold here, before any markup or override.
+   *
+   * Recorded for exactly the reason `usedOverride` is: so "why is this price
+   * what it is" stays answerable. Without it the margin on a saved quote can
+   * only be guessed at by looking up today's catalogue cost, which drifts —
+   * the same staleness that makes this project derive sell prices rather than
+   * store them. A quote is a frozen record, so the cost it was priced against
+   * has to be frozen with it.
+   *
+   * The TOTAL, parallel to `totalMinor`, not a unit cost: `quantity` means
+   * nights, days, km or pax depending on the product, and a per-unit cost
+   * would need the reader to know which. Margin is `totalMinor - costTotalMinor`.
+   *
+   * Optional because lines written before this existed have no value for it,
+   * and those quotes must keep rendering. Absent means "not recorded", never
+   * "free" — anything reading it has to tell those apart.
+   */
+  costTotalMinor?: number;
 };
 
 /**
