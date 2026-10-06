@@ -85,15 +85,31 @@ export function TripForm({
   const [childAges, setChildAges] = useState<string[]>(initial.childAges);
   const [days, setDays] = useState<DayRow[]>(() => {
     if (initial.days.length > 0) {
-      return initial.days.map((d) => ({
-        date: d.date,
-        from: d.from,
-        to: d.to,
-        via: d.via.join(", "),
-        bufferKm: d.bufferKm,
-        notes: d.notes ?? "",
-        local: d.to !== "" && d.to === d.from,
-      }));
+      /*
+       * Chained BEFORE "is this a stay day" is decided.
+       *
+       * Only day 1 carries a real `from`; every later day inherits it from the
+       * day before, and a standard tour supplies `to` alone and leaves `from`
+       * blank for exactly that reason. Comparing the raw `from` therefore
+       * never matched, so a tour's day at Munnar arrived rendered as "drive to
+       * Munnar" with the "Stay at the same place" box unticked — priced right,
+       * read wrong, which is the same class of confusion as a placeholder that
+       * looks like a value.
+       */
+      let carried = "";
+      return initial.days.map((d, i) => {
+        const from = i === 0 ? d.from : d.from || carried;
+        carried = d.to || from;
+        return {
+          date: d.date,
+          from,
+          to: d.to,
+          via: d.via.join(", "),
+          bufferKm: d.bufferKm,
+          notes: d.notes ?? "",
+          local: d.to !== "" && d.to === from,
+        };
+      });
     }
     // Dates can arrive in the URL with no itinerary behind them — a half-built
     // quote someone bookmarked, or a link shared before the days were filled

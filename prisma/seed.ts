@@ -449,10 +449,76 @@ async function seedDemoCatalogue() {
   console.log("✔ demo catalogue, 1 approved agent (with overrides), 1 pending signup");
 }
 
+
+/**
+ * Sonet's own standard tours, supplied 6 Oct 2026 with their kilometres and
+ * durations.
+ *
+ * Real business data, not demo rows — which is why this is NOT behind
+ * SEED_DEMO. They are the circuits Series Tours actually sells, and typing
+ * them by hand into production is the kind of transcription that gets a
+ * kilometre figure wrong.
+ *
+ * Runs ONLY when the table is completely empty, and the seed runs on every
+ * container start. That is the whole guard: once Sonet has edited, reordered
+ * or archived any of these, this can never resurrect or overwrite them. Same
+ * reasoning as the admin account — credentials, and catalogue, belong to the
+ * running system once it exists, not to this file.
+ *
+ * The day plans are DERIVED from the routes and night counts he gave, and the
+ * assumption in each is the same: two nights at Munnar, because that is what a
+ * day in the tea country needs, and the party is dropped back at Cochin for
+ * the flight. Both are his to change in one field.
+ */
+async function seedStandardTours() {
+  const existing = await prisma.tourTemplate.count();
+  if (existing > 0) {
+    console.log("• standard tours already present — left untouched");
+    return;
+  }
+
+  const AIRPORT = "Cochin International Airport";
+  const tours = [
+    {
+      name: "Munnar — 2 nights",
+      nights: 2,
+      allowanceKm: 350,
+      days: ["Munnar", "Munnar", AIRPORT],
+    },
+    {
+      name: "Munnar & Alleppey — 3 nights",
+      nights: 3,
+      allowanceKm: 550,
+      days: ["Munnar", "Munnar", "Alleppey", AIRPORT],
+    },
+    {
+      name: "Munnar, Thekkady & Alleppey — 4 nights",
+      nights: 4,
+      allowanceKm: 650,
+      days: ["Munnar", "Munnar", "Thekkady", "Alleppey", AIRPORT],
+    },
+  ];
+
+  for (const [i, t] of tours.entries()) {
+    await prisma.tourTemplate.create({
+      data: {
+        name: t.name,
+        startPlace: AIRPORT,
+        nights: t.nights,
+        allowanceKm: t.allowanceKm,
+        sortOrder: i,
+        days: { create: t.days.map((to, dayIndex) => ({ dayIndex, to })) },
+      },
+    });
+  }
+  console.log(`\u2714 standard tours: created ${tours.length}`);
+}
+
 async function main() {
   await seedAdmin();
 
   await seedMarkupRules();
+  await seedStandardTours();
 
   if (process.env.SEED_DEMO === "1") {
     const existing = await prisma.hotel.count();
