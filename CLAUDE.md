@@ -1646,6 +1646,15 @@ measured at **316MB resident for a 60MB input, 1.7MB with it**. On a 4GB box
 that also runs the ERP and MariaDB that is how a nightly job becomes an
 outage.
 
+**Cross-implementation interop is VERIFIED, 6 Oct 2026** — and it needed to
+be, because `-stream` emits indefinite-length BER rather than DER, which is
+the less commonly exercised encoding. An archive encrypted on the box
+(**OpenSSL 3, Ubuntu**) was decrypted on Sonet's Mac (**LibreSSL 3.3.6**) with
+the contents intact. Same-machine round trips were already passing in both
+places and proved nothing about this: the restore only ever runs box → laptop.
+If the encryption flags, the cipher, or the key type are ever changed, redo
+this test rather than assuming.
+
 **2. Verified by reading it back.** "rsync exited 0" says the bytes left, not
 that they arrived whole or can be read again. Every upload is downloaded and
 its SHA-256 compared, and the digest is recorded so `offsite.sh verify`
