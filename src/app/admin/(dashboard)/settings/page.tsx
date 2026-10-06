@@ -1,7 +1,9 @@
 import { loadMarkupTable, ensureMarkupRules } from "@/lib/markup-store";
 import { DepositPanel } from "./deposit-panel";
 import { EmailPanel } from "./email-panel";
+import { BackupPanel } from "./backup-panel";
 import { mailerStatus } from "@/lib/mailer";
+import { offsiteStatus } from "@/lib/backup-status";
 import { markupKey } from "@/lib/markup";
 import { PRODUCT_TYPE, AGENT_TIER, AGENT_TIER_LABEL, type ProductType } from "@/lib/enums";
 import { Card, PageHeader } from "@/components/ui";
@@ -117,6 +119,13 @@ export default async function SettingsPage() {
       <DepositPanel action={saveDepositPercent} percent={String(deposit / 100)} />
 
       <EmailPanel action={sendTestEmailAction} status={mailerStatus()} />
+
+      {/*
+        Written by deploy/offsite.sh on the host, read from the data bind mount.
+        Here for the same reason the email panel is: I once told Sonet that quiet
+        logs meant SMTP was working, and it did not.
+      */}
+      <BackupPanel status={await offsiteStatus()} />
     </>
   );
 }

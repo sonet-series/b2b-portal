@@ -320,17 +320,78 @@ those agents would be unusable.
 `deploy/restore.sh <backup.db.gz>` restores one, keeping the current database
 alongside as `.pre-restore-*`.
 
-### Known gap — off-box backups (revisit after 24 Sept 2026)
+### Off-box copies — `deploy/offsite.sh` (built 6 Oct 2026)
 
-These backups sit on the same disk as the database. That covers a bad
-migration or a mistaken delete. It does **not** cover the box failing, the disk
-failing, or the server being lost.
+Everything above sits on the same disk as the database, which covers a bad
+migration or a mistaken delete but not the box being lost. `offsite.sh`
+closes that: `backup.sh` calls it at the end, so there is no second cron
+entry to forget.
 
-**Confirmed with Sonet, 26 Aug 2026: shipping without off-box backups is a
-deliberate launch-scope decision, to be revisited after the 24 Sept deadline.**
-It is not an oversight and it is not done. Options when picked up: Hetzner
-Storage Box over rsync/borg, an S3-compatible bucket, or simply pulling the
-nightly gzip down to another machine on a schedule.
+Nothing happens until it is configured, and it says so in the log, in
+`data/offsite-status.json` and on **/admin/settings → Off-box backups**.
+
+**Set it up, in order.**
+
+1. **Prove the mechanism first.** No keys, no destination, no risk:
+
+   ```bash
+   cd /opt/b2b-portal && deploy/offsite.sh self-test
+   ```
+
+   It encrypts, uploads, reads back, decrypts and compares — with a throwaway
+   keypair — and checks that a different key cannot read the archive.
+
+2. **Pick a destination.** A Hetzner Storage Box (BX11, about €4/month, 1TB)
+   is the obvious match: same provider, and `rsync`/`sftp` over SSH on port
+   **23**. Anything reachable by ssh works, and a destination with no colon is
+   treated as a plain path — a second disk or an NFS mount.
+
+   ```bash
+   ssh-keygen -t ed25519 -f /root/.ssh/b2b-offsite -N '' -C b2b-offsite
+   # then put /root/.ssh/b2b-offsite.pub in the Storage Box's authorized_keys
+   ```
+
+3. **Make the encryption key.**
+
+   ```bash
+   deploy/offsite.sh keygen
+   ```
+
+   It prints the PRIVATE key once and never saves it here. Put it in a
+   password manager — **not on this server, and not in this repo**. Without it
+   every archive is unreadable; with it, all of them are, so it is the key to
+   the whole database. Only the public half stays on the box.
+
+4. **Configure.**
+
+   ```bash
+   cat >> /opt/b2b-portal/.env.offsite <<'EOF'
+   OFFSITE_REMOTE=u123456@u123456.your-storagebox.de:b2b-portal
+   OFFSITE_SSH_KEY=/root/.ssh/b2b-offsite
+   OFFSITE_SSH_PORT=23
+   EOF
+   chmod 600 /opt/b2b-portal/.env.offsite
+   deploy/offsite.sh send --force && deploy/offsite.sh list
+   ```
+
+5. **Check you can actually restore**, from your own machine, with the key you
+   saved — not from the server. A backup nobody has opened is a hope:
+
+   ```bash
+   deploy/offsite.sh fetch b2b-20261006T021500Z.tar.cms
+   deploy/offsite.sh open b2b-20261006T021500Z.tar.cms ~/b2b-backup-key.pem
+   ```
+
+   That prints the manifest and checks each member's SHA-256. Then
+   `deploy/restore.sh <the prod-*.db.gz it produced>`.
+
+**Checking on it later.** `deploy/offsite.sh verify` re-reads every archive on
+the remote and compares it with the digest recorded when it was sent, which
+catches bit-rot and anything that has been altered underneath you. It emails if
+something does not match. `/admin/settings` shows the last copy, and shows
+**Stale** when the most recent success is more than two nights old — a backup
+job that stopped being run leaves a perfectly happy "ok" behind it, and that is
+the failure worth catching.
 
 ## Continuous deploy
 

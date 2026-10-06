@@ -52,3 +52,17 @@ fi
 find "$BACKUP_DIR" -name 'prod-*.db.gz' -mtime "+$KEEP_DAYS" -delete
 find "$BACKUP_DIR" -name 'uploads-*.tar.gz' -mtime "+$KEEP_DAYS" -delete
 echo "[$(date -uIs)] pruned backups older than $KEEP_DAYS days"
+
+# Everything above protects against a bad migration or a mistaken delete. It
+# does NOT protect against losing the box, because all of it is on the same
+# disk as the database. offsite.sh encrypts the newest pair and puts it
+# somewhere else.
+#
+# `|| true` is deliberate: the LOCAL backup is the one that has to work, and an
+# unreachable remote must not turn a successful backup into a failed job. The
+# off-box copy owns its own alerting instead — it emails, and writes a status
+# file the admin Settings screen reads — so this cannot become a thing that
+# quietly stopped months ago.
+if [ -x "$APP_DIR/deploy/offsite.sh" ]; then
+  "$APP_DIR/deploy/offsite.sh" send || true
+fi

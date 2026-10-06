@@ -9,6 +9,36 @@ record of what was asked and when.
 
 ---
 
+## Waiting on Sonet — nothing in the code is missing
+
+None of these block an agent quoting, booking or paying. Each one is a feature
+that is built, tested and inert until a credential or a photograph exists.
+
+- [ ] **SMTP** — `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`,
+      `BOOKING_NOTIFY_TO` in `.env.production`, then **Settings → Send a test
+      email**. Until then booking requests arrive on the Bookings screen and
+      nowhere else; nothing is lost, you just have to look.
+- [ ] **ERP credentials** — `ERP_URL`, `ERP_API_KEY`, `ERP_API_SECRET`,
+      `ERP_COMPANY`, `ERP_ITEM_CODE`. Also needed: confirmation of a real Item
+      code, and whether each agency exists as a Customer in ERPNext — if not,
+      set `ERP_DEFAULT_CUSTOMER`.
+- [ ] **Off-box backup destination and key** — `deploy/offsite.sh self-test`
+      first (it proves the whole pipeline and needs nothing), then `keygen`,
+      then an `OFFSITE_REMOTE`. **The private key must not stay on the server.**
+      Steps in `deploy/DEPLOY-PLAN.md`. Until then /admin/settings says "Off"
+      and a lost server takes its backups with it.
+- [ ] **Photographs** — 7 vehicles, 1 hotel, 1 houseboat still have none. The
+      Crysta's five are placeholder test images and should be replaced.
+- [ ] **Andhra Pradesh and Puducherry permits** — 16 rows (8 vehicles × 2
+      states). A trip crossing a state with no permit set is flagged on the
+      quote rather than quietly costing nothing, so this shows up as a warning
+      on real quotes.
+- [ ] **Rotate the `seriestours-website` Google Places key** — flagged 26 Aug
+      2026, still outstanding. Not this portal's key; this one is separate and
+      IP-restricted.
+
+---
+
 ## Done
 
 ### 1. Guest, travel and accommodation details on a booking
@@ -64,3 +94,18 @@ Still needs from Sonet: `ERP_URL`, `ERP_API_KEY`, `ERP_API_SECRET`,
 agency exists as a Customer in the ERP (or `ERP_DEFAULT_CUSTOMER` set instead).
 Until those are set the feature says "not configured" on the booking screen and
 does nothing.
+
+### 3. Off-box backups
+**Deferred 26 Aug 2026 to "after the 24 Sept deadline", built 6 Oct 2026.** `deploy/offsite.sh`, called by `backup.sh`.
+
+Encrypted on the box with a public key — the private half is printed once by
+`keygen` and never written here, so getting into the server does not get you
+the archives. Uploaded, then downloaded back and compared byte for byte, with
+the digest kept so `verify` can re-check against bit-rot later. It can never
+fail the local backup (`|| true`), and in exchange it emails on failure and
+reports itself on /admin/settings — including **Stale**, for the job that
+stopped being run rather than started failing.
+
+`offsite.sh self-test` proves the whole pipeline with a throwaway keypair.
+What is left is in *Waiting on Sonet* above: a destination, and a key kept
+somewhere that is not the server.

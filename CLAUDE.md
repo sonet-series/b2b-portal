@@ -1620,10 +1620,73 @@ Nightly `sqlite3 .backup` + `PRAGMA integrity_check`, gzipped, 30 days, on the
 same disk. Also runs before every CI deploy, since migrations apply on
 container start.
 
-**Known gap, deliberately accepted for launch:** no off-box copy. Covers a bad
-migration or a mistaken delete, not the box failing. Sonet decided on 26 Aug
-2026 to ship without it and revisit **after the 24 Sept 2026 deadline**. Do not
-build it before then; do not let it be forgotten after.
+**The off-box gap is CLOSED (6 Oct 2026).** It was deliberately accepted for
+launch on 26 Aug and deferred to "after the 24 Sept deadline"; that date
+passed. `deploy/offsite.sh` takes the newest backup pair, encrypts it, and
+puts it somewhere that is not this machine.
+
+Four things about it are load-bearing.
+
+**1. Encrypted here, with a PUBLIC key.** The archive holds PAN cards,
+business proofs and bank-transfer screenshots, and off-box means on somebody
+else's disk. It is encrypted before it leaves, and asymmetrically: this box
+carries only the public half, so whoever gets into the box cannot read the
+archives already on the remote. A passphrase would have been sitting in the
+same file they had just read.
+
+`offsite.sh keygen` prints the private key ONCE and never writes it here.
+Verified: nothing matching `*private*` is left on disk afterwards. Lose it and
+every archive is landfill — that is the price of the property above, and it is
+why the restore path is `openssl` and `tar` and nothing else. CMS was chosen
+over anything that would have to be installed first on the worst day of the
+year; `offsite.sh open` runs on a Mac with LibreSSL, which was tested.
+
+**`-stream` is not optional.** Without it `openssl cms -encrypt` buffers:
+measured at **316MB resident for a 60MB input, 1.7MB with it**. On a 4GB box
+that also runs the ERP and MariaDB that is how a nightly job becomes an
+outage.
+
+**2. Verified by reading it back.** "rsync exited 0" says the bytes left, not
+that they arrived whole or can be read again. Every upload is downloaded and
+its SHA-256 compared, and the digest is recorded so `offsite.sh verify`
+re-checks older archives against bit-rot — the thing a second copy exists to
+survive.
+
+The index holds **one row per archive, replaced on re-send**. Appending looked
+fine and was wrong: CMS picks a fresh content key every run, so re-sending a
+stamp changes the ciphertext, and the stale row made `verify` report ALTERED
+against a perfectly good archive. A monitor that cries wolf is a monitor
+nobody reads.
+
+Pruning is on the stamp in the NAME, not the remote's mtime — a copy lands
+with whatever mtime the transport feels like, and a 30-day rule run against
+the wrong clock either keeps everything or deletes what is needed.
+
+**3. It cannot fail the nightly backup, and it cannot fail silently.**
+`backup.sh` calls it with `|| true`: the LOCAL backup is the one that has to
+work, and an unreachable remote must not cost it. In exchange this script owns
+its alerting — it emails through the SMTP settings already in
+`.env.production` (via `curl`, so no new dependency; the password goes in a
+0600 config file, never on a command line where `ps` would show it to the ERP's
+processes), and writes `data/offsite-status.json`, which `/admin/settings`
+reads. Same rule as the mailer: configuration an operator cannot see is
+configuration nobody trusts.
+
+The state that panel exists for is **Stale**, not Failing. A failure emails
+and shows red; the dangerous one is the job that stopped being RUN and left a
+cheerful "ok" from three weeks ago. Two nights without a copy says so.
+
+**4. `offsite.sh self-test` proves the whole pipeline** — encrypt, upload,
+read back, decrypt, compare, and confirm a different key CANNOT read it — with
+a throwaway keypair, so the real private key never touches the box. Run it
+before trusting any of this. It also runs against a plain directory
+destination, which is what makes it runnable at all; a transport that can be
+exercised beats one that can only be reasoned about.
+
+**Still Sonet's to do:** buy or pick a destination (a Hetzner Storage Box is
+the obvious match — same provider, and its restricted shell is why listing and
+pruning go through `sftp -b` rather than `ssh <command>`), run `keygen`, and
+put the private key somewhere that is not the server.
 
 Resolved:
 - Houseboat schema — confirmed, extended with dual pricing modes (25 Aug 2026).
