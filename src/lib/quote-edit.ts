@@ -18,6 +18,9 @@ export function editUrlFor(input: AnyQuoteInput, reference: string): string | nu
   const p = new URLSearchParams();
   p.set("vehicleId", input.vehicleId);
   if (input.garageId) p.set("garageId", input.garageId);
+  // Carried through an edit, or reopening a standard tour would silently
+  // reprice it on the per-day allowance instead of the tour's own.
+  if (input.tourId) p.set("tourId", input.tourId);
   p.set("startDate", input.startDate);
   p.set("endDate", input.endDate);
   if (input.adults) p.set("adults", String(input.adults));

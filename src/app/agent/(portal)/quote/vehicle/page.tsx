@@ -3,6 +3,7 @@ import { listPhotoIds, listPhotoIdsFor } from "@/lib/product-photos";
 import { gstBps } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { quoteVehicle } from "@/lib/quote";
+import { listOfferableTours, getTour, daysFromTour, dayCount } from "@/lib/tours";
 import { PricingError } from "@/lib/pricing";
 import { usingDistanceStub } from "@/lib/distance";
 import {
@@ -14,6 +15,7 @@ import {
 } from "@/lib/validation";
 import { FormError, PageHeader, EmptyState } from "@/components/ui";
 import { TripForm, type GarageOption } from "./trip-form";
+import { TourPicker } from "./tour-picker";
 import { SearchForm } from "../search-form";
 import { QuoteResults } from "../quote-results";
 import { saveQuoteAction } from "../actions";
@@ -79,13 +81,65 @@ export default async function VehicleQuotePage({
   // then replaces that quote rather than leaving a near-duplicate behind.
   const editingReference = typeof params.edit === "string" ? params.edit : null;
 
-  const dayRows = parseItineraryDays(params);
+  /*
+   * Standard tours — the circuits agents actually sell.
+   *
+   * Sonet, 6 Oct 2026: *"b2b agents wont be know how many km there trip will
+   * running"*. An agency in Delhi selling a Kerala holiday cannot be expected
+   * to know that Munnar to Thekkady is 95 km, let alone what the circuit runs
+   * to. Picking a tour fills the plan in for them.
+   */
+  const tours = await listOfferableTours();
+  const tourId = str(params.tourId) || null;
+  const tour = tourId ? await getTour(tourId) : null;
+
+  let dayRows = parseItineraryDays(params);
   const childAges = parseChildAges(params);
   // Quotes bookmarked before the itinerary builder existed carry typed legs.
   const legRows = parseVehicleLegs(params);
 
+  /*
+   * A chosen tour fills in the day plan and the end date — SERVER-SIDE, with
+   * no client scripting, because the form is a plain GET and everything here
+   * already travels in the query string.
+   *
+   * Only when the agent has not supplied their own: once the form has been
+   * submitted it carries day rows, and those are what they may have edited.
+   * Overwriting them from the template on every render would make the tour a
+   * restriction rather than a starting point, and silently discard their work.
+   */
+  const startDate = str(params.startDate);
+  let derivedEndDate: string | undefined;
+  if (tour && startDate !== "") {
+    if (dayRows.length === 0) {
+      /*
+       * Mapped into the FORM's row shape — strings — not the engine's.
+       *
+       * These rows feed both the zod schema, which coerces, and the form,
+       * which renders them straight into inputs. Handing the form numbers
+       * would make the one difference between a tour-filled plan and a typed
+       * one that the form could tell apart.
+       */
+      dayRows = daysFromTour(tour, startDate).map((d) => ({
+        date: d.date,
+        from: d.from,
+        to: d.to,
+        via: d.via,
+        bufferKm: "",
+        notes: "",
+      }));
+    }
+    // The hire runs as long as the tour does. The builder DERIVES its day rows
+    // from the hire dates, so a tour whose length disagreed with them would
+    // render an itinerary of the wrong length.
+    if (str(params.endDate) === "" && dayRows.length === dayCount(tour.nights)) {
+      derivedEndDate = dayRows[dayRows.length - 1].date;
+    }
+  }
+
   const parsed = vehicleQuoteSchema.safeParse({
     ...params,
+    ...(derivedEndDate ? { endDate: derivedEndDate } : {}),
     legs: legRows,
     ...(dayRows.length > 0 ? { days: dayRows } : {}),
     ...(childAges.length > 0 ? { childAges } : {}),
@@ -162,7 +216,26 @@ export default async function VehicleQuotePage({
             </p>
           )}
 
+          <TourPicker
+            tours={tours}
+            selected={tour}
+            params={{
+              garageId: str(params.garageId),
+              vehicleId: str(params.vehicleId),
+              startDate: str(params.startDate),
+              adults: str(params.adults),
+            }}
+          />
+
           <SearchForm>
+            {/*
+              The chosen tour travels with the form, so a submit keeps it — and
+              with it the kilometre allowance the hire is priced on. The ID
+              only: the allowance itself is read from the database in
+              `quoteVehicle`, because a number in the query string is a number
+              the agent can edit.
+            */}
+            {tour && <input type="hidden" name="tourId" value={tour.id} />}
             <TripForm
               garages={garageOptions}
               fieldErrors={fieldErrors}
@@ -170,7 +243,7 @@ export default async function VehicleQuotePage({
                 garageId: str(params.garageId),
                 vehicleId: str(params.vehicleId),
                 startDate: str(params.startDate),
-                endDate: str(params.endDate),
+                endDate: derivedEndDate ?? str(params.endDate),
                 adults: str(params.adults),
                 childAges,
                 days: dayRows,

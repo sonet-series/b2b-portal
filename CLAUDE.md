@@ -1202,6 +1202,68 @@ and a number.
 **Two save paths must freeze the same things.** They did not, and the
 difference only showed on a customer's document.
 
+### Standard tours — the agent should not have to know the km (6 Oct 2026)
+Sonet: *"b2b agents wont be know how many km there trip will running. so by
+saying that this much km is included will be feasiable for them and for their
+customer too"*, with the six circuits he actually sells and their totals:
+Cochin–Munnar–Cochin 350, –Alleppey 550, +Thekkady–Cochin 650,
++Kovalam–Trivandrum 1150, +Kanyakumari 1350, the full Madurai–Rameswaram
+circuit 1650.
+
+He is right twice over, and they are two different problems.
+
+**1. Planning the trip was the agent's job and should not have been.** An
+agency in Delhi selling a Kerala holiday has no way to know Munnar to Thekkady
+is 95 km. `TourTemplate` holds the circuits; picking one fills in the
+day-by-day plan and the end date.
+
+- **Not a second pricing path.** A template produces exactly the day plan the
+  builder produces, and `quoteVehicle` prices it unchanged. Two paths is how a
+  quote comes to disagree with itself.
+- **A starting point, never a restriction** — the same relationship the
+  destination chips have to free typing. Every day stays editable, and the
+  template is not re-applied once the form carries day rows, or editing one
+  would silently revert.
+- **Filled SERVER-SIDE**, from the query string, with no client scripting:
+  choosing a tour is a navigation, so the result is still a URL an agent can
+  bookmark or send to a colleague.
+- **A half-planned tour is hidden from agents**, not offered with gaps. The
+  admin list says so, because a tour that is silently invisible is one nobody
+  knows to finish.
+
+**2. "1,014 km included" is the wrong sentence, and the number was wrong too.**
+Included km was `includedKmPerDay × days`, so a 3-day Cochin–Munnar–Cochin at
+250 km/day stated **750 km included on a trip that runs 350** — arithmetic
+about an allowance, not a fact about the journey, and nothing a customer could
+judge.
+
+A tour's `allowanceKm` REPLACES that pool. Confirmed with Sonet 6 Oct 2026:
+his figure, not a measurement. His numbers are round because they are
+commercial allowances that already carry the sightseeing at each stop; Google
+measures the same circuit at 638. The allowance is what he stands behind and
+what a customer can hold him to.
+
+- **Resolved from the id server-side**, never read off the request — it decides
+  what the hire is priced on, so a number in the query string is a number the
+  agent can edit. Same rule as measuring the legs rather than trusting `legKm`.
+- **Km, not metres**, unlike every measured distance here: a typed round number
+  stored in metres claims a precision it does not have.
+- **The route leads the customer document now, not the number.** "All transfers
+  and sightseeing as set out in the day-by-day plan above, including local
+  running at each stop", then the allowance beneath it, and "detours and
+  running beyond the planned itinerary" in the exclusions. Leading with a
+  kilometre figure starts an argument about kilometres that was never the deal.
+
+**STILL OPEN — the drift check.** `includedKm` is still
+`max(allowance, measured)`, which is correct under "a quote may only claim what
+it charged": if the measured route exceeds the allowance, the excess IS billed
+as extra km and the document must say so. But then the picker advertises 650
+and the document says 680. That is not a bug in the quote — it is a tour whose
+allowance has fallen below the road it describes, and it should be surfaced to
+the ADMIN rather than silently surcharged to an agent's customer. The measured
+distance is already computed on every quote; nothing compares it to the
+allowance yet.
+
 ### The day description is OURS (21 Sept 2026)
 *"day description needs to be derived from our side. not the agent."*
 

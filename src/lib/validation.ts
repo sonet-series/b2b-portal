@@ -588,10 +588,52 @@ export const itineraryDaySchema = z.object({
   manualKm: legKm("Distance").optional(),
 });
 
+/**
+ * A standard tour — one of the circuits Series Tours actually sells.
+ *
+ * The day rows arrive as PARALLEL repeated fields (`dayTo` / `dayVia`), the
+ * same shape the itinerary builder uses, so a plain form produces them with no
+ * serialising and they zip back together by index.
+ */
+export const tourSchema = z
+  .object({
+    name: z.string().trim().min(1, "Give the tour a name"),
+    startPlace: z.string().trim().min(1, "Where does the tour start?"),
+    nights: z.coerce
+      .number({ error: "Nights must be a number" })
+      .int("Nights must be a whole number")
+      .min(1, "A tour runs at least one night")
+      .max(60, "That is longer than any tour sold here"),
+    allowanceKm: z.coerce
+      .number({ error: "The allowance must be a number" })
+      .int("The allowance must be a whole number of km")
+      .min(1, "Set the kilometre allowance")
+      .max(20000, "That allowance looks like a typo"),
+    notes: z.string().trim().optional(),
+    active: z.coerce.boolean().optional(),
+  })
+  .strip();
+
+/**
+ * One day row. `to` is required — a day that ends nowhere cannot be chained to
+ * the next one, and the gap it leaves is unbilled distance the operator still
+ * pays for.
+ */
+export const tourDaySchema = z.object({
+  to: z.string().trim().min(1, "Where does this day end?"),
+  via: z.string().trim().optional(),
+});
+
 export const vehicleQuoteSchema = z
   .object({
     vehicleId: z.string().min(1, "Choose a vehicle"),
     garageId: z.string().min(1, "Choose a depot").optional(),
+    /*
+     * The standard tour the plan was filled in from, if any. Only the ID — the
+     * kilometre allowance it carries is read from the database when the quote
+     * is priced, never from the request.
+     */
+    tourId: z.string().min(1).optional(),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a start date"),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose an end date"),
     adults: z.coerce

@@ -291,6 +291,18 @@ export type VehicleQuoteInput = {
   garageId?: string;
 
   /**
+   * The standard tour this hire was built from, when it was.
+   *
+   * Only the ID travels. The ALLOWANCE it implies is resolved server-side in
+   * `quoteVehicle`, because it decides what the hire is priced on and a number
+   * carried in the query string is a number the agent can edit.
+   *
+   * Absent on a hand-built trip, which keeps the per-day allowance it always
+   * had.
+   */
+  tourId?: string;
+
+  /**
    * Who is travelling. Flat, matching what the form submits and the schema
    * emits — see totalPax above for why this is not a nested object.
    *

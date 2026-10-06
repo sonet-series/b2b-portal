@@ -251,11 +251,28 @@ export function buildItineraryDocument(input: ItineraryDocumentInput): Itinerary
       ` with driver for ${days.length} ${days.length === 1 ? "day" : "days"}` +
       (input.subject?.detail ? ` (${input.subject.detail.toLowerCase()})` : "")
   );
-  included.push("All transfers and sightseeing as set out in the day-by-day plan above");
+  included.push(
+    "All transfers and sightseeing as set out in the day-by-day plan above, " +
+      "including local running at each stop"
+  );
   for (const item of input.alsoIncluded ?? []) included.push(item);
+  /*
+   * The ROUTE is what the price covers; the kilometre figure is the point past
+   * which running is charged.
+   *
+   * Sonet, 6 Oct 2026, on being shown a quote stating "1,014 km included":
+   * agents do not know how far their trip runs, and a customer cannot judge
+   * the number either. Leading with it starts an argument about kilometres
+   * that was never the deal — the same mistake as the old "toll at actuals"
+   * line, which told a customer to expect a charge they had already paid.
+   *
+   * So the kilometres move BELOW the route and are worded as what they
+   * actually are: the allowance this itinerary was priced against.
+   */
   if (terms?.includedKm != null) {
     included.push(
-      `${terms.includedKm.toLocaleString("en-IN")} km of running over the hire, depot to depot`
+      `A kilometre allowance of ${terms.includedKm.toLocaleString("en-IN")} km, ` +
+        "which covers the itinerary above"
     );
   }
   if (terms?.includesDriverAllowance) {
@@ -280,7 +297,8 @@ export function buildItineraryDocument(input: ItineraryDocumentInput): Itinerary
   excluded.push("Entry tickets, guide fees and activity charges");
   if (terms?.extraKmRateMinor != null) {
     excluded.push(
-      `Running beyond the included distance, charged at ${formatMinor(terms.extraKmRateMinor)} per km`
+      "Detours and running beyond the planned itinerary, charged at " +
+        `${formatMinor(terms.extraKmRateMinor)} per km`
     );
   }
   if (!terms?.includesTollParking) excluded.push("Toll and parking charges");

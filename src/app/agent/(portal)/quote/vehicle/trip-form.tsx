@@ -157,9 +157,27 @@ export function TripForm({
    */
   const bufferTotal = days.reduce((s, d) => s + (Number(d.bufferKm) || 0), 0);
 
-  const routeSummary = chained
-    .map((c, i) => (i === 0 ? c.from : c.to))
-    .filter((p, i, arr) => p !== "" && (i === 0 || p !== arr[i - 1]));
+  /*
+   * Where the trip starts, then where each day ends.
+   *
+   * This was `i === 0 ? c.from : c.to`, which took day 1's START and threw
+   * away its DESTINATION — so the first stop of every trip was missing from
+   * the summary. A five-day Cochin, Munnar, Thekkady, Alleppey circuit read
+   * back as "Cochin → Thekkady → Alleppey → Cochin", quietly losing the place
+   * the customer is actually going first. The first day contributes two
+   * places, not one.
+   *
+   * Consecutive repeats collapse, so two nights at Alleppey is one stop on the
+   * route rather than "Alleppey → Alleppey". Built as a loop against the
+   * output rather than a filter against the input: a filter comparing to
+   * `arr[i - 1]` compares to the UNFILTERED neighbour, so a blank day between
+   * two identical places would let the repeat through.
+   */
+  const routeSummary: string[] = [];
+  for (const place of [chained[0]?.from ?? "", ...chained.map((c) => c.to)]) {
+    const p = place.trim();
+    if (p !== "" && p !== routeSummary[routeSummary.length - 1]) routeSummary.push(p);
+  }
 
   return (
     <div className="space-y-4">
