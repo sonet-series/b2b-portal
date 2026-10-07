@@ -29,7 +29,13 @@ function MoveButton({
         disabled={disabled}
         aria-label={label}
         title={label}
-        className="rounded px-1.5 py-0.5 text-sm text-slate-500 ring-1 ring-inset ring-slate-200 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+        /*
+          The reorder arrows are the whole point of this screen, and at
+          text-sm in a thin grey ring they read as punctuation rather than
+          controls. Sized to an actual hit target, with a press state — a
+          button that does not depress gets clicked twice.
+        */
+        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 ring-1 ring-inset ring-slate-200 transition-colors hover:bg-slate-100 hover:text-slate-900 hover:ring-slate-300 active:bg-slate-200 disabled:pointer-events-none disabled:opacity-25"
       >
         {glyph}
       </button>
@@ -97,9 +103,9 @@ export default async function VehiclesPage() {
               <Td>up to {v.capacity} pax</Td>
               <Td>{v._count.rates === 0 ? <Badge tone="amber">No rates</Badge> : v._count.rates}</Td>
               <Td className="text-right">
-                <a href={`/admin/vehicles/${v.id}`} className="text-sm text-blue-700 hover:underline">
+                <LinkButton href={`/admin/vehicles/${v.id}`} size="sm">
                   Edit
-                </a>
+                </LinkButton>
               </Td>
             </tr>
           ))}

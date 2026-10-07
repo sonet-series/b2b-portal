@@ -10,7 +10,14 @@ export function SearchForm({ children }: { children: ReactNode }) {
     <Card className="mb-6">
       <form method="get" className="space-y-4">
         {children}
-        <Button type="submit">Get quote</Button>
+        {/*
+          The one thing this page exists to do, so it is sized like it.
+          At the default size it sat in a form of a dozen identically-sized
+          controls and read as one more of them.
+        */}
+        <Button type="submit" size="lg">
+          Get quote
+        </Button>
       </form>
     </Card>
   );

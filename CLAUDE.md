@@ -1396,6 +1396,46 @@ for the departure flight" rather than a description of what to see.
 `map` supplies the INDEX as it, which would silently give one place `{}` and
 the next `1` as its content. The list is written out one call at a time.
 
+### The UI primitives carry the whole app (7 Oct 2026)
+*"now make the UI better. the buttons and all"*. Done in
+`src/components/ui.tsx` rather than screen by screen: thirty-odd pages are
+built from eight primitives, so fixing those lifts everything at once and
+cannot leave half the app on the old style.
+
+**Buttons gained sizes and press states.** `sm` for a row action inside a
+table, `md` default, `lg` for the one thing a page is for — Get quote sat in a
+form of a dozen identically-sized controls and read as one more of them.
+`active:` matters more than hover here: this is used on a trackpad, and a
+control that does not visibly depress gets clicked twice, which is where
+double-submitted forms come from.
+
+Two tones added. `destructive` is SOLID red, for a delete that has already
+been confirmed; the outline `danger` stays for everything else, because if
+every delete link were solid red the page would look like a warning and the
+colour would stop meaning anything where it counts. `ghost` is for a third
+action that must not compete.
+
+**Table row hover is an INSET SHADOW, not a background colour.** Callers
+already paint rows to mean something — red for a line selling below cost,
+slate for an archived vehicle — and a hover background would REPLACE that
+colour, hiding the very thing the row is flagging. An inset shadow darkens
+whatever is underneath instead of displacing it.
+
+**Cards use `ring-1` rather than `border`.** A ring takes no part in layout,
+so adding or removing one never shifts the contents by a pixel.
+
+**One nav component for both portals** (`src/components/portal-nav.tsx`), with
+the current section marked. They had identical markup in two files and would
+have drifted the first time either was touched — the same reasoning as
+`booking-shared.ts`. The root href is matched EXACTLY and everything else by
+prefix: without that, Overview (`/admin`) lights up on every page, since every
+admin path starts with it, which is the same as highlighting nothing.
+
+**Fields react to the cursor** (`hover:ring-slate-400`). On the itinerary
+builder a read-only chained value sits directly beside a field you type in,
+and Sonet reported exactly that confusion on 21 Sept; a field that responds
+to hover says it is editable before you click it.
+
 ### Agent-side UX (19 Sept 2026)
 Prompted by Sonet pointing at mytourcab.com. That is a B2C site and most of it
 does not transfer — our agents are repeat professionals who want speed and

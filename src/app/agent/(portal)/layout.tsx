@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PortalNav } from "@/components/portal-nav";
 import { redirect } from "next/navigation";
 import { getAgent, clearSession } from "@/lib/auth";
 import { TripCartProvider, TripCartBar } from "@/components/trip-cart";
@@ -40,28 +41,27 @@ export default async function AgentLayout({ children }: { children: React.ReactN
     <TripCartProvider>
     <div className="flex min-h-screen flex-col bg-slate-100">
       <header className="border-b border-slate-200 bg-white print:hidden">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5">
           <Link href="/agent" className="text-sm font-semibold text-slate-900">
             Series Tours <span className="font-normal text-slate-400">B2B</span>
           </Link>
 
-          <nav className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            {NAV.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-slate-600 transition-colors hover:text-blue-700"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          <form action={signOut} className="ml-auto flex items-center gap-3">
-            <span className="hidden text-xs text-slate-500 sm:inline">{agent.agencyName}</span>
-            <Link href="/agent/change-password" className="text-sm text-slate-600 hover:text-blue-700">
+          <PortalNav items={NAV} root="/agent" />
+
+          <form action={signOut} className="ml-auto flex items-center gap-2">
+            <span className="hidden max-w-44 truncate text-xs text-slate-400 lg:inline">
+              {agent.agencyName}
+            </span>
+            <Link
+              href="/agent/change-password"
+              className="rounded-md px-2.5 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            >
               Password
             </Link>
-            <button type="submit" className="text-sm text-slate-600 hover:text-red-700">
+            <button
+              type="submit"
+              className="rounded-md px-2.5 py-1.5 text-sm text-slate-600 transition-colors hover:bg-red-50 hover:text-red-700"
+            >
               Sign out
             </button>
           </form>

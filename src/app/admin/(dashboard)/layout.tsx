@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PortalNav } from "@/components/portal-nav";
 import { redirect } from "next/navigation";
 import { getAdminUser, clearSession } from "@/lib/auth";
 
@@ -38,29 +39,33 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5">
           <Link href="/admin" className="text-sm font-semibold text-slate-900">
             Series Tours <span className="font-normal text-slate-400">B2B admin</span>
           </Link>
 
-          <nav className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            {NAV.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-slate-600 transition-colors hover:text-blue-700"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          {/*
+            The current page is marked, which it never was. Twelve
+            undifferentiated links give no sense of where you are, and on the
+            admin that matters most when a screen looks like another — Quotes
+            and Bookings are both a table of references.
+          */}
+          <PortalNav items={NAV} root="/admin" />
 
-          <form action={signOut} className="ml-auto flex items-center gap-3">
-            <span className="hidden text-xs text-slate-500 sm:inline">{admin.email}</span>
-            <Link href="/admin/change-password" className="text-sm text-slate-600 hover:text-blue-700">
+          <form action={signOut} className="ml-auto flex items-center gap-2">
+            <span className="hidden max-w-44 truncate text-xs text-slate-400 lg:inline">
+              {admin.email}
+            </span>
+            <Link
+              href="/admin/change-password"
+              className="rounded-md px-2.5 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            >
               Password
             </Link>
-            <button type="submit" className="text-sm text-slate-600 hover:text-red-700">
+            <button
+              type="submit"
+              className="rounded-md px-2.5 py-1.5 text-sm text-slate-600 transition-colors hover:bg-red-50 hover:text-red-700"
+            >
               Sign out
             </button>
           </form>

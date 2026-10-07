@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requireAgent } from "@/lib/auth";
 import { listPhotoIdsFor } from "@/lib/product-photos";
 import { ProductGallery } from "@/components/product-photos";
-import { Card, EmptyState, PageHeader } from "@/components/ui";
+import { Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -61,13 +60,20 @@ export default async function FleetPage() {
           hint="Series Tours has not published vehicle rates."
         />
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {vehicles.map((vehicle) => {
             const photoIds = photos.get(vehicle.id) ?? [];
             const depots = [...new Set(vehicle.garages.map((g) => g.garage.name))];
             const firstDepot = vehicle.garages[0]?.garage.id;
             return (
-              <Card key={vehicle.id}>
+              /*
+                flex column + items-stretch on the grid: cards hold different
+                amounts of content — one vehicle has five photographs and
+                thumbnails, another has a placeholder — and left to themselves
+                the "Quote this vehicle" buttons land at three different
+                heights. mt-auto on the footer pins them to one line.
+              */
+              <Card key={vehicle.id} className="flex flex-col">
                 {photoIds.length > 0 ? (
                   <ProductGallery
                     photoIds={photoIds}
@@ -80,7 +86,7 @@ export default async function FleetPage() {
                   </div>
                 )}
 
-                <h2 className="mt-3 font-medium text-slate-900">{vehicle.type}</h2>
+                <h2 className="mt-4 font-semibold text-slate-900">{vehicle.type}</h2>
                 <p className="text-sm text-slate-500">
                   Up to {vehicle.capacity} passenger{vehicle.capacity === 1 ? "" : "s"}
                 </p>
@@ -90,21 +96,26 @@ export default async function FleetPage() {
                   </p>
                 )}
 
+                {/* Pushes the action to the bottom of whatever height the card
+                    ends up being. */}
+                <div className="flex-1" />
+
                 {/*
                   Carries a depot as well as the vehicle. The picker offers
                   only what a depot can dispatch, so a vehicle preselected
                   without one is not selectable at all.
                 */}
-                <Link
+                <LinkButton
                   href={
                     firstDepot
                       ? `/agent/quote/vehicle?garageId=${firstDepot}&vehicleId=${vehicle.id}`
                       : "/agent/quote/vehicle"
                   }
-                  className="mt-3 inline-block text-sm text-blue-700 hover:underline"
+                  tone="primary"
+                  className="mt-4 w-full"
                 >
-                  Quote this vehicle →
-                </Link>
+                  Quote this vehicle
+                </LinkButton>
               </Card>
             );
           })}

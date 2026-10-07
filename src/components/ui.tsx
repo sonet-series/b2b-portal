@@ -24,19 +24,30 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+    <div className="mb-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-slate-200 pb-5">
+      <div className="min-w-0">
+        {/* tracking-tight: at this size the default letter-spacing reads loose
+            and makes a two-word title look like two separate things. */}
+        <h1 className="truncate text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
+        {description && (
+          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-500">{description}</p>
+        )}
       </div>
-      {action}
+      {action && <div className="flex flex-wrap items-center gap-2.5">{action}</div>}
     </div>
   );
 }
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cx("rounded-lg border border-slate-200 bg-white p-5 shadow-sm", className)}>
+    <div
+      className={cx(
+        // ring rather than border: it does not take part in layout, so a card
+        // never shifts its contents by a pixel when one is added or removed.
+        "rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-900/5",
+        className
+      )}
+    >
       {children}
     </div>
   );
@@ -44,9 +55,9 @@ export function Card({ children, className }: { children: ReactNode; className?:
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
-      <p className="text-sm font-medium text-slate-700">{title}</p>
-      {hint && <p className="mt-1 text-sm text-slate-500">{hint}</p>}
+    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 px-6 py-12 text-center">
+      <p className="text-sm font-semibold text-slate-800">{title}</p>
+      {hint && <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-slate-500">{hint}</p>}
     </div>
   );
 }
@@ -81,40 +92,103 @@ export function Badge({
 // Buttons
 // ---------------------------------------------------------------------------
 
+/*
+ * One base, three tones, three sizes.
+ *
+ * `active:` states matter more here than hover does: most of this app is used
+ * on a laptop trackpad where a click is a press, and a control that does not
+ * visibly depress leaves people clicking twice. Half of the double-submitted
+ * forms in any admin are this.
+ *
+ * `select-none` because a button whose label highlights blue on a slightly
+ * dragged click looks broken, and a drag is what a trackpad produces.
+ */
 const buttonBase =
-  "inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition-colors " +
+  "inline-flex select-none items-center justify-center gap-1.5 rounded-md font-medium " +
+  "transition-[background-color,box-shadow,border-color,color] duration-100 " +
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 " +
-  "disabled:cursor-not-allowed disabled:opacity-50";
+  "disabled:pointer-events-none disabled:opacity-45";
+
+const buttonSizes = {
+  /** Row actions inside a table, where a full-size button would crowd it. */
+  sm: "px-2.5 py-1 text-xs",
+  md: "px-3.5 py-2 text-sm",
+  /** The one thing a page is for — Get quote, Save, Confirm. */
+  lg: "px-5 py-2.5 text-sm",
+};
 
 const buttonTones = {
-  primary: "bg-blue-600 text-white hover:bg-blue-700",
-  secondary: "bg-white text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50",
-  danger: "bg-white text-red-700 ring-1 ring-inset ring-red-300 hover:bg-red-50",
+  /*
+   * A shadow, not just a fill. On a page that is mostly white cards, a flat
+   * blue rectangle reads as a coloured div; the lift is what says "press me".
+   * It deepens on hover and collapses on press.
+   */
+  primary:
+    "bg-blue-600 text-white shadow-sm shadow-blue-600/25 hover:bg-blue-700 hover:shadow " +
+    "active:bg-blue-800 active:shadow-none",
+  secondary:
+    "bg-white text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 " +
+    "hover:bg-slate-50 hover:ring-slate-400 active:bg-slate-100 active:shadow-none",
+  danger:
+    "bg-white text-red-700 shadow-sm ring-1 ring-inset ring-red-300 " +
+    "hover:bg-red-50 hover:ring-red-400 active:bg-red-100 active:shadow-none",
+  /*
+   * SOLID red, for the one button that destroys something after it has
+   * already been confirmed. Deliberately not the default `danger`: if every
+   * delete link were solid red the page would look like a warning, and the
+   * colour would stop meaning anything on the one that matters.
+   */
+  destructive:
+    "bg-red-600 text-white shadow-sm shadow-red-600/25 hover:bg-red-700 hover:shadow " +
+    "active:bg-red-800 active:shadow-none",
+  /** No chrome at all — for a third action that must not compete. */
+  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200",
 };
 
 export function Button({
   tone = "primary",
+  size = "md",
   className,
   ...props
-}: ComponentProps<"button"> & { tone?: keyof typeof buttonTones }) {
-  return <button className={cx(buttonBase, buttonTones[tone], className)} {...props} />;
+}: ComponentProps<"button"> & {
+  tone?: keyof typeof buttonTones;
+  size?: keyof typeof buttonSizes;
+}) {
+  return (
+    <button className={cx(buttonBase, buttonSizes[size], buttonTones[tone], className)} {...props} />
+  );
 }
 
 export function LinkButton({
   tone = "secondary",
+  size = "md",
   className,
   ...props
-}: ComponentProps<typeof Link> & { tone?: keyof typeof buttonTones }) {
-  return <Link className={cx(buttonBase, buttonTones[tone], className)} {...props} />;
+}: ComponentProps<typeof Link> & {
+  tone?: keyof typeof buttonTones;
+  size?: keyof typeof buttonSizes;
+}) {
+  return (
+    <Link className={cx(buttonBase, buttonSizes[size], buttonTones[tone], className)} {...props} />
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Form fields
 // ---------------------------------------------------------------------------
 
+/*
+ * `hover:ring-slate-400` is the point of this: a field that reacts to the
+ * cursor tells you it is editable before you click it, which matters on
+ * screens like the itinerary builder where read-only chained values ("from
+ * Munnar, carried over from day 1") sit directly beside fields you type in.
+ * Sonet reported exactly that confusion on 21 Sept.
+ */
 const controlBase =
   "block w-full rounded-md border-0 px-3 py-2 text-sm text-slate-900 shadow-sm ring-1 ring-inset " +
-  "placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-blue-600";
+  "transition-shadow placeholder:text-slate-400 hover:ring-slate-400 " +
+  "focus:ring-2 focus:ring-inset focus:ring-blue-600 " +
+  "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500";
 
 export function FieldShell({
   label,
@@ -326,15 +400,23 @@ export function FormSuccess({ message }: { message?: string }) {
 
 export function Table({ head, children }: { head: ReactNode[]; children: ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead className="bg-slate-50">
+    <div className="overflow-x-auto rounded-xl bg-white shadow-sm ring-1 ring-slate-900/5">
+      {/*
+        Row hover is an INSET SHADOW, not a background colour.
+        Callers already paint rows to mean something — red for a line selling
+        below cost, slate for an archived vehicle — and a hover background
+        would replace that colour, hiding the very thing the row is flagging.
+        An inset shadow darkens whatever is underneath instead of displacing
+        it, so the meaning survives the cursor.
+      */}
+      <table className="min-w-full divide-y divide-slate-200 text-sm [&_tbody_tr]:transition-shadow [&_tbody_tr:hover]:shadow-[inset_0_0_0_9999px_rgba(15,23,42,0.025)]">
+        <thead className="bg-slate-50/80">
           <tr>
             {head.map((h, i) => (
               <th
                 key={i}
                 scope="col"
-                className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
               >
                 {h}
               </th>
@@ -348,5 +430,5 @@ export function Table({ head, children }: { head: ReactNode[]; children: ReactNo
 }
 
 export function Td({ children, className }: { children?: ReactNode; className?: string }) {
-  return <td className={cx("px-4 py-2.5 align-top text-slate-700", className)}>{children}</td>;
+  return <td className={cx("px-4 py-3 align-top text-slate-700", className)}>{children}</td>;
 }
