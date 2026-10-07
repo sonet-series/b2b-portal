@@ -1800,6 +1800,22 @@ one, which is exactly backwards.
 the script, or it would run the PREVIOUS version of it. The script's own pull
 is then a no-op.
 
+**`deploy.sh` runs `set -u`, and the status block broke it.** The block used
+`$APP_DIR`, which the script had never defined — it only `cd`s to the repo
+root. Under `set -u` an undefined variable does not fall back to empty, it
+KILLS the shell during expansion, and `|| true` cannot catch that because
+nothing fails: the shell simply exits. So the deploy pulled, built, started
+and health-checked, and then died on its own last line with the site already
+updated and working.
+
+Two things worth taking from it:
+- **`APP_DIR` is now defined once, right after the `cd`.** Reaching for a
+  variable that exists in a sibling script (`backup.sh` sets its own) and
+  assuming it exists here is the actual mistake.
+- **The first thing CI did, once it could finally connect, was catch a bug
+  nobody else had hit** — every manual deploy that day predated the block. A
+  pipeline that has never run is not a pipeline that works.
+
 `concurrency: deploy-production` stops two runs building and restarting the
 same container at once, and `cancel-in-progress: false` because the run already
 going may be mid-migration. `workflow_dispatch` so a mis-keyed pipeline can be

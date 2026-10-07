@@ -16,6 +16,16 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+# The repo root, now that we are standing in it.
+#
+# `set -u` is on, so a reference to an undefined variable does not fall back
+# to empty — it KILLS the script, and `|| true` cannot catch it because the
+# shell exits during expansion rather than failing a command. That is exactly
+# what the deploy-status block at the end did on its first real run: built,
+# started, health-checked, then died on the last line with everything already
+# working. Define it once rather than reaching for it later and hoping.
+APP_DIR="$(pwd)"
 ROOT="$(pwd)"
 
 # Every phase prints how long the one before it took.
