@@ -9,6 +9,17 @@ name: Deploy to Hetzner
 on:
   push:
     branches: [main]
+  # So a stuck or mis-keyed pipeline can be re-run from the Actions tab
+  # without inventing a commit to push.
+  workflow_dispatch:
+
+# A deploy is not something to run twice at once. Two overlapping runs would
+# both `git pull`, both build, and both restart the same container — and the
+# loser could leave it on the older image. `cancel-in-progress: false` because
+# the run already building may be mid-migration.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -25,25 +36,21 @@ jobs:
           script: |
             set -e
             cd /opt/b2b-portal
+            # Pulled HERE as well as inside deploy.sh, and that is not
+            # redundant: without it this runs the PREVIOUS version of the
+            # script. Its own pull is then a no-op.
             git pull origin main
 
-            # Back up before migrating. Migrations run on container start, and
-            # a failed migration on a database with no recent backup is the
-            # worst position to be in.
-            bash deploy/backup.sh
-
-            docker compose build
-            docker compose up -d
-
-            echo "→ waiting for health"
-            for i in $(seq 1 30); do
-              if [ "$(docker inspect -f '{{.State.Health.Status}}' b2b-portal-web 2>/dev/null)" = "healthy" ]; then
-                echo "healthy after ${i} checks"
-                exit 0
-              fi
-              sleep 5
-            done
-
-            echo "Container did not become healthy. Logs:"
-            docker compose logs --tail=60
-            exit 1
+            # deploy.sh, not a second copy of these steps.
+            #
+            # The two had already drifted: the script backs up, polls the app
+            # directly rather than waiting on Docker's healthcheck interval,
+            # fails fast on a restarting container, trims the build cache and
+            # records what it deployed. None of that was here, so a CI deploy
+            # and a hand deploy did measurably different things — and the one
+            # that ran unattended was the weaker of the two.
+            #
+            # DEPLOYED_BY is recorded in data/deploy-status.json, so
+            # /admin/settings can say whether what is running got there by
+            # pipeline or by hand.
+            DEPLOYED_BY=ci bash deploy/deploy.sh

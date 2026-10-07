@@ -1777,6 +1777,34 @@ containers and the ERP keeps its data in named volumes. Two gigabytes is not
 worth finding out which ones. The same caution applies to
 `docker image prune -a`.
 
+### What is RUNNING is shown on a screen (7 Oct 2026)
+CI stopped deploying on 6 Oct and nobody noticed for a day. Every push reached
+GitHub and stopped there; the only symptom was a change that never appeared,
+and the only reason it surfaced was Sonet asking why a page was missing.
+
+**A green build somewhere else is not evidence.** `deploy.sh` now writes
+`data/deploy-status.json` — commit, subject, time, and whether it got there by
+pipeline or by hand — and `/admin/settings` shows it, flagging a deploy more
+than a week old. Same mechanism as the off-box backup status, same reasoning:
+configuration an operator cannot see is configuration nobody trusts, and that
+applies to the pipeline too.
+
+**The workflow now runs `deploy.sh` rather than its own copy of the steps.**
+The two had already drifted: the script backs up first, polls the app directly
+instead of waiting on Docker's healthcheck interval, fails fast on a restarting
+container, trims the build cache, and records what it deployed. None of that
+was in the workflow — so an unattended deploy did strictly less than a hand
+one, which is exactly backwards.
+
+**The `git pull` appears twice on purpose.** The workflow pulls before calling
+the script, or it would run the PREVIOUS version of it. The script's own pull
+is then a no-op.
+
+`concurrency: deploy-production` stops two runs building and restarting the
+same container at once, and `cancel-in-progress: false` because the run already
+going may be mid-migration. `workflow_dispatch` so a mis-keyed pipeline can be
+re-run without inventing a commit.
+
 ### Backups (confirmed 26 Aug 2026)
 Nightly `sqlite3 .backup` + `PRAGMA integrity_check`, gzipped, 30 days, on the
 same disk. Also runs before every CI deploy, since migrations apply on

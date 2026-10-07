@@ -3,7 +3,7 @@ import { DepositPanel } from "./deposit-panel";
 import { EmailPanel } from "./email-panel";
 import { BackupPanel } from "./backup-panel";
 import { mailerStatus } from "@/lib/mailer";
-import { offsiteStatus } from "@/lib/backup-status";
+import { offsiteStatus, deployStatus } from "@/lib/backup-status";
 import { markupKey } from "@/lib/markup";
 import { PRODUCT_TYPE, AGENT_TIER, AGENT_TIER_LABEL, type ProductType } from "@/lib/enums";
 import { Card, PageHeader } from "@/components/ui";
@@ -125,7 +125,7 @@ export default async function SettingsPage() {
         Here for the same reason the email panel is: I once told Sonet that quiet
         logs meant SMTP was working, and it did not.
       */}
-      <BackupPanel status={await offsiteStatus()} />
+      <BackupPanel status={await offsiteStatus()} deploy={await deployStatus()} />
     </>
   );
 }

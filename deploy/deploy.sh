@@ -136,6 +136,28 @@ say "Trimming the build cache"
 # cannot be tested anywhere but the server.
 df -h / | tail -1 | awk '{print "  disk: " $5 " used, " $4 " free"}' || true
 
+# What is actually running, written where the admin screen can read it.
+#
+# CI stopped deploying on 6 Oct 2026 and nobody noticed for a day: every push
+# reached GitHub and stopped there, and the only symptom was a change that
+# never appeared. A green build somewhere else is not evidence; what is
+# running on this box is.
+#
+# Same mechanism as the off-box backup status — a file in the data bind mount,
+# read by /admin/settings. The app cannot ask git what it is, so the deploy
+# tells it.
+say "Recording what was deployed"
+{
+  printf '{"commit":"%s","subject":"%s","at":"%s","by":"%s"}\n' \
+    "$(git rev-parse --short HEAD)" \
+    "$(git --no-pager log -1 --pretty=%s | tr -d '"\\' | cut -c1-120)" \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "${DEPLOYED_BY:-manual}" \
+    > "$APP_DIR/data/.deploy-status.tmp" \
+  && mv "$APP_DIR/data/.deploy-status.tmp" "$APP_DIR/data/deploy-status.json" \
+  && chmod 644 "$APP_DIR/data/deploy-status.json"
+} || echo "(could not record the deploy status — harmless, but the Settings screen will not update)"
+
 # Reported, never waited on: the container is already serving. This only says
 # whether Docker has caught up yet, which matters for its restart policy.
 say "Deployed"

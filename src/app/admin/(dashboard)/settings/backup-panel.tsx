@@ -1,5 +1,5 @@
 import { Badge, Card } from "@/components/ui";
-import { formatBytes, type OffsiteStatus } from "@/lib/backup-status";
+import { formatBytes, type OffsiteStatus, type DeployStatus } from "@/lib/backup-status";
 import { formatDateDisplay } from "@/lib/dates";
 
 /**
@@ -15,7 +15,13 @@ import { formatDateDisplay } from "@/lib/dates";
  * surfacing is not a loud one — it is the job that quietly stopped running and
  * left a cheerful "ok" from three weeks ago.
  */
-export function BackupPanel({ status }: { status: OffsiteStatus }) {
+export function BackupPanel({
+  status,
+  deploy,
+}: {
+  status: OffsiteStatus;
+  deploy: DeployStatus;
+}) {
   const tone =
     status.state === "ok" && !status.stale
       ? "green"
@@ -100,6 +106,41 @@ export function BackupPanel({ status }: { status: OffsiteStatus }) {
           <code className="rounded bg-slate-100 px-1">deploy/backup.sh</code> on the server.
         </p>
       )}
+
+      {/*
+        What is actually RUNNING here.
+        CI stopped deploying on 6 Oct 2026 and it went unnoticed for a day —
+        every push reached GitHub and stopped there, and the only symptom was
+        a change that never appeared. A green build elsewhere is not evidence.
+      */}
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        {deploy.at === null ? (
+          <p className="text-sm text-slate-500">
+            Nothing has recorded a deploy yet. The next run of{" "}
+            <code className="rounded bg-slate-100 px-1">deploy/deploy.sh</code> will fill this in.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-slate-600">
+              <span className="text-xs uppercase tracking-wide text-slate-400">Running </span>
+              <code className="rounded bg-slate-100 px-1">{deploy.commit}</code>
+              {deploy.subject && <span className="text-slate-500"> — {deploy.subject}</span>}
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Deployed {formatDateDisplay(deploy.at)} at{" "}
+              {deploy.at.toISOString().slice(11, 16)} UTC
+              {deploy.by && deploy.by !== "manual" ? ` by ${deploy.by}` : " by hand"}.
+            </p>
+            {deploy.stale && (
+              <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-inset ring-amber-200">
+                Nothing has deployed in over a week. If you have pushed since, the pipeline has
+                stopped working rather than had nothing to do — check the repository&rsquo;s
+                Actions tab.
+              </p>
+            )}
+          </>
+        )}
+      </div>
     </Card>
   );
 }

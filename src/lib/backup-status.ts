@@ -114,3 +114,61 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/**
+ * What is actually running on this box, and when it got there.
+ *
+ * Written by `deploy/deploy.sh`, read here — the same mechanism as the
+ * off-box backup status, and for the same reason.
+ *
+ * CI stopped deploying on 6 Oct 2026 and it went unnoticed for a day: every
+ * push reached GitHub and stopped there, and the only symptom was a change
+ * that never appeared. A green build somewhere else is not evidence. This
+ * makes "the server is behind" visible on a screen instead of being something
+ * you find out by missing it.
+ */
+export type DeployStatus = {
+  /** Short SHA, e.g. "060babd". Empty when never recorded. */
+  commit: string;
+  subject: string;
+  at: Date | null;
+  /** "manual", or "ci" when the workflow sets DEPLOYED_BY. */
+  by: string;
+  /**
+   * True when the last deploy is more than 7 days old.
+   *
+   * Not a failure on its own — a quiet week is a quiet week. It is a prompt to
+   * check whether nothing shipped, or whether shipping stopped working.
+   */
+  stale: boolean;
+};
+
+const DEPLOY_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+export async function deployStatus(): Promise<DeployStatus> {
+  const empty: DeployStatus = { commit: "", subject: "", at: null, by: "", stale: false };
+  let raw: string;
+  try {
+    raw = await readFile(path.join(path.dirname(uploadDir()), "deploy-status.json"), "utf8");
+  } catch {
+    return empty;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return empty;
+  }
+  if (typeof parsed !== "object" || parsed === null) return empty;
+  const o = parsed as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const atRaw = str(o.at);
+  const at = atRaw !== "" && !Number.isNaN(Date.parse(atRaw)) ? new Date(atRaw) : null;
+  return {
+    commit: str(o.commit),
+    subject: str(o.subject),
+    at,
+    by: str(o.by),
+    stale: at !== null && Date.now() - at.getTime() > DEPLOY_STALE_AFTER_MS,
+  };
+}
