@@ -1077,11 +1077,15 @@ charging for eg. 23.10. just 23 is fine"*.
 A per-km rate falls out of a percentage markup as ₹23.10, and nobody quotes a
 fare in paise. `toWholeRupees` in `src/lib/money.ts` rounds it.
 
-**NEAREST rupee, not up** — which is what his own example asks for, 23.10 → 23.
-Rounding up would turn ₹23.01 into ₹24, a 4% jump off a single paisa. That is
-the one place this differs from the kilometre rule, where he asked for always
-higher: a kilometre under-counted is diesel nobody paid for, while a rate is
-a published figure and the paise are noise either way.
+**Fifty paise rounds DOWN.** His rule, stated the same day: *"if its 50 or less
+than 50 paise then make it 23/- if its above 50 paise then make it 24"*. That
+is not `Math.round`, which breaks ties upward and would send ₹23.50 to ₹24 —
+a one-paisa difference, on exactly the values a percentage markup produces.
+
+Nor is it always-up, which is the rule for KILOMETRES. The two differ on
+purpose: a kilometre under-counted is diesel already burnt that nobody paid
+for, while on a rate the paise are noise either way and ₹23.01 becoming ₹24 is
+a 4% jump off a single paisa.
 
 **It is rounded ONCE and used for both the charge and the stated term.** The
 rate was resolved twice — identically, in two places — and a document may only
