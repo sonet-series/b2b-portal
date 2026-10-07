@@ -1431,6 +1431,36 @@ have drifted the first time either was touched — the same reasoning as
 prefix: without that, Overview (`/admin`) lights up on every page, since every
 admin path starts with it, which is the same as highlighting nothing.
 
+**GROUPED, and that was the real problem.** Sonet, after the first pass:
+*"heading nav seems like simple and its difficult to differeniate."* Marking
+the active item was not enough. Eleven items of similar length and weight in
+one undivided row give the eye nothing to navigate BY — "Hotels",
+"Houseboats" and "Packages" are three words of about the same shape, so
+finding one meant reading all eleven, every time.
+
+Three changes, none of them decoration:
+
+- **Clusters with a rule between them.** Catalogue, then trade, then tools.
+  Position becomes information: Bookings is "in the middle group", findable
+  without reading, and it stays true as the list grows.
+- **An icon per item** (`src/components/icons.tsx`). Words of similar length
+  look alike; a boat and a car do not. This is what makes an item
+  recognisable at a glance rather than by reading, which is what a nav used
+  all day needs. Hand-drawn rather than installed — eleven glyphs do not
+  justify a dependency to audit and carry into the runtime image, the same
+  call as `src/lib/zip.ts`. They share one viewBox, one stroke weight and a
+  handful of primitives, which is what makes a hand-made set look like a set.
+  All `aria-hidden`: each sits beside its own text label, and "Hotels, image,
+  Hotels" is worse than silence.
+- **Two header rows.** Brand, eleven items and the account controls were
+  competing for one line, which is half of why there was no room to group
+  anything.
+
+**Below `lg` each cluster takes its own ROW and the rules are hidden.** Found
+at phone width: a rule that was between two items on one line lands at the
+START of the next when it wraps, reading as a stray mark. Rows separate once
+rules cannot.
+
 **Fields react to the cursor** (`hover:ring-slate-400`). On the itinerary
 builder a read-only chained value sits directly beside a field you type in,
 and Sonet reported exactly that confusion on 21 Sept; a field that responds

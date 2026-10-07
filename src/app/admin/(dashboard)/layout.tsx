@@ -1,23 +1,34 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PortalNav } from "@/components/portal-nav";
+import { PortalNav, type NavItem } from "@/components/portal-nav";
 import { redirect } from "next/navigation";
 import { getAdminUser, clearSession } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Admin · Series Tours B2B" };
 
-const NAV = [
-  { href: "/admin", label: "Overview" },
-  { href: "/admin/hotels", label: "Hotels" },
-  { href: "/admin/houseboats", label: "Houseboats" },
-  { href: "/admin/vehicles", label: "Vehicles" },
-  { href: "/admin/garages", label: "Depots" },
-  { href: "/admin/km-check", label: "Distance check" },
-  { href: "/admin/itineraries", label: "Packages" },
-  { href: "/admin/agents", label: "Agents" },
-  { href: "/admin/quotes", label: "Quotes" },
-  { href: "/admin/bookings", label: "Bookings" },
-  { href: "/admin/settings", label: "Settings" },
+/*
+ * Grouped, because eleven flat items were impossible to scan. The clusters
+ * are: what you SELL, who you sell it to and what came of it, then the tools
+ * that are neither. Order within a cluster is how often Sonet opens them.
+ */
+const NAV: NavItem[][] = [
+  [{ href: "/admin", label: "Overview", icon: "overview" }],
+  [
+    { href: "/admin/hotels", label: "Hotels", icon: "hotel" },
+    { href: "/admin/houseboats", label: "Houseboats", icon: "houseboat" },
+    { href: "/admin/vehicles", label: "Vehicles", icon: "vehicle" },
+    { href: "/admin/itineraries", label: "Packages", icon: "package" },
+    { href: "/admin/garages", label: "Depots", icon: "depot" },
+  ],
+  [
+    { href: "/admin/agents", label: "Agents", icon: "agent" },
+    { href: "/admin/quotes", label: "Quotes", icon: "quote" },
+    { href: "/admin/bookings", label: "Bookings", icon: "booking" },
+  ],
+  [
+    { href: "/admin/km-check", label: "Distance check", icon: "distance" },
+    { href: "/admin/settings", label: "Settings", icon: "settings" },
+  ],
 ];
 
 async function signOut() {
@@ -39,18 +50,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5">
+        {/*
+          TWO ROWS, not one. Brand, eleven nav items and the account controls
+          were competing for a single line, which is half of why the nav was
+          unreadable — it had no room to group anything. Identity and account
+          go on top, navigation gets a line of its own.
+        */}
+        <div className="mx-auto flex max-w-6xl items-center gap-x-5 px-4 pt-2.5">
           <Link href="/admin" className="text-sm font-semibold text-slate-900">
             Series Tours <span className="font-normal text-slate-400">B2B admin</span>
           </Link>
-
-          {/*
-            The current page is marked, which it never was. Twelve
-            undifferentiated links give no sense of where you are, and on the
-            admin that matters most when a screen looks like another — Quotes
-            and Bookings are both a table of references.
-          */}
-          <PortalNav items={NAV} root="/admin" />
 
           <form action={signOut} className="ml-auto flex items-center gap-2">
             <span className="hidden max-w-44 truncate text-xs text-slate-400 lg:inline">
@@ -69,6 +78,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Sign out
             </button>
           </form>
+        </div>
+
+        <div className="mx-auto max-w-6xl px-4 pb-2 pt-1.5">
+          <PortalNav groups={NAV} root="/admin" />
         </div>
       </header>
 
