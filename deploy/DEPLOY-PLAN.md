@@ -433,8 +433,30 @@ That prints the manifest and checks each member's SHA-256. A backup nobody has
 opened is a hope.
 
 **Retention is the bucket's job on B2.** This script never deletes there — see
-CLAUDE.md for why. Set a Lifecycle Rule in the B2 console if you want one; the
-archive is ~5MB, so a year is under 2GB.
+CLAUDE.md for why. **Set 7 Oct 2026:** 30 days on the `b2b-portal/` prefix,
+then B2 removes it.
+
+```json
+{"daysFromUploadingToHiding": 30, "daysFromHidingToDeleting": 1,
+ "fileNamePrefix": "b2b-portal/"}
+```
+
+**Before ever touching those rules again, READ them first.** B2 replaces the
+entire rule set on update — it does not merge. The bucket already carried a
+rule for the ERP's own backups (prefix `20`, matching its `20260911-…`
+filenames, same 30 days), and setting ours alone would have silently deleted
+it, leaving the ERP's archives to grow forever with nobody noticing. The
+working command lists BOTH rules:
+
+```bash
+b2 bucket get series-tours-erp-backup          # read what is there
+b2 bucket update --lifecycle-rule '<rule 1>' --lifecycle-rule '<rule 2>' \
+    series-tours-erp-backup allPrivate         # write them ALL back
+```
+
+`allPrivate` is passed explicitly rather than omitted. It is what the bucket
+already is, and it holds PAN cards and payment screenshots — not a setting to
+let a CLI default decide.
 
 **Checking on it later.** `deploy/offsite.sh verify` re-reads every archive and
 compares it with the digest recorded when it was sent, which catches bit-rot
