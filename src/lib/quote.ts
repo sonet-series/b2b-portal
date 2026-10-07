@@ -30,7 +30,7 @@ import {
   type HouseboatPricingMode,
   type ItineraryPricingMode,
 } from "./enums";
-import { sumMinor } from "./money";
+import { sumMinor, toWholeRupees } from "./money";
 import { totalLegKm } from "./quote-types";
 import type {
   QuotingAgent,
@@ -614,10 +614,6 @@ export async function quoteVehicle(
       // Set where the bata line is actually pushed, so the customer document
       // can only claim a driver allowance that was really charged.
       let chargedBata = false;
-      // Kept outside the segment loop: the allowance is a trip-level pool, and
-      // so is the rate charged beyond it.
-      let extraKmRateMinor: number | undefined;
-
       for (const seg of segments) {
         const main = resolveMain(
           agent, markup, "vehicle", overrides, seg.rate.id, seg.rate.costMinor
@@ -656,25 +652,39 @@ export async function quoteVehicle(
         }
       }
 
-      // Resolved whether or not the trip goes over: the rate is a term of the
-      // hire, and the customer asking "what if we add a day trip" needs it
-      // stated on a quote that happens to be within its allowance.
-      if (segments.length > 0) {
-        const rateForTerms = resolveCharge(
-          agent, markup, "vehicle", overrides, segments[0].rate.id, "EXTRA_KM",
-          segments[0].rate.extraKmCostMinor
-        );
-        extraKmRateMinor = rateForTerms?.minor;
-      }
+      /*
+       * Resolved ONCE, whether or not the trip goes over.
+       *
+       * The rate is a term of the hire — a customer asking "what if we add a
+       * day trip" needs it stated on a quote that happens to be inside its
+       * allowance. It was resolved twice, identically, and the charged line
+       * and the stated term must be the SAME number: a document may only claim
+       * what it charged, and two calls are two chances to drift.
+       *
+       * Rounded to a whole rupee. Sonet, 7 Oct 2026: *"for extra km also we
+       * need it in 1 figure ... just 23 is fine"*. A percentage markup leaves
+       * ₹23.10 per km, and nobody quotes a fare in paise.
+       */
+      const extraKmCharge =
+        segments.length > 0
+          ? resolveCharge(
+              agent, markup, "vehicle", overrides, segments[0].rate.id, "EXTRA_KM",
+              segments[0].rate.extraKmCostMinor
+            )
+          : null;
+      const extraKmUnitMinor =
+        extraKmCharge === null ? null : toWholeRupees(extraKmCharge.minor);
+      // A trip-level figure, like the allowance it is charged beyond.
+      const extraKmRateMinor: number | undefined = extraKmUnitMinor ?? undefined;
 
       // Extra km bill against the allowance accumulated across all segments,
       // not per segment — the allowance is a trip-level pool.
       if (km != null && km > includedKm) {
         const extraKm = km - includedKm;
-        const extraRate = resolveCharge(
-          agent, markup, "vehicle", overrides, segments[0].rate.id, "EXTRA_KM",
-          segments[0].rate.extraKmCostMinor
-        );
+        const extraRate =
+          extraKmCharge && extraKmUnitMinor != null
+            ? { ...extraKmCharge, minor: extraKmUnitMinor }
+            : null;
         if (!extraRate) {
           unavailable.push({
             title,

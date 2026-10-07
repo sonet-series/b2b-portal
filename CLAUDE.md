@@ -1070,6 +1070,28 @@ state's existing fee out across every active vehicle — the honest reading,
 since the fee used to apply to all of them — and was tested against a
 populated copy and against its own half-finished state.
 
+### The extra-km rate is a whole rupee (7 Oct 2026)
+Sonet: *"for extra km also we need it in 1 figure, no need of showing or
+charging for eg. 23.10. just 23 is fine"*.
+
+A per-km rate falls out of a percentage markup as ₹23.10, and nobody quotes a
+fare in paise. `toWholeRupees` in `src/lib/money.ts` rounds it.
+
+**NEAREST rupee, not up** — which is what his own example asks for, 23.10 → 23.
+Rounding up would turn ₹23.01 into ₹24, a 4% jump off a single paisa. That is
+the one place this differs from the kilometre rule, where he asked for always
+higher: a kilometre under-counted is diesel nobody paid for, while a rate is
+a published figure and the paise are noise either way.
+
+**It is rounded ONCE and used for both the charge and the stated term.** The
+rate was resolved twice — identically, in two places — and a document may only
+claim what it charged. Rounding one call and not the other would print "₹24 per
+km" above a line billing ₹24.15, which is the toll-and-parking mistake again.
+
+**Deliberately NOT applied to totals.** A quote's total is a sum of real line
+amounts; rounding it would stop the lines adding up to it, and that property is
+what makes "why is this number what it is" answerable.
+
 ### Local running is per NIGHT, and the total rounds UP to 50 (7 Oct 2026)
 **This replaces the per-stop rule below, which measurement proved wrong.**
 

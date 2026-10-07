@@ -47,6 +47,25 @@ export function formatMinor(minor: number): string {
     : INR_PAISE.format(toMajor(minor));
 }
 
+/**
+ * Rounds to a whole rupee, dropping the paise.
+ *
+ * For figures a customer READS AS A RATE rather than pays as a total — Sonet,
+ * 7 Oct 2026: *"for extra km also we need it in 1 figure, no need of showing
+ * or charging for eg. 23.10. just 23 is fine"*. A per-km rate falls out of a
+ * percentage markup as ₹23.10, and nobody quotes a fare in paise.
+ *
+ * NEAREST rupee, not up, which is what his own example asks for: 23.10 → 23.
+ * Rounding up would make ₹23.01 into ₹24, a 4% jump off a single paisa.
+ *
+ * Deliberately NOT applied to totals. A quote's total is a sum of real line
+ * amounts, and rounding it would make the lines stop adding up to it — which
+ * is the one property that makes "why is this number what it is" answerable.
+ */
+export function toWholeRupees(minor: number): number {
+  return Math.round(minor / MINOR_PER_MAJOR) * MINOR_PER_MAJOR;
+}
+
 /** Sums line totals without ever leaving integer space. */
 export function sumMinor(values: readonly number[]): number {
   return values.reduce((a, b) => a + b, 0);
