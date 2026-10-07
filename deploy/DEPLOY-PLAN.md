@@ -361,78 +361,88 @@ those agents would be unusable.
 `deploy/restore.sh <backup.db.gz>` restores one, keeping the current database
 alongside as `.pre-restore-*`.
 
-### Off-box copies — `deploy/offsite.sh` (built 6 Oct 2026)
+### Off-box copies — `deploy/offsite.sh` (built 6 Oct 2026, B2 7 Oct)
 
 Everything above sits on the same disk as the database, which covers a bad
-migration or a mistaken delete but not the box being lost. `offsite.sh`
-closes that: `backup.sh` calls it at the end, so there is no second cron
-entry to forget.
+migration or a mistaken delete but not the box being lost. `offsite.sh` closes
+that: `backup.sh` calls it at the end, so there is no second cron entry to
+forget.
 
 Nothing happens until it is configured, and it says so in the log, in
 `data/offsite-status.json` and on **/admin/settings → Off-box backups**.
 
-**Set it up, in order.**
+**The destination already exists.** The ERP has backed up to Backblaze B2 since
+11 Sept via `/root/backup-erp.sh` — bucket `series-tours-erp-backup`, `b2` CLI
+installed and authorised. The portal goes in the same bucket under its own
+prefix. Nothing to buy.
 
-1. **Prove the mechanism first.** No keys, no destination, no risk:
+**Set it up in THIS ORDER.** The order matters: `b2-check` tests the
+destination, so the destination has to be configured before it can.
 
-   ```bash
-   cd /opt/b2b-portal && deploy/offsite.sh self-test
-   ```
+**1. Prove the mechanism**, no keys and no destination needed:
 
-   It encrypts, uploads, reads back, decrypts and compares — with a throwaway
-   keypair — and checks that a different key cannot read the archive.
+```bash
+cd /opt/b2b-portal && deploy/offsite.sh self-test
+```
 
-2. **Pick a destination.** A Hetzner Storage Box (BX11, about €4/month, 1TB)
-   is the obvious match: same provider, and `rsync`/`sftp` over SSH on port
-   **23**. Anything reachable by ssh works, and a destination with no colon is
-   treated as a plain path — a second disk or an NFS mount.
+**2. Configure the destination:**
 
-   ```bash
-   ssh-keygen -t ed25519 -f /root/.ssh/b2b-offsite -N '' -C b2b-offsite
-   # then put /root/.ssh/b2b-offsite.pub in the Storage Box's authorized_keys
-   ```
+```bash
+printf 'OFFSITE_REMOTE=b2://series-tours-erp-backup/b2b-portal\n' >> /opt/b2b-portal/.env.offsite
+chmod 600 /opt/b2b-portal/.env.offsite
+```
 
-3. **Make the encryption key.**
+**3. Prove the B2 transport**, with a throwaway object:
 
-   ```bash
-   deploy/offsite.sh keygen
-   ```
+```bash
+deploy/offsite.sh b2-check
+```
 
-   It prints the PRIVATE key once and never saves it here. Put it in a
-   password manager — **not on this server, and not in this repo**. Without it
-   every archive is unreadable; with it, all of them are, so it is the key to
-   the whole database. Only the public half stays on the box.
+**4. Make the encryption key:**
 
-4. **Configure.**
+```bash
+deploy/offsite.sh keygen
+```
 
-   ```bash
-   cat >> /opt/b2b-portal/.env.offsite <<'EOF'
-   OFFSITE_REMOTE=u123456@u123456.your-storagebox.de:b2b-portal
-   OFFSITE_SSH_KEY=/root/.ssh/b2b-offsite
-   OFFSITE_SSH_PORT=23
-   EOF
-   chmod 600 /opt/b2b-portal/.env.offsite
-   deploy/offsite.sh send --force && deploy/offsite.sh list
-   ```
+It prints the PRIVATE key once and never saves it. **Into a password manager
+and nowhere else** — not a chat window, not an email, not a ticket. Anything
+it is pasted into becomes a copy of the key to every agent's PAN card and
+every payment screenshot.
 
-5. **Check you can actually restore**, from your own machine, with the key you
-   saved — not from the server. A backup nobody has opened is a hope:
+If it does leak, starting again is cheap *provided no archive has been sent
+yet*: delete `/opt/b2b-portal/offsite-key.pub.pem`, run `keygen` again, and
+carry on. Once archives exist they are readable only by the key they were
+encrypted to, so a leak after that means re-sending everything you still want
+and treating what is on the remote as exposed.
 
-   ```bash
-   deploy/offsite.sh fetch b2b-20261006T021500Z.tar.cms
-   deploy/offsite.sh open b2b-20261006T021500Z.tar.cms ~/b2b-backup-key.pem
-   ```
+**5. Send the first copy:**
 
-   That prints the manifest and checks each member's SHA-256. Then
-   `deploy/restore.sh <the prod-*.db.gz it produced>`.
+```bash
+deploy/offsite.sh send --force && deploy/offsite.sh list
+```
 
-**Checking on it later.** `deploy/offsite.sh verify` re-reads every archive on
-the remote and compares it with the digest recorded when it was sent, which
-catches bit-rot and anything that has been altered underneath you. It emails if
-something does not match. `/admin/settings` shows the last copy, and shows
-**Stale** when the most recent success is more than two nights old — a backup
-job that stopped being run leaves a perfectly happy "ok" behind it, and that is
-the failure worth catching.
+**6. Prove the restore from your own machine**, with the key you saved — not
+from the server, which by design cannot read its own backups:
+
+```bash
+deploy/offsite.sh fetch b2b-20261007T021500Z.tar.cms
+deploy/offsite.sh open b2b-20261007T021500Z.tar.cms ~/b2b-backup-key.pem
+```
+
+That prints the manifest and checks each member's SHA-256. A backup nobody has
+opened is a hope.
+
+**Retention is the bucket's job on B2.** This script never deletes there — see
+CLAUDE.md for why. Set a Lifecycle Rule in the B2 console if you want one; the
+archive is ~5MB, so a year is under 2GB.
+
+**Checking on it later.** `deploy/offsite.sh verify` re-reads every archive and
+compares it with the digest recorded when it was sent, which catches bit-rot
+and anything altered underneath you. `/admin/settings` shows the last copy, and
+shows **Stale** when the most recent success is more than two nights old — a
+backup job that stopped being run leaves a perfectly happy "ok" behind it, and
+that is the failure worth catching.
+
 
 ## Continuous deploy
 

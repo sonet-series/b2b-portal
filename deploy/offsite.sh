@@ -460,6 +460,14 @@ cmd_keygen() {
   the ones already sent; with it, all of them are readable, so treat it as the
   key to the whole database.
 
+  DO NOT PASTE IT ANYWHERE ELSE. Not into a chat window, an email, a ticket, a
+  support thread or a document. Anything it is pasted into is now a copy of
+  the key to every agent's PAN card and every payment screenshot you hold.
+  If that happens, it costs nothing to start again: delete
+  $OFFSITE_CERT, run keygen once more, and re-send. The only cost is losing
+  archives already encrypted to the old key, and on the day you generate it
+  there are none.
+
 EOF
   cat "$tmp/private.pem"
   cat <<EOF
@@ -628,7 +636,17 @@ cmd_self_test() {
 # fallback, and a fallback nobody has exercised is a guess. One object, a few
 # hundred bytes, named so it cannot be mistaken for a backup.
 cmd_b2_check() {
-  is_b2_remote || { echo "OFFSITE_REMOTE is not a b2:// destination (it is: ${OFFSITE_REMOTE:-unset})"; exit 1; }
+  if ! is_b2_remote; then
+    echo "OFFSITE_REMOTE is not a b2:// destination (it is: ${OFFSITE_REMOTE:-unset})."
+    echo
+    echo "Set the destination FIRST — this command tests it, so it has to know"
+    echo "where to test. In $ENV_FILE:"
+    echo
+    echo "    OFFSITE_REMOTE=b2://series-tours-erp-backup/b2b-portal"
+    echo
+    echo "then run this again."
+    exit 1
+  fi
   command -v b2 >/dev/null 2>&1 || { echo "The 'b2' CLI is not on PATH."; exit 1; }
 
   local bucket prefix stamp name tmp
