@@ -733,17 +733,34 @@ over the allowance had ALREADY been charged and were in the total, so the
 document was telling the customer they would be billed a second time for
 kilometres they had just paid for.
 
-`terms.includedKm` is now `max(allowance, tripKm)`:
-- **Over the allowance** — the trip distance, because that is what the price
-  bought.
-- **Under it** — the allowance, because four days bought 1,000 km whether or
-  not they were driven.
+`terms.includedKm` became `max(allowance, tripKm)`.
 
-The option's headline uses the same figure, so it cannot contradict the terms
-two lines below it.
+**AMENDED 7 Oct 2026 — it is now simply the TRIP DISTANCE.** The
+over-the-allowance half was right and is unchanged; the under-the-allowance
+half ("four days bought 1,000 km whether or not they were driven") was wrong,
+and it produced the sentence Sonet complained about: a 5-day hire at 250 km/day
+telling a customer **"1,250 km included" on a trip measuring 700**.
 
-**The allowance is an INPUT to the extra-km calculation, not a customer-facing
-number.** It only ever meant "how far before we start charging per km".
+That is not merely confusing, it is a PROMISE. The party could ask the driver
+for another 550 km and owe nothing, while the same document said detours beyond
+the plan cost ₹23 a km. Both cannot be true.
+
+What changed in between is that the trip distance became trustworthy. Since
+7 Oct it is measured, carries 62 km a night of local running, and rounds up to
+the next 50 — so it already holds the cushion the per-day allowance used to
+provide by accident.
+
+**Two numbers, two jobs, and they must not be conflated again:**
+- **`chargeAfterKm`** (the per-day allowance, pooled over the hire) decides
+  WHEN an extra-km line is billed. It stays, and it must: the daily rate covers
+  a normal day's running, and five days to Bangalore and back cannot cost the
+  same as five days around Kerala. Removing it would silently undercharge every
+  long hire. It is never shown to anyone.
+- **`terms.includedKm`** (the trip distance) is what the document STATES. It is
+  the only one a customer ever sees.
+
+The variable was called `includedKm` while doing both jobs, which is how they
+came to be confused. It is now named for the job it has.
 
 ### The quote may only CLAIM what it charged (20 Sept 2026)
 The printed quote carried a fixed line — "toll, parking and interstate permits

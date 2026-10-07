@@ -610,7 +610,7 @@ export async function quoteVehicle(
        * on one hire is two different answers to "how far before we charge per
        * km", and the line that reports it could only pick one.
        */
-      let includedKm = tourAllowanceKm ?? 0;
+      let chargeAfterKm = tourAllowanceKm ?? 0;
       // Set where the bata line is actually pushed, so the customer document
       // can only claim a driver allowance that was really charged.
       let chargedBata = false;
@@ -622,7 +622,7 @@ export async function quoteVehicle(
         if (main.usedOverride) usedOverride = true;
 
         if (tourAllowanceKm == null) {
-          includedKm += (seg.rate.includedKmPerDay ?? 0) * seg.units;
+          chargeAfterKm += (seg.rate.includedKmPerDay ?? 0) * seg.units;
         }
 
         lines.push({
@@ -679,8 +679,8 @@ export async function quoteVehicle(
 
       // Extra km bill against the allowance accumulated across all segments,
       // not per segment — the allowance is a trip-level pool.
-      if (km != null && km > includedKm) {
-        const extraKm = km - includedKm;
+      if (km != null && km > chargeAfterKm) {
+        const extraKm = km - chargeAfterKm;
         const extraRate =
           extraKmCharge && extraKmUnitMinor != null
             ? { ...extraKmCharge, minor: extraKmUnitMinor }
@@ -688,14 +688,14 @@ export async function quoteVehicle(
         if (!extraRate) {
           unavailable.push({
             title,
-            reason: `This hire includes ${includedKm} km and no extra-km rate is loaded, so ${km} km cannot be quoted.`,
+            reason: `This hire covers ${chargeAfterKm} km and no extra-km rate is loaded, so ${km} km cannot be quoted.`,
           });
         } else {
           if (extraRate.usedOverride) usedOverride = true;
           const legSummary =
             legs.length > 0 ? ` across ${legs.length} leg${legs.length === 1 ? "" : "s"}` : "";
           lines.push({
-            description: `Extra km (${km} km${legSummary}, ${includedKm} km included)`,
+            description: `Extra km (${km} km${legSummary}, ${chargeAfterKm} km on the daily rate)`,
             quantity: extraKm,
             unitMinor: extraRate.minor,
             totalMinor: extraRate.minor * extraKm,
@@ -706,9 +706,35 @@ export async function quoteVehicle(
       }
 
       if (lines.length > 0) {
-        // The same figure the terms state, so the headline cannot contradict
-        // the small print two lines below it.
-        const coveredKm = Math.max(includedKm, km ?? 0);
+        /*
+         * What the quote STATES as included: the distance this trip actually
+         * runs, not the rate card's per-day allowance.
+         *
+         * Those are two different numbers doing two different jobs, and
+         * conflating them is what produced the sentence Sonet objected to. A
+         * 5-day hire at 250 km/day told the customer "1,250 km included" on a
+         * trip measuring 700 — and that is not merely confusing, it is a
+         * PROMISE. Under those terms the party could ask the driver for
+         * another 550 km and owe nothing, while the same document said
+         * detours beyond the plan cost ₹23 a km. Both cannot be true.
+         *
+         * Confirmed with Sonet, 7 Oct 2026: state what the price was built
+         * on. Since 7 Oct the trip distance is itself an operator-grade
+         * figure — measured, 62 km a night for local running, rounded up to
+         * the next 50 — so it already carries the cushion the per-day
+         * allowance used to provide informally.
+         *
+         * `chargeAfterKm` still governs WHEN extra km is billed, and must:
+         * the daily rate covers a normal day's running, and a 5-day trip to
+         * Bangalore and back cannot cost the same as five days around Kerala.
+         * Removing that threshold would silently undercharge every long hire.
+         *
+         * This REVERSES the 20 Sept rule for the under-allowance case only.
+         * Over the allowance it is unchanged and still correct: the excess has
+         * already been charged and is in the total, so a 1,189 km trip covers
+         * 1,189 km and must not be billed for them twice.
+         */
+        const coveredKm = km ?? chargeAfterKm;
         options.push({
           key: "PER_DAY",
           productType: "vehicle",
