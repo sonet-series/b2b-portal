@@ -10,6 +10,8 @@ export type ChargeOption = {
   charge: RateCharge;
   label: string;
   defaultMinor: number | null;
+  /** What the row costs, before markup. Null when the charge is not offered. */
+  costMinor: number | null;
 };
 
 /** One selectable priced row, pre-flattened on the server. */
@@ -31,6 +33,8 @@ export type OverrideRow = {
   /** Null when the underlying rate has since been deleted. */
   label: string | null;
   defaultMinor: number | null;
+  /** What the row costs. Null when the rate has since been deleted. */
+  costMinor: number | null;
 };
 
 const PRODUCT_LABEL: Record<ProductType, string> = {
@@ -121,23 +125,34 @@ export function RateCardPanel({
                 label="Which charge"
                 name="charge"
                 required
-                options={(selected?.charges ?? [{ charge: "MAIN", label: "Main rate", defaultMinor: null }]).map(
-                  (c) => ({
-                    value: c.charge,
-                    label:
-                      c.defaultMinor === null
-                        ? `${c.label} — not offered on this rate`
-                        : `${c.label} — default ${formatMinor(c.defaultMinor)}`,
-                  })
-                )}
-                hint="Defaults shown are for this agency's tier."
+                options={(
+                  selected?.charges ?? [
+                    { charge: "MAIN" as const, label: "Main rate", defaultMinor: null, costMinor: null },
+                  ]
+                ).map((c) => ({
+                  value: c.charge,
+                  /*
+                    COST is shown beside the default, not just the default.
+                    An override is an ABSOLUTE price that bypasses the markup
+                    rules entirely, so it is the one thing here that can sell
+                    below cost — and with only a default on screen there is
+                    nothing to tell ₹1,500 from ₹15,000. The mistake otherwise
+                    surfaces as a quote that quietly loses money on every
+                    booking for this agency.
+                  */
+                  label:
+                    c.defaultMinor === null
+                      ? `${c.label} — not offered on this rate`
+                      : `${c.label} — costs ${formatMinor(c.costMinor ?? 0)}, default ${formatMinor(c.defaultMinor)}`,
+                }))}
+                hint="Defaults are for this agency's tier. Anything at or below cost loses money on every booking."
                 error={err.charge}
               />
               <MoneyField
                 label="Override price"
                 name="overridePriceMinor"
                 required
-                hint="Replaces the tier default for that charge, for this agent only."
+                hint="Replaces the tier default for that charge, for this agent only. It ignores the markup rules, so check it against the cost above."
                 error={err.overridePriceMinor}
               />
             </div>
@@ -165,9 +180,14 @@ export function RateCardPanel({
           hint="This agent is quoted catalogue default rates on everything."
         />
       ) : (
-        <Table head={["Product", "Charge", "Rate", "Default", "This agent", ""]}>
-          {overrides.map((o) => (
-            <tr key={o.id}>
+        <Table head={["Product", "Charge", "Rate", "Cost", "Default", "This agent", ""]}>
+          {overrides.map((o) => {
+            // At cost counts as below. Selling for exactly what it cost is not
+            // a rate, and on an override it is far likelier a typo than a
+            // decision.
+            const belowCost = o.costMinor != null && o.overridePriceMinor <= o.costMinor;
+            return (
+            <tr key={o.id} className={belowCost ? "bg-red-50" : undefined}>
               <Td>
                 <Badge tone="blue">{PRODUCT_LABEL[o.productType as ProductType] ?? o.productType}</Badge>
               </Td>
@@ -183,9 +203,21 @@ export function RateCardPanel({
                 {o.notes && <div className="text-xs text-slate-500">{o.notes}</div>}
               </Td>
               <Td className="text-slate-500">
+                {o.costMinor != null ? formatMinor(o.costMinor) : "—"}
+              </Td>
+              <Td className="text-slate-500">
                 {o.defaultMinor != null ? formatMinor(o.defaultMinor) : "—"}
               </Td>
-              <Td className="font-medium text-slate-900">{formatMinor(o.overridePriceMinor)}</Td>
+              <Td
+                className={belowCost ? "font-semibold text-red-700" : "font-medium text-slate-900"}
+              >
+                {formatMinor(o.overridePriceMinor)}
+                {belowCost && (
+                  <span className="block text-xs font-semibold text-red-700">
+                    at or below cost
+                  </span>
+                )}
+              </Td>
               <Td className="text-right">
                 <button
                   type="button"
@@ -196,7 +228,8 @@ export function RateCardPanel({
                 </button>
               </Td>
             </tr>
-          ))}
+            );
+          })}
         </Table>
       )}
     </section>

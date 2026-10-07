@@ -69,6 +69,9 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
       notes: e.notes,
       label: option?.label ?? null,
       defaultMinor: chargeOption?.defaultMinor ?? null,
+      // So an override already set below cost is visible on the list, not only
+      // discovered later on a quote that has been losing money since.
+      costMinor: chargeOption?.costMinor ?? null,
     };
   });
 

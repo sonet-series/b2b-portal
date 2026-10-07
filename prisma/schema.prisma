@@ -781,6 +781,23 @@ model QuoteLine {
   /// catalogue default did. Makes "why is this price what it is" answerable.
   usedOverride Boolean @default(false)
 
+  /// What this line COST, in total, in paise — the catalogue's stored cost
+  /// for whatever was sold, before any markup or override.
+  ///
+  /// Recorded for the same reason `usedOverride` is. Without it the margin on
+  /// a saved quote can only be guessed at by looking up today's catalogue
+  /// cost, which drifts — the same staleness that makes this project derive
+  /// sell prices rather than store them. A quote is a frozen record, so the
+  /// cost it was priced against freezes with it.
+  ///
+  /// The TOTAL, parallel to `totalMinor`, never a unit cost: `quantity` means
+  /// nights, days, km or pax depending on the product.
+  ///
+  /// NULLABLE, and absent means "not recorded" — never "free". Every line
+  /// written before 7 Oct 2026 has no value, and the admin screen says so
+  /// rather than reporting 100% margin on a quote nobody measured.
+  costTotalMinor Int?
+
   /// Which product this line came from. Lines had no provenance before, which
   /// is fine while a quote holds one product and useless once it holds four —
   /// a combined quote has to be able to group its lines back into the items
@@ -1090,99 +1107,4 @@ model StatePermit {
 
   @@unique([state, vehicleId])
   @@index([state, active])
-}
-
-/// One of the circuits Series Tours actually sells — "Cochin, Munnar,
-/// Thekkady, Alleppey, back to Cochin", 650 km.
-///
-/// Sonet, 6 Oct 2026: *"b2b agents wont be know how many km there trip will
-/// running"*. Agents sell these six or seven standard routes; making each one
-/// build a day-by-day plan from scratch asks them to know Kerala's roads, and
-/// then states a kilometre figure their customer has no way to judge.
-///
-/// A template is NOT a new pricing path. It fills in exactly the day plan the
-/// builder already produces, and the quote prices it the same way it always
-/// has. The agent can still edit the days afterwards — it is a starting point,
-/// never a restriction, the same relationship the destination chips have to
-/// free typing.
-model TourTemplate {
-  id   String @id @default(uuid())
-  /// What an agent picks it by: "Munnar & Alleppey — 4 nights".
-  name String
-
-  /// Where the tour begins — almost always an airport. Day 1 runs from here,
-  /// and every later day is chained from the one before, exactly as a
-  /// hand-built itinerary is.
-  startPlace String
-
-  /// Nights, so days = nights + 1. A route sold at two durations is two
-  /// templates: the day plans genuinely differ, and the local running that
-  /// accrues at each overnight stop differs with them.
-  nights Int
-
-  /// THE ALLOWANCE, in km. Sonet's figure, not a measurement.
-  ///
-  /// His own numbers are round — 350, 550, 650, 1150, 1350, 1650 — because
-  /// they are commercial allowances built from running these trips, and they
-  /// already carry the sightseeing at each stop. Google measures the same
-  /// route at 638 or 1,187. Confirmed with Sonet 6 Oct 2026: the ALLOWANCE is
-  /// what the hire is priced and quoted on, because it is the number he
-  /// stands behind and the number a customer can hold him to.
-  ///
-  /// The route is still measured underneath. The measurement is not thrown
-  /// away — it is what lets the admin see a tour whose allowance has drifted
-  /// below the road it describes, which is money leaking on every booking.
-  /// It simply does not decide the price.
-  ///
-  /// Km, not metres, unlike every measured distance here: a typed round
-  /// number stored in metres claims a precision it does not have. Same
-  /// reasoning, and the same unit, as VehicleRate.includedKmPerDay.
-  allowanceKm Int
-
-  /// Shown to the agent when choosing. Not customer-facing — the customer
-  /// document is built from the day plan, as it is for any other quote.
-  notes String?
-
-  /// Sonet's order, lowest first, for the same reason the fleet has one: this
-  /// is a sales order and cannot be derived. Kept contiguous on every move.
-  sortOrder Int @default(0)
-
-  /// Soft delete — a tour that has been quoted against is never removed.
-  active Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  days TourTemplateDay[]
-
-  @@index([active, sortOrder])
-}
-
-/// One day of a template, in the same shape as the itinerary the agent would
-/// otherwise type: where the day ends, and anywhere it stops on the way.
-///
-/// There is no `from`: day 1 starts at the template's startPlace and every
-/// later day starts wherever the previous one ended. That is `chainDays`, and
-/// storing a `from` here would let a template express a gap the builder
-/// cannot — unbilled distance the operator still pays for.
-model TourTemplateDay {
-  id         String       @id @default(uuid())
-  templateId String
-  template   TourTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-  /// 0-based. Day 0 is the arrival day.
-  dayIndex Int
-
-  /// Where this day ends. Equal to the previous day's `to` for a day spent at
-  /// one stop, which is how a day excursion is expressed — exactly as in a
-  /// hand-built plan.
-  to String
-
-  /// Stops on the way, comma-separated, in order. A plain string rather than
-  /// a child table: it is read and written as a whole, never queried into,
-  /// and a third table for an ordered list of two place names is weight with
-  /// no benefit.
-  viaCsv String?
-
-  @@unique([templateId, dayIndex])
 }

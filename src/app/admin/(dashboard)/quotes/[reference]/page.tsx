@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getQuoteForAdmin, readSnapshot, resolveSubject } from "@/lib/quote-store";
 import { formatMinor } from "@/lib/money";
+import { lineMargin, quoteMargin, formatPct, formatMarginMinor } from "@/lib/margin";
 import { gstBps } from "@/lib/settings";
 import { withGst, formatBps } from "@/lib/settings-shared";
 import { formatDateDisplay } from "@/lib/dates";
@@ -45,6 +46,8 @@ export default async function AdminQuotePage({
   const subject = await resolveSubject(snapshot);
   const terms = snapshot.option?.terms;
   const totals = withGst(quote.totalMinor, await gstBps());
+  // What the trip earns. Admin-only — it is never computed on an agent screen.
+  const margin = quoteMargin(quote.lines);
 
   const input = snapshot.input;
   const garageId =
@@ -239,30 +242,113 @@ export default async function AdminQuotePage({
               <th className="py-1.5 text-right font-semibold">Qty</th>
               <th className="py-1.5 text-right font-semibold">Unit</th>
               <th className="py-1.5 text-right font-semibold">Amount</th>
+              <th className="py-1.5 text-right font-semibold">Cost</th>
+              <th className="py-1.5 text-right font-semibold">Margin</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {quote.lines.map((line) => (
-              <tr key={line.id}>
-                <td className="py-1.5 pr-3 text-slate-700">
-                  {line.description}
-                  {line.usedOverride && (
-                    <span className="ml-2 text-xs text-green-700">agency rate</span>
-                  )}
-                </td>
-                <td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">
-                  {line.quantity.toLocaleString("en-IN")}
-                </td>
-                <td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">
-                  {formatMinor(line.unitMinor)}
-                </td>
-                <td className="py-1.5 text-right tabular-nums text-slate-900">
-                  {formatMinor(line.totalMinor)}
-                </td>
-              </tr>
-            ))}
+            {quote.lines.map((line) => {
+              const m = lineMargin(line);
+              return (
+                <tr key={line.id} className={m.belowCost ? "bg-red-50" : undefined}>
+                  <td className="py-1.5 pr-3 text-slate-700">
+                    {line.description}
+                    {line.usedOverride && (
+                      <span className="ml-2 text-xs text-green-700">agency rate</span>
+                    )}
+                    {/*
+                      The one that matters. An override is an ABSOLUTE price
+                      that bypasses the markup rules, so a mistyped one sells
+                      below cost on every quote for that agency until somebody
+                      notices — and the agent's screen shows a cheerful green
+                      "your agency rate applied" while it does.
+                    */}
+                    {m.belowCost && (
+                      <span className="ml-2 text-xs font-semibold text-red-700">
+                        at or below cost
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">
+                    {line.quantity.toLocaleString("en-IN")}
+                  </td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">
+                    {formatMinor(line.unitMinor)}
+                  </td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-slate-900">
+                    {formatMinor(line.totalMinor)}
+                  </td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">
+                    {formatMarginMinor(line.costTotalMinor)}
+                  </td>
+                  <td
+                    className={
+                      "py-1.5 text-right tabular-nums " +
+                      (m.belowCost ? "font-semibold text-red-700" : "text-slate-700")
+                    }
+                  >
+                    {formatMarginMinor(m.marginMinor)}
+                    {m.marginPct != null && (
+                      <span className="ml-1 text-xs text-slate-400">
+                        {formatPct(m.marginPct)}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+
+        {/*
+          The quote's own margin, under the lines it is derived from.
+          Admin-only: this is what the trip EARNS, and it has no business
+          anywhere an agent can see.
+        */}
+        {margin.allUnknown ? (
+          <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500 ring-1 ring-inset ring-slate-200">
+            This quote was saved before costs were recorded on each line, so its margin cannot be
+            worked out. Looking up today&rsquo;s catalogue cost would not answer it either — rates
+            move, and the quote was priced against the ones in force then.
+          </p>
+        ) : (
+          <div
+            className={
+              "mt-3 rounded-md px-3 py-2 text-sm ring-1 ring-inset " +
+              (margin.belowCost.length > 0
+                ? "bg-red-50 text-red-800 ring-red-200"
+                : "bg-slate-50 text-slate-600 ring-slate-200")
+            }
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+              <span>
+                Cost <strong className="tabular-nums">{formatMinor(margin.costMinor)}</strong>
+                <span className="mx-2 text-slate-300">·</span>
+                Charged{" "}
+                <strong className="tabular-nums">{formatMinor(margin.chargedMinor)}</strong>
+              </span>
+              <span>
+                Margin{" "}
+                <strong className="tabular-nums">{formatMinor(margin.marginMinor)}</strong>{" "}
+                <span className="text-xs">{formatPct(margin.marginPct)}</span>
+              </span>
+            </div>
+            {margin.unknownLines > 0 && (
+              <p className="mt-1 text-xs">
+                {margin.unknownLines} line{margin.unknownLines === 1 ? "" : "s"} had no recorded
+                cost and {margin.unknownLines === 1 ? "is" : "are"} left out of both sides —
+                never counted as free.
+              </p>
+            )}
+            {margin.belowCost.length > 0 && (
+              <p className="mt-1 text-xs font-semibold">
+                {margin.belowCost.length} line{margin.belowCost.length === 1 ? "" : "s"} sell
+                {margin.belowCost.length === 1 ? "s" : ""} at or below cost. Check the agency rate
+                card — an override is an absolute price and ignores the markup rules entirely.
+              </p>
+            )}
+          </div>
+        )}
 
         <dl className="mt-4 divide-y divide-slate-100 text-sm">
           <div className="flex items-baseline justify-between py-2">

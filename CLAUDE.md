@@ -1306,69 +1306,65 @@ and a number.
 **Two save paths must freeze the same things.** They did not, and the
 difference only showed on a customer's document.
 
-### Standard tours — the agent should not have to know the km (6 Oct 2026)
-Sonet: *"b2b agents wont be know how many km there trip will running. so by
-saying that this much km is included will be feasiable for them and for their
-customer too"*, with the six circuits he actually sells and their totals:
-Cochin–Munnar–Cochin 350, –Alleppey 550, +Thekkady–Cochin 650,
-+Kovalam–Trivandrum 1150, +Kanyakumari 1350, the full Madurai–Rameswaram
-circuit 1650.
+### Standard tours were built and REMOVED (6–7 Oct 2026)
+Sonet gave six circuits with the kilometres he quotes for them. They were taken
+as products to enter, and `TourTemplate` was built so an agent could pick one
+and have the day plan filled in.
 
-He is right twice over, and they are two different problems.
+**That was a misreading, and he said so plainly:** *"i dont want you to make a
+standard tour ... these are just examples i just showed you ... i cannot give
+you all the tours. also agent get lot of customization from their customer. so
+its needs to calculate as a person."*
 
-**1. Planning the trip was the agent's job and should not have been.** An
-agency in Delhi selling a Kerala holiday has no way to know Munnar to Thekkady
-is 95 km. `TourTemplate` holds the circuits; picking one fills in the
-day-by-day plan and the end date.
+The six were EVIDENCE, not a catalogue — evidence that the portal's distances
+were wrong. A template library would have been a second thing to keep current
+that only ever covered the trips nobody customises.
 
-- **Not a second pricing path.** A template produces exactly the day plan the
-  builder produces, and `quoteVehicle` prices it unchanged. Two paths is how a
-  quote comes to disagree with itself.
-- **A starting point, never a restriction** — the same relationship the
-  destination chips have to free typing. Every day stays editable, and the
-  template is not re-applied once the form carries day rows, or editing one
-  would silently revert.
-- **Filled SERVER-SIDE**, from the query string, with no client scripting:
-  choosing a tour is a navigation, so the result is still a URL an agent can
-  bookmark or send to a colleague.
-- **A half-planned tour is hidden from agents**, not offered with gaps. The
-  admin list says so, because a tour that is silently invisible is one nobody
-  knows to finish.
+The real fix came from measuring that gap instead: local running per night,
+rounded up to 50, which reproduces his judgement on ANY itinerary an agent
+builds. See below.
 
-**2. "1,014 km included" is the wrong sentence, and the number was wrong too.**
-Included km was `includedKmPerDay × days`, so a 3-day Cochin–Munnar–Cochin at
-250 km/day stated **750 km included on a trip that runs 350** — arithmetic
-about an allowance, not a fact about the journey, and nothing a customer could
-judge.
+Removed in full on 7 Oct: both tables dropped, `VehicleQuoteInput.tourId` gone
+from the type, the zod schema and the edit URL. The feature was live for one
+day and seeded nothing, so no saved quote carries a tour id.
 
-A tour's `allowanceKm` REPLACES that pool. Confirmed with Sonet 6 Oct 2026:
-his figure, not a measurement. His numbers are round because they are
-commercial allowances that already carry the sightseeing at each stop; Google
-measures the same circuit at 638. The allowance is what he stands behind and
-what a customer can hold him to.
+**Worth keeping as a lesson:** when someone gives you data, ask what it is
+evidence OF before building the thing it most resembles.
 
-- **Resolved from the id server-side**, never read off the request — it decides
-  what the hire is priced on, so a number in the query string is a number the
-  agent can edit. Same rule as measuring the legs rather than trusting `legKm`.
-- **Km, not metres**, unlike every measured distance here: a typed round number
-  stored in metres claims a precision it does not have.
-- **The route leads the customer document now, not the number.** "All transfers
-  and sightseeing as set out in the day-by-day plan above, including local
-  running at each stop", then the allowance beneath it, and "detours and
-  running beyond the planned itinerary" in the exclusions. Leading with a
-  kilometre figure starts an argument about kilometres that was never the deal.
+### Margin is recorded, and below-cost is flagged (7 Oct 2026)
+`QuoteLine.costTotalMinor` freezes what each line COST beside what it charged.
+Without it the margin on a saved quote was unanswerable, and looking up today's
+catalogue cost would not have answered it either — rates move, and the quote
+was priced against the ones in force then. Same reasoning as `usedOverride`.
 
-**STILL OPEN — the drift check.** `includedKm` is still
-`max(allowance, measured)`, which is correct under "a quote may only claim what
-it charged": if the measured route exceeds the allowance, the excess IS billed
-as extra km and the document must say so. But then the picker advertises 650
-and the document says 680. That is not a bug in the quote — it is a tour whose
-allowance has fallen below the road it describes, and it should be surfaced to
-the ADMIN rather than silently surcharged to an agent's customer. The measured
-distance is already computed on every quote; nothing compares it to the
-allowance yet.
+**NULL means not recorded, never free.** Every line written before today has
+none, and `/admin/quotes` says the margin cannot be worked out rather than
+reporting 100% on a quote nobody measured. Lines with no cost are excluded from
+both sides of a partial total, and the count of them is stated.
 
-### The day description is OURS (21 Sept 2026)
+**The failure this exists to catch:** a rate-card override is an ABSOLUTE price
+that bypasses the markup rules entirely, so a mistyped one — ₹1,500 where
+₹15,000 was meant — produces an ordinary-looking quote that loses money on
+every booking for that agency, for as long as nobody notices. The agent's
+screen shows a green "your agency rate applied" badge while it happens. The
+first quote saved after this shipped found exactly that in the demo data: a
+₹3,500 override against a ₹3,800 cost, the whole quote at **−4.3% margin**.
+
+Flagged in three places, all admin-only:
+- **`/admin/quotes/[ref]`** — cost and margin per line, the quote's total
+  margin, and any line at or below cost in red.
+- **The rate-card list** — an existing override at or below cost, so one set
+  months ago is visible without opening a quote.
+- **The override form** — the COST is now shown beside the tier default when
+  choosing a charge. With only a default on screen there is nothing to tell
+  ₹1,500 from ₹15,000.
+
+**At cost counts as below.** Selling for exactly what it cost is not a rate,
+and on an override it is far likelier a typo than a decision.
+
+**Margin is never computed on an agent screen.** It is what the trip earns.
+
+### The day description is OURS (21 Sept 2026)### The day description is OURS (21 Sept 2026)
 *"day description needs to be derived from our side. not the agent."*
 
 An agent writing their own gets it different on every quote, or leaves it

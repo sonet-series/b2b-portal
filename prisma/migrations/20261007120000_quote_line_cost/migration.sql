@@ -1,0 +1,11 @@
+-- What each quote line COST us, beside what it charged.
+--
+-- One nullable column, so this is metadata-only in SQLite: no table rebuild,
+-- no `INSERT ... SELECT`, and none of the P3009 half-applied failure this
+-- project has lost an evening to three times.
+--
+-- Nullable rather than `NOT NULL DEFAULT 0` on purpose. Every line written
+-- before today genuinely has no recorded cost, and zero would read as "this
+-- cost us nothing" — reporting 100% margin on quotes nobody ever measured.
+-- NULL means unknown, and the admin screen says so.
+ALTER TABLE "QuoteLine" ADD COLUMN "costTotalMinor" INTEGER;

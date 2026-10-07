@@ -1,0 +1,31 @@
+-- Standard tours, removed.
+--
+-- Built 6 Oct 2026 on a misreading. Sonet gave six circuits with their
+-- kilometres as DATA — evidence that the portal's distances were wrong — and
+-- they were taken as products to enter. His correction, 6 Oct: *"i dont want
+-- you to make a standard tour ... i cannot give you all the tours. also agent
+-- get lot of customization from their customer. so its needs to calculate as
+-- a person."*
+--
+-- He is right, and the real fix came from measuring that gap instead: local
+-- running per night and the total rounded up to 50, which reproduces his
+-- judgement on ANY itinerary an agent builds rather than on a list somebody
+-- has to maintain. A template library would have been a second thing to keep
+-- current that only ever covered the trips nobody customises.
+--
+-- DROP TABLE, not a soft delete, because nothing points at these rows:
+-- `VehicleQuoteInput.tourId` is gone from the type, the schema and the edit
+-- URL, and no saved quote on production ever carried one — the feature was
+-- live for a day and seeded nothing.
+--
+-- The child goes first. TourTemplateDay has a foreign key onto TourTemplate
+-- with ON DELETE CASCADE; dropping the parent first leaves a table whose
+-- constraint points at nothing, which SQLite tolerates quietly and every
+-- later schema diff then argues about.
+--
+-- `IF EXISTS` on both: SQLite has no `DROP COLUMN IF EXISTS`, but it does
+-- have this, and migrations run unattended on container start. One that
+-- cannot re-run from its own half-finished state needs a human at the worst
+-- possible moment.
+DROP TABLE IF EXISTS "TourTemplateDay";
+DROP TABLE IF EXISTS "TourTemplate";

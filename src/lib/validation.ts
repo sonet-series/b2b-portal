@@ -628,12 +628,6 @@ export const vehicleQuoteSchema = z
   .object({
     vehicleId: z.string().min(1, "Choose a vehicle"),
     garageId: z.string().min(1, "Choose a depot").optional(),
-    /*
-     * The standard tour the plan was filled in from, if any. Only the ID — the
-     * kilometre allowance it carries is read from the database when the quote
-     * is priced, never from the request.
-     */
-    tourId: z.string().min(1).optional(),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a start date"),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose an end date"),
     adults: z.coerce

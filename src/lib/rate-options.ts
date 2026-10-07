@@ -23,6 +23,17 @@ export type ChargeOption = {
   label: string;
   /** Null when the row does not offer this charge at all. */
   defaultMinor: number | null;
+  /**
+   * What the row COSTS, before any markup — null when the charge is not
+   * offered.
+   *
+   * Shown beside the default when setting an override, because an override is
+   * an ABSOLUTE price that bypasses the markup rules entirely. Without the
+   * cost on screen there is nothing to tell ₹1,500 from ₹15,000, and the
+   * mistake only surfaces as a quote that quietly loses money on every
+   * booking for that agency.
+   */
+  costMinor: number | null;
 };
 
 export type RateOption = {
@@ -54,10 +65,15 @@ export async function listRateOptions(tier: AgentTier): Promise<RateOption[]> {
   const optionalForTier = (productType: ProductType, costMinor: number | null) =>
     sellPriceOptional(markup, productType, tier, costMinor);
 
-  const charge = (c: RateCharge, defaultMinor: number | null): ChargeOption => ({
+  const charge = (
+    c: RateCharge,
+    defaultMinor: number | null,
+    costMinor: number | null
+  ): ChargeOption => ({
     charge: c,
     label: RATE_CHARGE_LABEL[c],
     defaultMinor,
+    costMinor,
   });
 
   const [hotelRates, houseboatRates, vehicleRates, itineraryRates] = await Promise.all([
@@ -93,8 +109,8 @@ export async function listRateOptions(tier: AgentTier): Promise<RateOption[]> {
       label: `${r.hotel.name} (${r.hotel.location}) · ${r.roomType} ${r.mealPlan} · ${season(r.validFrom, r.validTo, r.seasonLabel)}`,
       defaultMinor: forTier("hotel", r.costPerNightMinor),
       charges: [
-        charge("MAIN", forTier("hotel", r.costPerNightMinor)),
-        charge("EXTRA_BED", optionalForTier("hotel", r.extraBedCostMinor)),
+        charge("MAIN", forTier("hotel", r.costPerNightMinor), r.costPerNightMinor),
+        charge("EXTRA_BED", optionalForTier("hotel", r.extraBedCostMinor), r.extraBedCostMinor),
       ],
     })),
     ...houseboatRates.map((r) => ({
@@ -103,8 +119,8 @@ export async function listRateOptions(tier: AgentTier): Promise<RateOption[]> {
       label: `${r.houseboat.name} (${r.houseboat.location}) · ${CRUISE_PACKAGE_LABEL[r.cruisePackage as CruisePackage] ?? r.cruisePackage} · ${HOUSEBOAT_PRICING_MODE_LABEL[r.pricingMode as HouseboatPricingMode] ?? r.pricingMode} · ${season(r.validFrom, r.validTo, r.seasonLabel)}`,
       defaultMinor: forTier("houseboat", r.costMinor),
       charges: [
-        charge("MAIN", forTier("houseboat", r.costMinor)),
-        charge("EXTRA_PAX", optionalForTier("houseboat", r.extraPaxCostMinor)),
+        charge("MAIN", forTier("houseboat", r.costMinor), r.costMinor),
+        charge("EXTRA_PAX", optionalForTier("houseboat", r.extraPaxCostMinor), r.extraPaxCostMinor),
       ],
     })),
     ...vehicleRates.map((r) => ({
@@ -113,11 +129,12 @@ export async function listRateOptions(tier: AgentTier): Promise<RateOption[]> {
       label: `${r.vehicle.type} · ${VEHICLE_RATE_TYPE_LABEL[r.rateType as VehicleRateType] ?? r.rateType} · ${season(r.validFrom, r.validTo, r.seasonLabel)}`,
       defaultMinor: forTier("vehicle", r.costMinor),
       charges: [
-        charge("MAIN", forTier("vehicle", r.costMinor)),
-        charge("EXTRA_KM", optionalForTier("vehicle", r.extraKmCostMinor)),
+        charge("MAIN", forTier("vehicle", r.costMinor), r.costMinor),
+        charge("EXTRA_KM", optionalForTier("vehicle", r.extraKmCostMinor), r.extraKmCostMinor),
         charge(
           "DRIVER_ALLOWANCE",
-          optionalForTier("vehicle", r.driverAllowanceCostMinor)
+          optionalForTier("vehicle", r.driverAllowanceCostMinor),
+          r.driverAllowanceCostMinor
         ),
       ],
     })),
@@ -127,10 +144,11 @@ export async function listRateOptions(tier: AgentTier): Promise<RateOption[]> {
       label: `${r.itinerary.name} · ${ITINERARY_PRICING_MODE_LABEL[r.pricingMode as ItineraryPricingMode] ?? r.pricingMode} · ${season(r.validFrom, r.validTo, r.seasonLabel)}`,
       defaultMinor: forTier("itinerary", r.costMinor),
       charges: [
-        charge("MAIN", forTier("itinerary", r.costMinor)),
+        charge("MAIN", forTier("itinerary", r.costMinor), r.costMinor),
         charge(
           "SINGLE_SUPPLEMENT",
-          optionalForTier("itinerary", r.singleSupplementCostMinor)
+          optionalForTier("itinerary", r.singleSupplementCostMinor),
+          r.singleSupplementCostMinor
         ),
       ],
     })),

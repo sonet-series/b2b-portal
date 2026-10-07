@@ -6,7 +6,6 @@ import { sellPrice, sellPriceOptional, type MarkupTable } from "./markup";
 import { priceHouseboat, priceItinerary, PricingError } from "./pricing";
 import { measureItinerary } from "./itinerary";
 import { priceAncillaries } from "./ancillary";
-import { tourAllowanceKm as resolveTourAllowanceKm } from "./tours";
 import {
   parseDateOnly,
   formatDateDisplay,
@@ -434,16 +433,6 @@ export async function quoteVehicle(
 
   const days = daysBetween(start, end);
 
-  /*
-   * A standard tour's kilometre allowance, resolved from the id SERVER-SIDE.
-   *
-   * Never taken from the request. The allowance is what the hire is priced on,
-   * so accepting a number off the query string would let a hand-edited URL buy
-   * 5,000 km for the price of 650 — exactly the reason this function measures
-   * the legs itself rather than reading `legKm` from the URL.
-   */
-  const tourAllowanceKm = await resolveTourAllowanceKm(input.tourId);
-
   const vehicle = await prisma.vehicle.findFirst({
     where: { id: input.vehicleId, active: true },
     include: { rates: { where: { active: true } } },
@@ -594,23 +583,15 @@ export async function quoteVehicle(
       const lines: QuoteLineDraft[] = [];
       let usedOverride = false;
       /*
-       * What the hire's price covers, in km.
+       * How far the daily rate covers before extra km is billed — the per-day
+       * allowance, pooled across the whole hire.
        *
-       * Normally the per-day allowance pooled across the whole hire. For a
-       * STANDARD TOUR it is the tour's own allowance instead — Sonet's round
-       * commercial figure, which already carries the sightseeing at each stop.
-       *
-       * Confirmed with Sonet 6 Oct 2026, and it fixes the sentence he
-       * objected to. A 3-day Cochin–Munnar–Cochin at 250 km/day stated "750
-       * km included" on a trip that runs 350: arithmetic about an allowance,
-       * not a fact about the journey, and nothing a customer could judge.
-       * A tour states 350, because that is the number he stands behind.
-       *
-       * It replaces the per-day pool rather than adding to it. Two allowances
-       * on one hire is two different answers to "how far before we charge per
-       * km", and the line that reports it could only pick one.
+       * NEVER shown to anyone. It is an input to the extra-km calculation and
+       * nothing else; what the quote STATES as included is the trip distance,
+       * further down. Conflating the two is what produced "1,250 km included"
+       * on a trip measuring 700.
        */
-      let chargeAfterKm = tourAllowanceKm ?? 0;
+      let chargeAfterKm = 0;
       // Set where the bata line is actually pushed, so the customer document
       // can only claim a driver allowance that was really charged.
       let chargedBata = false;
@@ -621,9 +602,7 @@ export async function quoteVehicle(
         const unitMinor = main.minor;
         if (main.usedOverride) usedOverride = true;
 
-        if (tourAllowanceKm == null) {
-          chargeAfterKm += (seg.rate.includedKmPerDay ?? 0) * seg.units;
-        }
+        chargeAfterKm += (seg.rate.includedKmPerDay ?? 0) * seg.units;
 
         lines.push({
           description: `Vehicle hire · ${seg.rate.seasonLabel} · ${seasonSpan(seg.from, seg.to)}`,
