@@ -22,20 +22,48 @@ that is built, tested and inert until a credential or a photograph exists.
       `ERP_COMPANY`, `ERP_ITEM_CODE`. Also needed: confirmation of a real Item
       code, and whether each agency exists as a Customer in ERPNext — if not,
       set `ERP_DEFAULT_CUSTOMER`.
-- [ ] **Off-box backup destination and key** — `deploy/offsite.sh self-test`
-      first (it proves the whole pipeline and needs nothing), then `keygen`,
-      then an `OFFSITE_REMOTE`. **The private key must not stay on the server.**
-      Steps in `deploy/DEPLOY-PLAN.md`. Until then /admin/settings says "Off"
-      and a lost server takes its backups with it.
+- [ ] **Off-box backups for the PORTAL** — the ERP already has them
+      (Backblaze B2, `series-tours-erp-backup`, via `/root/backup-erp.sh`).
+      The portal's do not. `offsite.sh` speaks SSH or a local path today;
+      **adding B2 would reuse the bucket and CLI already on the box**, so
+      there is nothing to buy. Offered 7 Oct, not yet taken up.
 - [ ] **Photographs** — 7 vehicles, 1 hotel, 1 houseboat still have none. The
       Crysta's five are placeholder test images and should be replaced.
 - [ ] **Andhra Pradesh and Puducherry permits** — 16 rows (8 vehicles × 2
       states). A trip crossing a state with no permit set is flagged on the
-      quote rather than quietly costing nothing, so this shows up as a warning
-      on real quotes.
+      quote rather than quietly costing nothing.
 - [ ] **Rotate the `seriestours-website` Google Places key** — flagged 26 Aug
-      2026, still outstanding. Not this portal's key; this one is separate and
-      IP-restricted.
+      2026, still outstanding. Not this portal's key.
+- [ ] **Reboot the server** — 170 days up, 66 updates pending, 5 of them
+      security. Takes the ERP and seriestours.com down with the portal, so it
+      wants a quiet slot. **Held on 7 Oct** until the ERP teardowns below are
+      explained — rebooting mid-mystery means diagnosing two things at once.
+- [ ] **Check every agency's rate card for below-cost overrides.** The margin
+      work shipped 7 Oct found one in the demo data immediately
+      (₹3,500 against a ₹3,800 cost). `/admin/agents/[id]` now flags them in
+      red; the real agencies have not been looked at.
+
+---
+
+## Unexplained — worth not forgetting
+
+- [ ] **The ERP stack was torn down twice on 7 Oct**, around 08:30 and at
+      10:54 UTC, both times a complete `docker compose down` on
+      `/root/frappe-compose.yml` — containers and the `frappe_default`
+      network, volumes untouched. Both followed a b2b deploy by a couple of
+      minutes, which is suggestive and may be coincidence.
+
+      Ruled out: `/opt/b2b-portal/docker-compose.yml` touches only the
+      external `edge` network and `deploy.sh` never runs `down`;
+      `/root/backup-erp.sh` only ever `exec`s and uploads; certbot has no
+      hooks; every login in `last` is Sonet's own IP. Docker's event buffer
+      had rolled over the morning occurrence, so the two could not be
+      compared.
+
+      Most likely a `docker compose -f frappe-compose.yml down` typed in one
+      of the other open sessions, intending a restart. **Unconfirmed.** If it
+      recurs with nobody at a keyboard, that assumption is wrong and it needs
+      chasing properly.
 
 ---
 
