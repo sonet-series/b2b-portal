@@ -172,9 +172,50 @@ wait for health, and print which migrations applied. Use it rather than typing
 the steps — the backup is the step that gets skipped when it feels
 unnecessary, which is precisely when it is not.
 
-### Fixing the workflow
+### Fixing the workflow — the secrets were never set (7 Oct 2026)
 
-The failure is almost certainly one of the three secrets under
+**Sixty consecutive runs, every one red, none ever green.** Each died in 7–9
+seconds, which is far too fast to have reached the server: the SSH step itself
+was failing. A pipeline that has never once succeeded has not broken — it was
+never finished.
+
+The workflow now CHECKS the three secrets before trying, and names the one
+that is missing instead of exiting 1 with nothing. It also catches the single
+commonest mistake, the PUBLIC key pasted where the private one belongs, which
+otherwise produces an authentication error that explains nothing.
+
+**Setting it up, on the server:**
+
+```bash
+ssh-keygen -t ed25519 -f /root/.ssh/gh-deploy -N '' -C 'github-actions-b2b'
+cat /root/.ssh/gh-deploy.pub >> /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+cat /root/.ssh/gh-deploy        # the PRIVATE half — copy this
+```
+
+Then at **github.com/sonet-series/b2b-portal → Settings → Secrets and
+variables → Actions → New repository secret**, three of them:
+
+| Secret | Value |
+|---|---|
+| `SERVER_HOST` | `77.42.81.0` |
+| `SERVER_USER` | `root` |
+| `SERVER_SSH_KEY` | the whole output of that last `cat`, **including** the `-----BEGIN OPENSSH PRIVATE KEY-----` and `-----END-----` lines |
+
+Then **Actions → Deploy to Hetzner → Run workflow** to test it without
+pushing. The guard step passes or names what is still wrong.
+
+**This key grants root on a box that also runs the ERP.** Anyone with write
+access to the repository can make it print that secret. That is one person
+today, so it is a risk worth taking knowingly rather than one to be surprised
+by later. If it ever needs tightening, a forced command in `authorized_keys`
+(`command="cd /opt/b2b-portal && git pull origin main && DEPLOYED_BY=ci bash
+deploy/deploy.sh"`) restricts the key to deploying and nothing else — at the
+cost of the deploy steps then living in two places.
+
+### If it still fails
+
+The failure is then one of the three secrets under
 **Settings → Secrets and variables → Actions**:
 
 | Secret | Common mistake |

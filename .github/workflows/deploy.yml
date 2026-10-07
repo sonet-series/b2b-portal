@@ -26,6 +26,45 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      # appleboy/ssh-action fails in about 8 seconds with a bare "exit code 1"
+      # when a secret is missing, which is indistinguishable from the server
+      # refusing the key. 60 consecutive runs failed that way before anyone
+      # worked out which it was. Say it instead of making the next person
+      # guess.
+      - name: Check the deploy secrets exist
+        env:
+          HOST: ${{ secrets.SERVER_HOST }}
+          USER: ${{ secrets.SERVER_USER }}
+          KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          missing=""
+          [ -n "$HOST" ] || missing="$missing SERVER_HOST"
+          [ -n "$USER" ] || missing="$missing SERVER_USER"
+          [ -n "$KEY" ]  || missing="$missing SERVER_SSH_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing"
+            echo "Set them under Settings -> Secrets and variables -> Actions."
+            echo "See deploy/DEPLOY-PLAN.md for what each one should contain."
+            exit 1
+          fi
+          # The commonest mistake by a distance: the PUBLIC key pasted where
+          # the private one belongs. It cannot authenticate and the error it
+          # produces says nothing about why.
+          case "$KEY" in
+            ssh-rsa*|ssh-ed25519*|ecdsa-*)
+              echo "::error::SERVER_SSH_KEY looks like a PUBLIC key (it starts with ssh-ed25519 or similar)."
+              echo "It needs the PRIVATE key — the whole file including the"
+              echo "-----BEGIN ... PRIVATE KEY----- and -----END ...----- lines."
+              exit 1 ;;
+          esac
+          case "$KEY" in
+            *"PRIVATE KEY"*) : ;;
+            *)
+              echo "::error::SERVER_SSH_KEY has no PRIVATE KEY header. Paste the whole key file, header and footer included."
+              exit 1 ;;
+          esac
+          echo "All three secrets are present and the key looks like a private key."
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
