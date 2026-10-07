@@ -22,11 +22,14 @@ that is built, tested and inert until a credential or a photograph exists.
       `ERP_COMPANY`, `ERP_ITEM_CODE`. Also needed: confirmation of a real Item
       code, and whether each agency exists as a Customer in ERPNext — if not,
       set `ERP_DEFAULT_CUSTOMER`.
-- [ ] **Off-box backups for the PORTAL** — the ERP already has them
-      (Backblaze B2, `series-tours-erp-backup`, via `/root/backup-erp.sh`).
-      The portal's do not. `offsite.sh` speaks SSH or a local path today;
-      **adding B2 would reuse the bucket and CLI already on the box**, so
-      there is nothing to buy. Offered 7 Oct, not yet taken up.
+- [ ] **Off-box backups for the PORTAL** — B2 support built 7 Oct, so there is
+      nothing to buy: the ERP's bucket, CLI and credentials are already on the
+      box. Three steps, on the server:
+      `deploy/offsite.sh b2-check` (proves the transport with a throwaway
+      object), then `deploy/offsite.sh keygen` (**the private key must not
+      stay on the server**), then `OFFSITE_REMOTE=b2://series-tours-erp-backup/b2b-portal`
+      in `.env.offsite`. Finally open one archive on the Mac with the key, to
+      prove the restore rather than assume it.
 - [ ] **Photographs** — 7 vehicles, 1 hotel, 1 houseboat still have none. The
       Crysta's five are placeholder test images and should be replaced.
 - [ ] **Andhra Pradesh and Puducherry permits** — 16 rows (8 vehicles × 2
@@ -47,7 +50,11 @@ that is built, tested and inert until a credential or a photograph exists.
 
 ## Unexplained — worth not forgetting
 
-- [ ] **The ERP stack was torn down twice on 7 Oct**, around 08:30 and at
+- [x] **The ERP stack was torn down twice on 7 Oct** — **explained.** Sonet,
+      7 Oct: *"teardown might have been mine. as i am also working along with
+      this."* He was working in parallel sessions. Left recorded because the
+      elimination is worth keeping if it ever recurs with nobody at a
+      keyboard. Original note:, around 08:30 and at
       10:54 UTC, both times a complete `docker compose down` on
       `/root/frappe-compose.yml` — containers and the `frappe_default`
       network, volumes untouched. Both followed a b2b deploy by a couple of

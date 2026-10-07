@@ -162,7 +162,35 @@ die() {
 # a USB drive, an NFS mount. Both are genuinely useful, and the filesystem one
 # is what makes `self-test` runnable anywhere, including on a laptop. A
 # transport that can be exercised beats one that can only be reasoned about.
-is_ssh_remote() { case "$OFFSITE_REMOTE" in *:*) return 0;; *) return 1;; esac; }
+# --- which transport -------------------------------------------------------
+# Three shapes, decided by what the destination looks like:
+#   b2://bucket/prefix   Backblaze B2, through the `b2` CLI
+#   user@host:path       ssh — rsync up, scp down, sftp to list and delete
+#   /some/path           a plain directory — a second disk, an NFS mount
+#
+# B2 was added 7 Oct 2026 for a reason worth recording: the ERP on this same
+# box has backed up to B2 since 11 Sept, through /root/backup-erp.sh. The
+# bucket, the CLI and the credentials are already here and already paid for.
+# Telling Sonet to buy a Hetzner Storage Box for the portal — which is what
+# this script originally assumed — was asking him to solve a problem he had
+# already solved.
+is_b2_remote()  { case "$OFFSITE_REMOTE" in b2://*) return 0;; *) return 1;; esac; }
+is_ssh_remote() { if is_b2_remote; then return 1; fi; case "$OFFSITE_REMOTE" in *:*) return 0;; *) return 1;; esac; }
+
+# b2://bucket/prefix  ->  bucket  /  prefix (prefix may be empty)
+b2_bucket() { local r="${OFFSITE_REMOTE#b2://}"; printf '%s' "${r%%/*}"; }
+b2_prefix() {
+  local r="${OFFSITE_REMOTE#b2://}"
+  case "$r" in
+    */*) local p="${r#*/}"; printf '%s' "${p%/}" ;;
+    *)   printf '' ;;
+  esac
+}
+# The full object name: prefix/name, or just name when there is no prefix.
+b2_key() {
+  local prefix; prefix="$(b2_prefix)"
+  if [ -n "$prefix" ]; then printf '%s/%s' "$prefix" "$1"; else printf '%s' "$1"; fi
+}
 ssh_host() { printf '%s' "${OFFSITE_REMOTE%%:*}"; }
 ssh_path() { printf '%s' "${OFFSITE_REMOTE#*:}"; }
 
@@ -184,7 +212,11 @@ sftp_batch() {
 
 remote_put() {
   local src="$1" name="$2"
-  if is_ssh_remote; then
+  if is_b2_remote; then
+    # Exactly the invocation /root/backup-erp.sh has been using since 11 Sept,
+    # so the syntax is proven on this box rather than taken from the docs.
+    b2 file upload --no-progress "$(b2_bucket)" "$src" "$(b2_key "$name")" >/dev/null
+  elif is_ssh_remote; then
     ssh_setup
     printf 'mkdir %s\n' "$(ssh_path)" | sftp_batch >/dev/null 2>&1 || true
     rsync -e "ssh ${SSH_OPTS[*]}" --partial --inplace "$src" "$OFFSITE_REMOTE/$name"
@@ -199,7 +231,14 @@ remote_put() {
 
 remote_get() {
   local name="$1" dest="$2"
-  if is_ssh_remote; then
+  if is_b2_remote; then
+    # v4 syntax first, v3 as a fallback: only the UPLOAD form is proven here,
+    # and a download that silently does nothing would make `verify` pass on an
+    # archive it never actually read.
+    b2 file download --no-progress "b2://$(b2_bucket)/$(b2_key "$name")" "$dest" >/dev/null 2>&1 \
+      || b2 download-file-by-name --noProgress "$(b2_bucket)" "$(b2_key "$name")" "$dest" >/dev/null 2>&1
+    [ -s "$dest" ]
+  elif is_ssh_remote; then
     ssh_setup
     scp "${SSH_OPTS[@]}" -q "$(ssh_host):$(ssh_path)/$name" "$dest"
   else
@@ -208,7 +247,16 @@ remote_get() {
 }
 
 remote_list() {
-  if is_ssh_remote; then
+  if is_b2_remote; then
+    # Filtered to OUR names by the grep below, which matters here more than
+    # anywhere else: this bucket also holds the ERP's own backups, and nothing
+    # in this script may see them, let alone act on them.
+    { b2 ls "b2://$(b2_bucket)/$(b2_prefix)" 2>/dev/null \
+        || b2 ls "$(b2_bucket)" "$(b2_prefix)" 2>/dev/null \
+        || true; } \
+      | sed -e 's#^.*/##' -e 's/[[:space:]]*$//' \
+      | grep -E '^b2b-[0-9]{8}T[0-9]{6}Z\.tar\.cms$' || true
+  elif is_ssh_remote; then
     printf 'cd %s\nls -1\n' "$(ssh_path)" | sftp_batch \
       | sed -e 's#^.*/##' -e 's/[[:space:]]*$//' \
       | grep -E '^b2b-[0-9]{8}T[0-9]{6}Z\.tar\.cms$' || true
@@ -220,7 +268,24 @@ remote_list() {
 
 remote_rm() {
   local name="${1:?remote_rm needs a name}"
-  if is_ssh_remote; then
+  if is_b2_remote; then
+    # DELIBERATELY DOES NOTHING ON B2.
+    #
+    # Not an oversight and not laziness. Deleting from B2 is the one command
+    # here that could destroy backups rather than merely fail, and it is the
+    # one I could not test — the bucket is live, shared with the ERP's own
+    # archives, and the delete syntax differs between b2 CLI versions in ways
+    # the upload syntax does not. Shipping an untested destructive command
+    # against somebody's only off-box copies is not a trade worth making to
+    # save disk that costs pennies.
+    #
+    # The archive is about 5MB, so a year of nightly copies is under 2GB —
+    # roughly a penny a month at B2's prices. Retention belongs on the bucket
+    # anyway, where it survives this script being edited: set a Lifecycle Rule
+    # in the B2 console to keep only the last N days.
+    log "not deleting $name — set a lifecycle rule on the bucket instead (see help)"
+    return 0
+  elif is_ssh_remote; then
     printf 'cd %s\nrm %s\n' "$(ssh_path)" "$name" | sftp_batch >/dev/null 2>&1
   else
     rm -f "${OFFSITE_REMOTE:?}/${name:?}"
@@ -237,6 +302,14 @@ cmd_send() {
     return 0
   fi
   [ -f "$OFFSITE_CERT" ] || die "no recipient certificate at $OFFSITE_CERT — run: deploy/offsite.sh keygen"
+
+  # Checked before anything is built or encrypted, so a missing CLI costs a
+  # second rather than a full archive's worth of work and a confusing failure
+  # at the upload.
+  if is_b2_remote; then
+    command -v b2 >/dev/null 2>&1 \
+      || die "OFFSITE_REMOTE is a b2:// destination but the 'b2' CLI is not on PATH"
+  fi
 
   # The newest stamp backup.sh wrote. Taking the pair from ONE run is the
   # point: a database restored beside somebody else's uploads directory has
@@ -335,6 +408,9 @@ cmd_send() {
   # Prune on the stamp in the NAME, not the remote's mtime. A copy may land
   # with whatever mtime the transport feels like, and a 30-day rule run
   # against the wrong clock either keeps everything or deletes what is needed.
+  if is_b2_remote; then
+    log "retention is the bucket's lifecycle rule on B2, not this script — nothing pruned"
+  else
   local cut; cut="$(cutoff_date)"
   local pruned=0 f d
   while read -r f; do
@@ -349,6 +425,7 @@ cmd_send() {
   # The index follows the remote. Rows for archives that are gone would have
   # `verify` reporting "gone" for every night since the portal launched.
   awk -F'\t' -v cut="$cut" 'substr($1,1,8) >= cut' "$idx" > "$idx.tmp" && mv "$idx.tmp" "$idx"
+  fi
 
   write_status "ok" "Verified byte-identical on the remote" "$name" "$bytes"
   log "ok: $name is off-box"
@@ -541,6 +618,69 @@ cmd_self_test() {
   echo "OFFSITE_REMOTE and a private key kept somewhere that is not this box."
 }
 
+# --- b2-check --------------------------------------------------------------
+# Proves the B2 transport against a THROWAWAY object before any real archive
+# depends on it.
+#
+# This exists because the b2 CLI's syntax changed between major versions and
+# only the UPLOAD form is proven on this box — /root/backup-erp.sh has used it
+# since September. Download and list are written with a v4 form and a v3
+# fallback, and a fallback nobody has exercised is a guess. One object, a few
+# hundred bytes, named so it cannot be mistaken for a backup.
+cmd_b2_check() {
+  is_b2_remote || { echo "OFFSITE_REMOTE is not a b2:// destination (it is: ${OFFSITE_REMOTE:-unset})"; exit 1; }
+  command -v b2 >/dev/null 2>&1 || { echo "The 'b2' CLI is not on PATH."; exit 1; }
+
+  local bucket prefix stamp name tmp
+  bucket="$(b2_bucket)"; prefix="$(b2_prefix)"
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  name="offsite-selftest-$stamp.txt"
+  tmp="$(mktemp -d)"
+  WORK="$tmp"
+
+  echo "Bucket: $bucket${prefix:+  prefix: $prefix}"
+  printf 'offsite.sh b2-check %s\n' "$stamp" > "$tmp/probe.txt"
+
+  echo "  upload…"
+  if ! b2 file upload --no-progress "$bucket" "$tmp/probe.txt" "$(b2_key "$name")" >/dev/null; then
+    echo "  FAILED to upload. Check the bucket name and that 'b2 account get' is authorised."
+    exit 1
+  fi
+  echo "  ok"
+
+  echo "  download…"
+  if b2 file download --no-progress "b2://$bucket/$(b2_key "$name")" "$tmp/back.txt" >/dev/null 2>&1; then
+    echo "  ok (v4 syntax)"
+  elif b2 download-file-by-name --noProgress "$bucket" "$(b2_key "$name")" "$tmp/back.txt" >/dev/null 2>&1; then
+    echo "  ok (v3 fallback)"
+  else
+    echo "  FAILED to download. 'verify' would not work; sending would still be safe."
+    exit 1
+  fi
+  if cmp -s "$tmp/probe.txt" "$tmp/back.txt"; then
+    echo "  bytes match"
+  else
+    echo "  FAILED: what came back is not what went up"
+    exit 1
+  fi
+
+  echo "  list…"
+  if b2 ls "b2://$bucket/$prefix" >/dev/null 2>&1; then
+    echo "  ok (v4 syntax)"
+  elif b2 ls "$bucket" "$prefix" >/dev/null 2>&1; then
+    echo "  ok (v3 fallback)"
+  else
+    echo "  FAILED to list. 'send' could not tell whether today's copy already exists,"
+    echo "  so it would upload one every run. Not dangerous, but wasteful."
+    exit 1
+  fi
+
+  echo
+  echo "B2 transport works. The probe object is still in the bucket:"
+  echo "    $(b2_key "$name")"
+  echo "Delete it by hand if you like — this script never deletes from B2."
+}
+
 cmd_help() {
   cat <<EOF
 Off-box copies of the nightly backup.
@@ -552,13 +692,24 @@ Off-box copies of the nightly backup.
   deploy/offsite.sh verify           re-read every archive, check it still matches
   deploy/offsite.sh fetch <name>     pull one down
   deploy/offsite.sh open <a> <key>   decrypt and check it (run where the key is)
+  deploy/offsite.sh b2-check         prove a b2:// destination with a throwaway object
 
 Configure in $ENV_FILE (chmod 600):
 
-  OFFSITE_REMOTE=u123456@u123456.your-storagebox.de:b2b-portal
-      Where copies go. With a colon it is ssh/rsync; without, a plain path —
-      a second disk or an NFS mount. Unset means no off-box copy is made, and
-      that is said in the log, in the status file, and on /admin/settings.
+  OFFSITE_REMOTE=b2://series-tours-erp-backup/b2b-portal
+      Where copies go. Three shapes:
+        b2://bucket/prefix   Backblaze B2, through the \`b2\` CLI. The ERP
+                             already uses B2 from this box, so the bucket and
+                             credentials exist — run \`b2-check\` once first.
+        user@host:path       ssh: rsync up, scp back, sftp to list and prune.
+        /some/path           a plain directory — a second disk, an NFS mount.
+      Unset means no off-box copy is made, and that is said in the log, in the
+      status file, and on /admin/settings.
+
+      On B2 this script NEVER DELETES. Retention belongs on the bucket, as a
+      Lifecycle Rule in the B2 console — it survives this script being edited,
+      and an untested delete against your only off-box copies is not worth the
+      pennies of disk it would save. The archive is ~5MB, so a year is <2GB.
   OFFSITE_SSH_KEY=/root/.ssh/b2b-offsite    ssh key for that host
   OFFSITE_SSH_PORT=23                       Hetzner Storage Boxes use 23
   OFFSITE_CERT=$APP_DIR/offsite-key.pub.pem recipient cert from \`keygen\`
@@ -571,6 +722,7 @@ EOF
 
 case "${1:-send}" in
   send)      shift || true; cmd_send "${1:-}" ;;
+  b2-check)  cmd_b2_check ;;
   keygen)    cmd_keygen ;;
   list)      cmd_list ;;
   fetch)     shift; cmd_fetch "$@" ;;

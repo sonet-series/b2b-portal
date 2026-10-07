@@ -1898,10 +1898,37 @@ before trusting any of this. It also runs against a plain directory
 destination, which is what makes it runnable at all; a transport that can be
 exercised beats one that can only be reasoned about.
 
-**Still Sonet's to do:** buy or pick a destination (a Hetzner Storage Box is
-the obvious match — same provider, and its restricted shell is why listing and
-pruning go through `sftp -b` rather than `ssh <command>`), run `keygen`, and
-put the private key somewhere that is not the server.
+**The destination is BACKBLAZE B2, and it already exists (7 Oct 2026).**
+
+I spent the morning telling Sonet to buy a Hetzner Storage Box. Reading
+`/root/backup-erp.sh` — while chasing something else entirely — showed the ERP
+has backed up to B2 since 11 Sept: bucket `series-tours-erp-backup`, the `b2`
+CLI installed and authorised, db dumps four times a day, file tars nightly,
+with failure alerting through the ERP's own Gmail account. He was being told
+to solve a problem he had already solved.
+
+`OFFSITE_REMOTE` now takes three shapes: `b2://bucket/prefix`, `user@host:path`
+for ssh, or a plain directory. The portal's archive goes in the same bucket
+under its own prefix, and `remote_list` filters to `b2b-*.tar.cms` so the ERP's
+own backups are invisible to this script — they share a bucket and nothing
+here may act on them.
+
+**On B2 this script NEVER DELETES, deliberately.** Deleting is the one command
+that can destroy backups rather than merely fail, and it is the one that could
+not be tested: the bucket is live, it holds the ERP's only off-box copies, and
+the delete syntax differs across `b2` CLI versions in ways the upload syntax
+does not. Shipping an untested destructive command against somebody's last
+line of defence is not a trade worth making to save disk that costs pennies —
+the archive is ~5MB, so a year is under 2GB. Retention goes on the bucket as a
+Lifecycle Rule, where it also survives this script being edited.
+
+**`offsite.sh b2-check` proves the transport first**, with a throwaway object
+of a few hundred bytes. Only the UPLOAD form is proven on this box — it is
+the one `backup-erp.sh` has used for a month — so download and list carry a v4
+form with a v3 fallback, and a fallback nobody has exercised is a guess.
+
+**Still Sonet's to do:** run `b2-check`, then `keygen`, and put the private key
+somewhere that is not the server.
 
 Resolved:
 - Houseboat schema — confirmed, extended with dual pricing modes (25 Aug 2026).
