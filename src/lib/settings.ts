@@ -11,18 +11,38 @@ import { prisma } from "./db";
 
 export const SETTING_KEYS = {
   /**
-   * Local running allowed at each overnight stop, in KILOMETRES.
+   * Local running, in KILOMETRES, allowed for each NIGHT of the hire.
    *
-   * Replaced a percentage road margin on 19 Sept 2026. A percentage scales
-   * with the distance driven, which is backwards: local running happens where
-   * the party STOPS, not on the long transfers. A 400 km transfer day does not
-   * need 20 km of slack; a night at Munnar needs a day around the tea estates.
+   * Replaced a percentage road margin on 19 Sept 2026 — a percentage scales
+   * with the distance driven, which is backwards, since local running happens
+   * where the party stops and not on the long transfers.
    *
-   * Counted per DISTINCT place they overnight at, not per night and not per
-   * day — two nights at Munnar is one place to drive around. The final day's
-   * drop point does not count: they leave from there.
+   * Then counted per distinct PLACE until 7 Oct 2026, on the reasoning that
+   * "two nights at Munnar is one place to drive around". **That was wrong, and
+   * measurement proved it.** It is one place and TWO DAYS of driving around
+   * it — Top Station one day, Mattupetty and Echo Point the next — and the
+   * per-place model gave the second day nothing at all.
+   *
+   * Sonet's six real circuits, measured against the portal on 7 Oct 2026, were
+   * under-counted on every single one, from -4% to -22%. Dividing the missing
+   * distance by NIGHTS gave 68, 64, 57, 64, 61, 62 — across trips from 350 to
+   * 1,650 km. Least squares puts it at 61.9. Per place it ranged 70 to 136 and
+   * fitted nothing.
+   *
+   * The worst row was Cochin–Munnar–Cochin at -22%: two nights in one place,
+   * which is exactly the case the old model handled worst, and his
+   * highest-volume trip.
+   *
+   * NIGHTS, not days: nights are days minus one, which is what stops the
+   * arrival afternoon and the departure morning being charged as two full days
+   * of sightseeing. Fitting per-day instead gave more than twice the error.
+   *
+   * A NEW KEY rather than a change of meaning on the old one. `perStopKm` may
+   * hold a number somebody chose for a different model, and silently
+   * reinterpreting it per night would quietly reprice every hire by whatever
+   * that number happened to be.
    */
-  PER_STOP_KM: "perStopKm",
+  PER_NIGHT_KM: "perNightKm",
 
   /**
    * GST on the hire, in BASIS POINTS (500 = 5%).
@@ -62,7 +82,7 @@ export const SETTING_KEYS = {
 } as const;
 
 const DEFAULTS: Record<string, number> = {
-  [SETTING_KEYS.PER_STOP_KM]: 60,
+  [SETTING_KEYS.PER_NIGHT_KM]: 62,
   [SETTING_KEYS.GST_BPS]: 500, // 5%
   [SETTING_KEYS.TOLL_PARKING_PER_DAY_MINOR]: 30_000, // ₹300/day
   [SETTING_KEYS.DEPOSIT_BPS]: 2500, // 25%
@@ -82,8 +102,8 @@ export async function setSetting(key: string, value: number): Promise<void> {
 }
 
 /** Kilometres allowed for local running at each overnight stop. */
-export async function perStopKm(): Promise<number> {
-  return getSetting(SETTING_KEYS.PER_STOP_KM);
+export async function perNightKm(): Promise<number> {
+  return getSetting(SETTING_KEYS.PER_NIGHT_KM);
 }
 
 

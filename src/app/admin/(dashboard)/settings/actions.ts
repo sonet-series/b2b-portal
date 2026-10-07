@@ -54,7 +54,7 @@ export async function savePerStopKm(_prev: FormState, formData: FormData): Promi
     return { ok: false, message: "That is a lot per stop — check the number.", errors: { km: "Too large" } };
   }
 
-  await setSetting(SETTING_KEYS.PER_STOP_KM, km);
+  await setSetting(SETTING_KEYS.PER_NIGHT_KM, km);
   revalidatePath("/admin/settings");
   return { ok: true, message: `Local running set to ${km} km per overnight stop.` };
 }

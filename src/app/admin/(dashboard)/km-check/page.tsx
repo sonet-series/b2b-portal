@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { measureItinerary } from "@/lib/itinerary";
 import { usingDistanceStub } from "@/lib/distance";
-import { perStopKm } from "@/lib/settings";
+import { perNightKm } from "@/lib/settings";
 import { formatDateOnly, MS_PER_DAY } from "@/lib/dates";
 import { Badge, Card, PageHeader, Table, Td } from "@/components/ui";
 import type { ItineraryDay } from "@/lib/quote-types";
@@ -112,7 +112,7 @@ export default async function KmCheckPage() {
     where: { active: true },
     orderBy: { name: "asc" },
   });
-  const stopKm = await perStopKm();
+  const stopKm = await perNightKm();
 
   type Row = {
     route: Route;
@@ -172,7 +172,8 @@ export default async function KmCheckPage() {
         <>
           <p className="-mt-2 mb-4 text-sm text-slate-500">
             Measured from <strong>{garage?.name}</strong> ({garage?.address}), with{" "}
-            <strong>{stopKm} km</strong> of local running allowed per overnight place. This is the
+            <strong>{stopKm} km</strong> of local running allowed per night, rounded up to the next
+            50 km. This is the
             same calculation a real quote uses — nothing here is priced or saved.
           </p>
 
@@ -246,8 +247,8 @@ export default async function KmCheckPage() {
               <div>
                 <dt className="inline font-medium text-slate-900">Local — </dt>
                 <dd className="inline">
-                  the sightseeing allowance the portal adds, {stopKm} km for each distinct place
-                  the party overnights at. One flat figure for everywhere, today.
+                  the sightseeing allowance the portal adds, {stopKm} km for each NIGHT, plus
+                  whatever rounds the trip up to the next 50 km.
                 </dd>
               </div>
               <div>

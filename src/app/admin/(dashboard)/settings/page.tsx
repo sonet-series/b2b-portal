@@ -9,7 +9,7 @@ import { PRODUCT_TYPE, AGENT_TIER, AGENT_TIER_LABEL, type ProductType } from "@/
 import { Card, PageHeader } from "@/components/ui";
 import { MarkupRow } from "./markup-row";
 import { LocalRunningPanel } from "./local-running-panel";
-import { perStopKm, tollParkingPerDayMinor, depositBps } from "@/lib/settings";
+import { perNightKm, tollParkingPerDayMinor, depositBps } from "@/lib/settings";
 import { prisma } from "@/lib/db";
 import { toMajor } from "@/lib/money";
 import { allStates } from "@/lib/destinations";
@@ -26,7 +26,7 @@ const PRODUCT_LABEL: Record<ProductType, string> = {
 };
 
 export default async function SettingsPage() {
-  const stopKm = await perStopKm();
+  const nightKm = await perNightKm();
   const tollPerDay = await tollParkingPerDayMinor();
   const deposit = await depositBps();
   const permits = await prisma.statePermit.findMany({
@@ -100,7 +100,7 @@ export default async function SettingsPage() {
         rule.
       </p>
 
-      <LocalRunningPanel action={savePerStopKm} km={String(stopKm)} />
+      <LocalRunningPanel action={savePerStopKm} km={String(nightKm)} />
 
       <ChargesPanel
         tollAction={saveTollParking}

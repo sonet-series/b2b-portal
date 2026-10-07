@@ -1,7 +1,7 @@
 import "server-only";
 import { routeHops, metersToKm, type Hop } from "./distance";
 import { parseDateOnly, formatDateOnly, startOfUtcDay, daysBetween } from "./dates";
-import { perStopKm } from "./settings";
+import { perNightKm } from "./settings";
 import type { VehicleLeg, ItineraryDay } from "./quote-types";
 
 /**
@@ -175,8 +175,17 @@ export type MeasuredItinerary = {
    * matches exactly what anyone gets from Google.
    */
   localKm: number;
-  /** The distinct places they overnight at, in order. */
+  /**
+   * The distinct places they overnight at, in order.
+   *
+   * INFORMATION ONLY since 7 Oct 2026. The allowance used to be derived from
+   * the length of this list; it is now per night. Kept because the admin view
+   * reports where the party actually stays, which is a different question from
+   * how far they drive.
+   */
   stops: string[];
+  /** Nights of the hire — days minus one. What the allowance is counted on. */
+  nights: number;
   /** Sightseeing buffer the agent added across the trip. km. */
   bufferKm: number;
   /** routedKm + localKm + bufferKm — the number the hire is priced on. */
@@ -288,9 +297,67 @@ export async function measureItinerary(
     push(inbound.label, metersToKm(inbound.meters), inbound.bufferKm, inbound.source === "MANUAL", -1);
   }
 
+  /*
+   * Local running is allowed PER NIGHT, not per distinct place.
+   *
+   * It was per place until 7 Oct 2026 — "two nights at Munnar is one place to
+   * drive around" — and measurement against Sonet's own figures showed that
+   * reasoning was simply wrong. It is one place and TWO DAYS of driving around
+   * it, and the second day got nothing. All six of his real circuits came out
+   * under-counted, by 4% to 22%, with the worst being the two-nights-in-one-
+   * place trip that is also his most common.
+   *
+   * Nights rather than days, because nights are days minus one: that is what
+   * stops the arrival afternoon and the departure morning being charged as two
+   * full days of sightseeing.
+   */
   const stops = overnightStops(chained);
-  const perStop = await perStopKm();
-  const localAllowance = stops.length * perStop;
+  const nights = Math.max(0, chained.length - 1);
+  const perNight = await perNightKm();
+
+  /*
+   * And the TOTAL is rounded to the nearest 50 km.
+   *
+   * Sonet, 7 Oct 2026: *"give the kms in round figure only in 50s or 100s"*.
+   * Every figure he quotes is round — 350, 550, 650, 1150, 1350, 1650 — because
+   * a kilometre allowance is a commercial undertaking, not a measurement, and
+   * "1,187 km included" invites an argument about the 37.
+   *
+   * Rounding to the NEAREST 50 reproduced all six of his figures exactly from
+   * routed + 62/night. It rounds UP regardless, on his instruction the same
+   * day: *"always go on the higher side when km is be calculated"*.
+   *
+   * That is deliberate and it is not free — it lands 50 km above his stated
+   * figure on three of the six circuits. He chose it knowing that: the two
+   * errors are not symmetrical. Over-counting costs the customer 50 km of
+   * allowance they will not drive; under-counting is diesel the operator
+   * already burnt and nobody paid for, which is the mistake that has been
+   * running on every hire until today. It is the same reasoning as
+   * `metersToKm` rounding up — the operator does not absorb the remainder.
+   *
+   * The ROUNDING LANDS ON THE ALLOWANCE, never on the routed legs. Each routed
+   * leg must keep matching exactly what anyone gets from Google — that is what
+   * makes the distance checkable — and the allowance is a judgement figure
+   * already, so adjusting it is honest in a way that rewriting a measurement
+   * would not be.
+   *
+   * Never rounds DOWN below the road itself: a 12 km transfer must not round
+   * to nothing, and no hire may be priced on less distance than it is measured
+   * at.
+   */
+  const raw = routedKm + bufferKm + nights * perNight;
+  /*
+   * Only a hire with at least one night is rounded.
+   *
+   * A same-day airport transfer measures 12 km, and rounding that up to 50
+   * would quadruple it — visibly absurd on a quote and indefensible to the
+   * customer. The rounding exists because a TOUR's allowance is a commercial
+   * undertaking stated in round numbers; a transfer is just a measured drive,
+   * and it keeps being priced on exactly the road, as it is today.
+   */
+  const rounded =
+    nights > 0 ? Math.max(Math.ceil(raw / 50) * 50, routedKm + bufferKm) : raw;
+  const localAllowance = rounded - routedKm - bufferKm;
 
   /*
    * Rides as its own leg rather than being spread across the real ones. Every
@@ -300,7 +367,10 @@ export async function measureItinerary(
    */
   if (localAllowance > 0) {
     legs.push({
-      label: `Local running at ${stops.length} stop${stops.length === 1 ? "" : "s"} (${perStop} km each)`,
+      label:
+        nights > 0
+          ? `Local running and rounding, ${nights} night${nights === 1 ? "" : "s"} (${perNight} km each)`
+          : "Local running allowance",
       km: localAllowance,
       bufferKm: 0,
       // -2, not -1: sharing the depot marker made the printed quote add this
@@ -314,6 +384,7 @@ export async function measureItinerary(
     legs,
     routedKm,
     localKm: localAllowance,
+    nights,
     stops,
     bufferKm,
     routeStates: [...routeStates].sort(),

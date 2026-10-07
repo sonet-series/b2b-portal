@@ -1070,7 +1070,68 @@ state's existing fee out across every active vehicle — the honest reading,
 since the fee used to apply to all of them — and was tested against a
 populated copy and against its own half-finished state.
 
-### Local running is per STOP, not a percentage (19 Sept 2026)
+### Local running is per NIGHT, and the total rounds UP to 50 (7 Oct 2026)
+**This replaces the per-stop rule below, which measurement proved wrong.**
+
+Sonet gave six real circuits with the kilometres he quotes for them, and asked
+the only question that settles it: *"check how much b2b is quoting and how much
+difference its show from my km and the b2b km"*. `/admin/km-check` runs them
+through `measureItinerary` against the live Routes API and prints the gap.
+
+**Every single route was UNDER-counted**, from -4% to -22%. That is distance
+the vehicle really drives with nobody charging for it, on every hire since the
+feature shipped.
+
+The pattern named the cause. Missing distance divided by NIGHTS:
+
+| Route | Yours | Routed | Missing | Nights | ÷ nights |
+|---|---|---|---|---|---|
+| Cochin–Munnar–Cochin | 350 | 214 | 136 | 2 | 68 |
+| Cochin–Munnar–Alleppey | 550 | 359 | 191 | 3 | 64 |
+| + Thekkady–Cochin | 650 | 421 | 229 | 4 | 57 |
+| + Kovalam–Trivandrum | 1,150 | 764 | 386 | 6 | 64 |
+| + Kanyakumari day trip | 1,350 | 921 | 429 | 7 | 61 |
+| Full Madurai circuit | 1,650 | 1,158 | 492 | 8 | 62 |
+
+57–68 across trips from 350 to 1,650 km. Least squares: **61.9 km per night**.
+Per distinct PLACE the same data gives 70–136 and fits nothing.
+
+**"Two nights at Munnar is still one place to drive around" was simply false.**
+It is one place and TWO DAYS of driving around it — Top Station one day,
+Mattupetty and Echo Point the next — and the old model gave the second day
+nothing at all. That is why Cochin–Munnar–Cochin was worst at -22%: two nights
+in one place is the case it handled least well, and it is the most common trip
+sold.
+
+**Nights, not days.** Nights are days minus one, which is what stops the
+arrival afternoon and the departure morning being charged as two full days of
+sightseeing. Fitting per-day gave more than twice the error.
+
+**A NEW setting key (`perNightKm`, default 62), not a reinterpretation of
+`perStopKm`.** That row may hold a number chosen for the old model, and
+silently reading it per night would reprice every hire by whatever it happened
+to be.
+
+**The total then rounds UP to the next 50 km.** Sonet: *"give the kms in round
+figure only in 50s or 100s"* and *"always go on the higher side when km is be
+calculated"*. Rounding to the NEAREST 50 reproduced all six of his figures
+exactly; rounding UP lands 50 km above three of them, and he chose that
+knowing it. The errors are not symmetrical — over-counting costs a customer
+allowance they will not use, under-counting is diesel already burnt that nobody
+paid for. Same reasoning as `metersToKm`.
+
+Two things the rounding must not do:
+- **Never land on a routed leg.** It adjusts the ALLOWANCE. Every routed leg
+  has to keep matching exactly what anyone gets from Google, because that is
+  what makes a distance checkable; the allowance is a judgement figure already.
+- **Never apply to a same-day hire.** A 12 km airport transfer rounded to 50
+  quadruples it. Rounding is for a TOUR's allowance; a transfer is a measured
+  drive and is still priced on exactly the road.
+
+`MeasuredItinerary.stops` survives as INFORMATION — where the party sleeps is a
+real question, it just no longer decides the distance.
+
+### Local running was per STOP — superseded, see above (19 Sept 2026)
 A percentage road margin was tried first and replaced the same day. Sonet's
 correction was right and worth recording: **a percentage scales with distance
 driven, which is backwards.** Local running happens where the party STOPS, not
