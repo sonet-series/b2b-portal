@@ -35,8 +35,9 @@ that is built, tested and inert until a credential or a photograph exists.
 - [ ] **Andhra Pradesh and Puducherry permits** — 16 rows (8 vehicles × 2
       states). A trip crossing a state with no permit set is flagged on the
       quote rather than quietly costing nothing.
-- [ ] **Rotate the `seriestours-website` Google Places key** — flagged 26 Aug
-      2026, still outstanding. Not this portal's key.
+- [x] ~~**Rotate the `seriestours-website` Google Places key**~~ — flagged
+      26 Aug 2026, re-raised 7 Oct with the billing risk restated. Sonet:
+      *"lets it be."* **A decision, not an oversight — do not re-raise.**
 - [ ] **Reboot the server** — 170 days up, 66 updates pending, 5 of them
       security. Takes the ERP and seriestours.com down with the portal, so it
       wants a quiet slot. **Held on 7 Oct** until the ERP teardowns below are
