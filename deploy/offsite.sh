@@ -101,6 +101,22 @@ alert() {
   local subject="$1" body="$2" cfg to
   local host="" port="" user="" pass="" from="" notify=""
   local env_prod="$APP_DIR/.env.production"
+
+  # Through ERPNext's own outgoing Gmail account, the route /root/backup-erp.sh uses,
+  # when $APP_DIR/.env.alerts says ALERT_VIA=erpnext (Sonet, 21 Oct 2026). The SMTP
+  # settings below are empty on the box, so until a seriestours.com sender exists
+  # this is the only way these alerts reach anyone. No mail password leaves ERPNext.
+  local alerts="$APP_DIR/.env.alerts"
+  if [ -f "$alerts" ] && grep -q '^ALERT_VIA=erpnext$' "$alerts"; then
+    to="$(sed -n 's/^ALERT_TO=//p' "$alerts" | tail -1)"
+    if [ -n "$to" ] && erpnext_mail "$subject" "$(printf '%s\n\nHost: %s\nLog: /var/log/b2b-backup.log' "$body" "$(hostname)")" "$to"; then
+      log "alert emailed to $to (via ERPNext)"
+    else
+      log "could not email the alert through ERPNext"
+    fi
+    return 0
+  fi
+
   if [ -f "$env_prod" ]; then
     host="$(sed -n 's/^SMTP_HOST=//p' "$env_prod" | tail -1)"
     port="$(sed -n 's/^SMTP_PORT=//p' "$env_prod" | tail -1)"
@@ -130,6 +146,28 @@ alert() {
   } | curl -K "$cfg" --upload-file - --max-time 20 >/dev/null 2>&1 \
       && log "alert emailed to $to" || log "could not email the alert"
   rm -f "${cfg:?}"
+}
+
+# Copies the message and deploy/erpnext_mail.py into the ERPNext container under names
+# of their own (never ERPNext's /tmp/.bk_* files, so two alerts can't overwrite each
+# other), runs it with the bench's python, and removes all three again.
+# `erpnext_mail --check` finds ERPNext's outgoing account and sends nothing.
+erpnext_mail() {
+  local c="${ERPNEXT_CONTAINER:-frappe-backend-1}" id="b2b-alert-$$-$RANDOM" t="" out=""
+  local run="cd /home/frappe/frappe-bench/sites && /home/frappe/frappe-bench/env/bin/python /tmp/$id.py"
+  docker cp "$(dirname "$0")/erpnext_mail.py" "$c:/tmp/$id.py" >/dev/null || return 1
+  if [ "$1" = "--check" ]; then
+    out="$(docker exec "$c" bash -c "$run --check" 2>&1 | tail -1)"
+  else
+    t="$(mktemp -d)"
+    printf '%s\n' "$1" > "$t/subject"; printf '%s\n' "$2" > "$t/body"
+    docker cp "$t/subject" "$c:/tmp/$id.subject" >/dev/null && docker cp "$t/body" "$c:/tmp/$id.body" >/dev/null \
+      && out="$(docker exec "$c" bash -c "$run '$3' /tmp/$id.subject /tmp/$id.body" 2>&1 | tail -1)"
+    rm -rf "${t:?}"
+  fi
+  docker exec "$c" rm -f "/tmp/$id.py" "/tmp/$id.subject" "/tmp/$id.body" >/dev/null 2>&1
+  echo "$out"
+  case "$out" in MAIL_SENT|OUTGOING_OK*) return 0;; *) return 1;; esac
 }
 
 # --- status the admin screen can read --------------------------------------
@@ -747,6 +785,7 @@ case "${1:-send}" in
   verify)    cmd_verify ;;
   open)      shift; cmd_open "$@" ;;
   self-test) cmd_self_test ;;
+  mail-check) erpnext_mail --check ;;
   help|-h|--help) cmd_help ;;
   *) echo "Unknown command: $1"; echo; cmd_help; exit 1 ;;
 esac
