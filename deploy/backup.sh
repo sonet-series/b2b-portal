@@ -10,6 +10,9 @@
 set -euo pipefail
 
 APP_DIR="/opt/b2b-portal"
+# Any failure, an explicit `exit 1` or a command failing under set -e, emails Sonet
+# through offsite.sh's alert (via ERPNext's outgoing account; Sonet, 21 Oct 2026).
+trap 'rc=$?; [ "$rc" -eq 0 ] || "$APP_DIR/deploy/offsite.sh" alert "B2B portal backup FAILED on $(hostname)" "deploy/backup.sh stopped with exit code $rc. See /var/log/b2b-backup.log." || true' EXIT
 DB="$APP_DIR/data/prod.db"
 BACKUP_DIR="$APP_DIR/backups"
 KEEP_DAYS=30

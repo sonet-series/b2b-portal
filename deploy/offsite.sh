@@ -787,6 +787,7 @@ case "${1:-send}" in
   open)      shift; cmd_open "$@" ;;
   self-test) cmd_self_test ;;
   mail-check) erpnext_mail --check ;;
+  alert)     shift; alert "${1:?usage: offsite.sh alert <subject> <body>}" "${2:-}" ;;
   help|-h|--help) cmd_help ;;
   *) echo "Unknown command: $1"; echo; cmd_help; exit 1 ;;
 esac
