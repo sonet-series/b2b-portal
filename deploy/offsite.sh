@@ -165,7 +165,8 @@ erpnext_mail() {
       && out="$(docker exec "$c" bash -c "$run '$3' /tmp/$id.subject /tmp/$id.body" 2>&1 | tail -1)"
     rm -rf "${t:?}"
   fi
-  docker exec "$c" rm -f "/tmp/$id.py" "/tmp/$id.subject" "/tmp/$id.body" >/dev/null 2>&1
+  # docker cp writes as root; the container runs as frappe, so clean up as root.
+  docker exec -u root "$c" rm -f "/tmp/$id.py" "/tmp/$id.subject" "/tmp/$id.body" >/dev/null 2>&1 || true
   echo "$out"
   case "$out" in MAIL_SENT|OUTGOING_OK*) return 0;; *) return 1;; esac
 }
